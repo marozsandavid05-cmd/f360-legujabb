@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>document.documentElement.className += ' js';</script>
+<title>Rólunk · A történetünk és a csapat · Studio F360</title>
+<meta name="description" content="A Studio F360 története, hitvallása és csapata: két alapító, két helyszín, gyógytornászok, masszőrök, jógaoktatók, edzők és táplálkozási tanácsadó.">
+<link rel="icon" href="media/logo/favicon-64.png" type="image/png">
+<link rel="stylesheet" href="fonts-brand/fonts-brand.css">
+<link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="css/pages.css">
+</head>
+<body class="p-rolunk">
+
+<a class="skip" href="#fo">Ugrás a tartalomra</a>
+<div class="page-frame" aria-hidden="true"></div>
+<div class="page-vignette" aria-hidden="true"></div>
+
+<!-- NAV -->
+<nav class="nav" aria-label="Fő navigáció">
+  <a href="index.html" class="nav__brand" aria-label="Studio F360 főoldal">
+    <img class="nav__logo nav__logo--dark" src="media/logo/brand-wide-anthracite.png" alt="Studio F360" width="571" height="120"><img class="nav__logo nav__logo--light" src="media/logo/brand-wide-cream.png" alt="" aria-hidden="true" width="571" height="120">
+  </a>
+  <div class="nav__links">
+    <div class="nav__item nav__item--sub nav__place nav__place--mex">
+      <a class="nav__link" href="mexikoi.html"><span class="nav__place-t">Mexikói út</span><span class="nav__place-k">XIV. kerület</span></a>
+      <div class="nav__sub">
+        <a class="nav__sub-lead" href="mexikoi.html">A Mexikói úti stúdió<span>Mexikói út 32/b · 7:00-21:00</span></a>
+        <a href="gyogyaszat.html">Gyógytorna &amp; manuálterápia</a>
+        <a href="gyogyaszat.html#gerinc" class="nav__sub-child">Gerincferdülés-terápia</a>
+        <a href="masszazs.html">Masszázsterápiák</a>
+        <a href="joga-pilates.html">Jóga &amp; Pilates</a>
+        <a href="taplalkozas.html">Táplálkozási tanácsadás &amp; InBody</a>
+      </div>
+    </div>
+    <div class="nav__item nav__item--sub nav__place nav__place--reit">
+      <a class="nav__link" href="reitter.html"><span class="nav__place-t">Reitter Ferenc utca</span><span class="nav__place-k">XIII. kerület</span></a>
+      <div class="nav__sub theme-rehab">
+        <a class="nav__sub-lead" href="reitter.html">Sport, rehab &amp; teljesítmény<span>Reitter Ferenc utca 48. · 8:00-20:00</span></a>
+        <a href="reitter-terapia.html">Eszközös terápiák</a>
+      </div>
+    </div>
+    <span class="nav__rule" aria-hidden="true"></span>
+    <div class="nav__item is-on"><a class="nav__link" href="rolunk.html" aria-current="page">Rólunk</a></div>
+    <div class="nav__item"><a class="nav__link" href="arak.html">Árak</a></div>
+    <div class="nav__item"><a class="nav__link" href="blog.html">Blog</a></div>
+    <div class="nav__item"><a class="nav__link" href="kapcsolat.html">Kapcsolat</a></div>
+  </div>
+  <div class="nav__end">
+    <a class="nav__soc" href="https://www.instagram.com/studio_f360_egeszsegkozpont/" target="_blank" rel="noopener" aria-label="Instagram"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><rect x="3.25" y="3.25" width="17.5" height="17.5" rx="5" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="4.1" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="17.3" cy="6.7" r="1.05" fill="currentColor"/></svg></a>
+    <a class="nav__soc" href="https://www.facebook.com/fitfoodfizio360" target="_blank" rel="noopener" aria-label="Facebook"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M13.4 21v-7.6h2.6l.4-3h-3V8.5c0-.9.3-1.5 1.5-1.5h1.6V4.3c-.3 0-1.2-.1-2.3-.1-2.3 0-3.9 1.4-3.9 4v2.2H7.7v3h2.6V21h3.1z" fill="currentColor"/></svg></a>
+    <a class="nav__cta" href="https://f360.hu/idopontfoglalas/" target="_blank" rel="noopener">Időpontfoglalás</a>
+    <button class="nav__burger" aria-label="Menü" aria-expanded="false" aria-controls="menu">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</nav>
+
+<!-- MOBIL MENÜ -->
+<div class="menu" id="menu" data-lenis-prevent>
+  <div class="menu__places">
+    <div class="menu__place menu__place--mex">
+      <a class="menu__place-t" href="mexikoi.html"><span class="no">XIV. kerület</span>Mexikói út</a>
+      <ul>
+        <li><a href="mexikoi.html">A Mexikói úti stúdió</a></li>
+        <li><a href="gyogyaszat.html">Gyógytorna &amp; manuálterápia</a></li>
+        <li><a href="gyogyaszat.html#gerinc" class="menu__child">Gerincferdülés-terápia</a></li>
+        <li><a href="masszazs.html">Masszázsterápiák</a></li>
+        <li><a href="joga-pilates.html">Jóga &amp; Pilates</a></li>
+        <li><a href="taplalkozas.html">Táplálkozási tanácsadás &amp; InBody</a></li>
+      </ul>
+    </div>
+    <div class="menu__place menu__place--reit">
+      <a class="menu__place-t" href="reitter.html"><span class="no">XIII. kerület</span>Reitter Ferenc utca</a>
+      <ul>
+        <li><a href="reitter.html">Sport, rehab &amp; teljesítmény</a></li>
+        <li><a href="reitter-terapia.html">Eszközös terápiák</a></li>
+      </ul>
+    </div>
+  </div>
+  <ol class="menu__main">
+    <li><a href="rolunk.html">Rólunk</a></li>
+    <li><a href="arak.html">Árak</a></li>
+    <li><a href="blog.html">Blog</a></li>
+    <li><a href="kapcsolat.html">Kapcsolat</a></li>
+  </ol>
+  <div class="menu__social">
+    <a class="menu__soc" href="https://www.instagram.com/studio_f360_egeszsegkozpont/" target="_blank" rel="noopener" aria-label="Instagram"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><rect x="3.25" y="3.25" width="17.5" height="17.5" rx="5" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="4.1" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="17.3" cy="6.7" r="1.05" fill="currentColor"/></svg></a>
+    <a class="menu__soc" href="https://www.facebook.com/fitfoodfizio360" target="_blank" rel="noopener" aria-label="Facebook"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M13.4 21v-7.6h2.6l.4-3h-3V8.5c0-.9.3-1.5 1.5-1.5h1.6V4.3c-.3 0-1.2-.1-2.3-.1-2.3 0-3.9 1.4-3.9 4v2.2H7.7v3h2.6V21h3.1z" fill="currentColor"/></svg></a>
+  </div>
+  <div class="menu__cta">
+    <a class="btn btn--accent" href="https://f360.hu/idopontfoglalas/" target="_blank" rel="noopener">Időpontfoglalás</a>
+  </div>
+</div>
+
+<main id="fo">
+
+<!-- ============ FEJLÉC: cím + bevezető + ugrás a csapathoz ============ -->
+<header class="chap-hd" data-hero>
+  <div class="chap-hd__t">
+    <p class="tag" data-reveal>Rólunk · A történet és a csapat</p>
+    <h1><span class="line-mask"><span>Két nő,</span></span><span class="line-mask"><span>egy fordulópont</span></span></h1>
+  </div>
+  <div class="chap-hd__side">
+    <p class="lead" data-reveal>A Studio F360 megnyitása 2020-ban mindkettőnk
+    életében nagy fordulópont volt. Két élethelyzet, egy találkozás, és egy közös
+    ötlet, amibe együtt vágtunk bele.</p>
+    <nav class="rolunk-jump" aria-label="Ezen az oldalon" data-reveal>
+      <a href="#tortenet">A történetünk</a>
+      <a href="#hitvallas">Hitvallás</a>
+      <a href="#csapat">A csapat</a>
+    </nav>
+  </div>
+</header>
+
+<!-- ============ TÖRTÉNET: sticky alapító-fotó + fejezetek (Lilla szavaival) ============ -->
+<section class="story" id="tortenet" aria-label="Az alapítás története">
+  <figure class="story__media">
+    <img src="media/brand/DSC-29.jpg" alt="A két alapító, Tringer Lilla és Kovács Anna a stúdió ablakánál" loading="lazy" width="1070" height="1600">
+  </figure>
+  <div class="story__caps">
+    <article class="story__cap">
+      <span class="y">Előtte · Lilla</span>
+      <p>„Évekig a kórházi közegben dolgoztam gyógytornászként. Szerettem, amit
+      csinálok, és sokáig ez tartott lendületben. Aztán egyre kevésbé volt
+      összeegyeztethető a rendszerrel. <b>Falakba ütköztem, és eljutottam oda,
+      hogy szeretnék mást csinálni.</b>”</p>
+    </article>
+    <article class="story__cap">
+      <span class="y">Előtte · Anna</span>
+      <p>„Anna ugyanebben az időben a több kisgyerekes év után indult vissza a
+      munkába. Nem kórházban dolgozott, hanem egy liofilizáló üzemben, és
+      <b>szakmailag tovább szeretett volna működni.</b>”</p>
+    </article>
+    <article class="story__cap">
+      <span class="y">A találkozás · közös ötlet</span>
+      <p>„Mindkettőnk életében egyszerre jött a váltás. Amikor találkoztunk, ebből
+      a közös élethelyzetből és a közös gondolkodásból született meg a vállalkozás
+      ötlete. <b>Együtt vágtunk bele,</b> és az ugrás így már nem tűnt olyan
+      ijesztőnek.”</p>
+    </article>
+    <article class="story__cap">
+      <span class="y">2020 · A hely</span>
+      <p>„Megálmodtunk egy olyan helyet, ahol van idő minden vendéget
+      végighallgatni, ahol egyszerre nem hat-nyolc különböző embert kell
+      kezelni. Ahol jól érzik magukat az emberek, el tudnak lazulni, meg tudnak
+      nyílni. <b>Egy olyan helyet, ahova mi is, mint vendég, szívesen járnánk.</b>
+      Ezt az elvet tartottuk szem előtt a kollégáink kiválasztásánál is.”</p>
+    </article>
+    <article class="story__cap">
+      <span class="y">Ma · két helyszín</span>
+      <p>„A Mexikói úton továbbra is az egészségmegőrzésre, a mozgásszervi
+      panaszok kezelésére és a megelőzésre fókuszálunk. A Reitter Ferenc utcai
+      központtal pedig <b>hidat építünk az egészség és a sportteljesítmény
+      között:</b> hogy a mozgás ne csak a rehabilitációról, hanem a fejlődésről
+      és az erőről is szóljon.”</p>
+    </article>
+  </div>
+</section>
+
+<!-- ============ HITVALLÁS ============ -->
+<section class="creed" id="hitvallas" aria-label="Hitvallás">
+  <p class="tag" data-reveal>Hitvallás</p>
+  <p class="creed__txt" data-reveal>Biológiai, pszichés és szociális lényünk összefonódik, egymástól
+  el nem választható. Egyes szolgáltatásaink más-más minőségünket állítják
+  kihívás elé, de a cél ugyanaz: segíteni, hogy jól legyél a bőrödben.
+  <span class="accent">Tehát úgy kint, mint bent.</span></p>
+  <div class="creed__cta" data-reveal>
+    <a class="btn btn--ghost" href="#csapat">A csapat <span class="ar">↓</span></a>
+  </div>
+</section>
+
+<!-- ============ CSAPAT: alapítók, majd helyszínenként ============ -->
+<section class="team" id="csapat" aria-labelledby="csapat-cim">
+  <div class="team__head">
+    <p class="tag" data-reveal>A csapat</p>
+    <h2 id="csapat-cim" data-headin><span class="line-mask"><span>Mindenki egyedi</span></span><span class="line-mask"><span>színfolt</span></span></h2>
+    <div class="team__side" data-reveal>
+      <p>De a cél és a szemléletmód közös. Huszonhárom év baleseti központ,
+      tizenhat év élsport, indiai jógaképzés, NB I-es bajnoki cím: nyisd ki a
+      névjegyeket, megéri.</p>
+      <p class="team__count"><b data-n="team">9</b> szakember · <b data-n="mex">6</b> a Mexikói úton · <b data-n="reit">4</b> a Reitter Ferenc utcában · egy kolléga mindkét helyszínen</p>
+      <a class="lnk" href="#tortenet">↑ A történetünk</a>
+    </div>
+  </div>
+
+  <div class="founders" data-reveal>
+    <p class="founders__cap">Tringer Lilla és Kovács Anna · alapítók</p>
+    <div class="founders__txt">
+      <p>A stúdiót ketten alapítottuk, 2020-ban. Lilla a mozgásért, Anna többek között
+      a táplálkozásért felel.</p>
+      <blockquote>„Egy olyan helyet akartunk, ahova mi is, mint vendég, szívesen járnánk.
+      Ezt az elvet tartottuk szem előtt a kollégáink kiválasztásánál is.”</blockquote>
+      <a class="lnk" href="#tortenet">↑ A történetünk</a>
+    </div>
+    <figure class="founders__p">
+      <img src="media/brand/K0A3620-scaled-e1753972608907.jpg" alt="Tringer Lilla portréja" loading="lazy" width="1706" height="1779">
+      <figcaption><b>Tringer Lilla</b><span>alapító · gyógytornász, szakmai vezető</span></figcaption>
+    </figure>
+    <figure class="founders__p">
+      <img src="media/brand/K0A3646-scaled-e1753972646743.jpg" alt="Kovács Anna portréja" loading="lazy" width="1706" height="1740">
+      <figcaption><b>Kovács Anna</b><span>alapító · táplálkozási tanácsadó</span></figcaption>
+    </figure>
+  </div>
+
+  <div class="roster">
+    <h3 class="roster__sec">Mexikói út · XIV. kerület</h3>
+    <details class="dossier" data-loc="mex">
+      <summary>
+        <img class="pf" src="media/brand/csapat/kodacsine-labancz-agnes.jpg" alt="" width="360" height="360" loading="lazy">
+        <span class="nm">Kodácsiné Labancz Ágnes</span>
+        <span class="rl">gyógytornász · manuálterapeuta</span>
+        <span class="plus" aria-hidden="true">+</span>
+      </summary>
+      <div class="dossier__body">
+        <div class="cv">
+          <p><b>23 év a Manninger Jenő Baleseti Központban</b>, vállambulancián.
+          1992-ben diplomázott gyógytornászként, 2014-ben okleveles fizioterapeuta
+          (Semmelweis Egyetem, MSc). Két évtizede gyakorlati oktató, konferencia-előadó,
+          a fizioterápiás szakorvos-képzés közreműködője.</p>
+          <p>Specialitása a váll: rotátorköpeny-sérülések, vállfájdalom, gyulladás,
+          túlerőltetés. Emellett traumatológia, ortopédia, gerincbetegségek,
+          sportsérülések és a váll-nyak régió túlterheléses fájdalmai.</p>
+          <p class="tel">Bejelentkezés: <a class="lnk" href="tel:+367****9731">06 70 316 9731</a></p>
+        </div>
+        <div class="skills">
+          <h4>Továbbképzések</h4>
+          <ul>
+            <li>Maitland® · Mulligan® A+B+C</li>
+            <li>OMT ortopédiai manuálterápia</li>
+            <li>McKenzie® A és B</li>
+            <li>szegmentális stabilizációs tréning</li>
+            <li>neurodinamika · lymphoedema drainage</li>
+          </ul>
+        </div>
+      </div>
+    </details>
+    <details class="dossier" data-loc="mex">
+      <summary>
+        <img class="pf" src="media/brand/csapat/vas-luca.jpg" alt="" width="360" height="360" loading="lazy">
+        <span class="nm">Vas Luca</span>
+        <span class="rl">gyógytornász · perinatális tréner · SEAS terapeuta</span>
+        <span class="plus" aria-hidden="true">+</span>
+      </summary>
+      <div class="dossier__body">
+        <div class="cv">
+          <p><b>16 év élsportolói pályafutás.</b> Gyógymasszőrként kezdte, majd a
+          Szegedi Tudományegyetemen szerzett gyógytornász-fizioterapeuta diplomát.
+          Kisgyermek-úszásoktatással és megváltozott részképességű gyermekek vízi
+          terápiájával is foglalkozott. A kismama-vonal és a gerincferdülés-terápia
+          egyik oszlopa.</p>
+        </div>
+        <div class="skills">
+          <h4>Továbbképzések</h4>
+          <ul>
+            <li>SEAS gerincferdülés-terapeuta</li>
+            <li>perinatális tréner</li>
+            <li>női egészség- és gátizomtréner (PTE, folyamatban)</li>
+            <li>triggerpont-terápia · fascia-technikák · flossing</li>
+          </ul>
+        </div>
+      </div>
+    </details>
+    <details class="dossier" data-loc="mex">
+      <summary>
+        <img class="pf" src="media/brand/csapat/szegedi-botond.jpg" alt="" width="360" height="360" loading="lazy">
+        <span class="nm">Szegedi Botond</span>
+        <span class="rl">gyógymasszőr · nyirokmasszőr <span class="loc-b">Reitter is</span></span>
+        <span class="plus" aria-hidden="true">+</span>
+      </summary>
+      <div class="dossier__body">
+        <div class="cv">
+          <p>Vendéglátós-szakács múlt után Ausztráliában, saját hátproblémája
+          kapcsán talált rá a masszázsra. Szabadidejében fest, olvas, zenét
+          hallgat. A stúdió masszázs-kartotékjának gazdája.</p>
+        </div>
+        <div class="skills">
+          <h4>Területei</h4>
+          <ul>
+            <li>gyógymasszázs · frissítő · relax</li>
+            <li>sportmasszázs · cellulit-kezelés</li>
+            <li>nyirokmasszázs · köpölyterápia</li>
+          </ul>
+        </div>
+      </div>
+    </details>
+    <details class="dossier" data-loc="mex">
+      <summary>
+        <img class="pf" src="media/brand/csapat/barkoczy-barbara.jpg" alt="" width="360" height="360" loading="lazy">
+        <span class="nm">Barkóczy Barbara</span>
+        <span class="rl">jógaoktató · aerial jóga · aerial trapéz</span>
+        <span class="plus" aria-hidden="true">+</span>
+      </summary>
+      <div class="dossier__body">
+        <div class="cv">
+          <p>Közgazdász, több mint 18 év pénzügyi és vezetői területen, mellette
+          a jógaoktatás lett a másik hivatása. Nálunk jógaórákat, aerial jógát és
+          aerial trapézt tart.</p>
+        </div>
+        <div class="skills">
+          <h4>Végzettségek</h4>
+          <ul>
+            <li>aerial trapéz oktató · Body Tone Technika®</li>
+            <li>hatha · női jóga · kismamajóga (Samadhi)</li>
+            <li>Love Your Belly oktató</li>
+          </ul>
+        </div>
+      </div>
+    </details>
+    <details class="dossier" data-loc="mex">
+      <summary>
+        <img class="pf" src="media/brand/csapat/aczel-gabriella.jpg" alt="" width="360" height="360" loading="lazy">
+        <span class="nm">Aczél Gabriella</span>
+        <span class="rl">jógaoktató · gerincjóga · Yin jóga</span>
+        <span class="plus" aria-hidden="true">+</span>
+      </summary>
+      <div class="dossier__body">
+        <div class="cv">
+          <p>Tíz évig légiutas-kísérő. A Bikram jógával kezdte: „90 percig küzdöttem
+          az ászanákkal a 40 fokos teremben, mégis azon kaptam magam, hogy
+          mosolygok; szerelem volt elsőre.” Több mint tíz év gyakorlás után
+          <b>200 órás képzést végzett a goai Bhakti Jogshalában, Indiában.</b>
+          Nálunk gerincjógát és Yin jógát tart.</p>
+        </div>
+        <div class="skills">
+          <h4>Képzések</h4>
+          <ul>
+            <li>jógaoktató · meditáció-oktató</li>
+            <li>well-being facilitátor</li>
+          </ul>
+        </div>
+      </div>
+    </details>
+    <details class="dossier" data-loc="mex">
+      <summary>
+        <img class="pf" src="media/brand/csapat/kovacs-anna.jpg" alt="" width="360" height="360" loading="lazy">
+        <span class="nm">Kovács Anna</span>
+        <span class="rl">táplálkozási tanácsadó · InBody · alapító</span>
+        <span class="plus" aria-hidden="true">+</span>
+      </summary>
+      <div class="dossier__body">
+        <div class="cv">
+          <p>2011-ben végzett élelmiszermérnökként a Corvinus Egyetemen. TDK-dolgozata
+          és diplomamunkája is az egészségtudatos táplálkozásról szólt, ezzel a
+          termékfejlesztési munkával <b>2010-ben első helyezést ért el a MÉTE OTDK-n.</b></p>
+          <p>A több éves versenysport és az egészségtudatos táplálkozás iránti
+          érdeklődés vezette a táplálkozási tanácsadás felé; 2018-ban a Pécsi
+          Tudományegyetem Táplálkozástudományi Mester szakán folytatta. A Mexikói úton
+          ő tartja a táplálkozási tanácsadást és az InBody testösszetétel-elemzést.</p>
+        </div>
+        <div class="skills">
+          <h4>Fordulj hozzá bizalommal</h4>
+          <ul>
+            <li>sporttáplálkozás · InBody 770</li>
+            <li>diabétesz · inzulinrezisztencia</li>
+            <li>várandósság alatti táplálkozás · terhességi cukorbetegség</li>
+            <li>PCOS · endometriózis</li>
+            <li>ételallergiák és -érzékenységek</li>
+          </ul>
+        </div>
+      </div>
+    </details>
+
+    <h3 class="roster__sec roster__sec--reit">Reitter Ferenc utca · XIII. kerület</h3>
+    <details class="dossier" data-loc="reit">
+      <summary>
+        <img class="pf" src="media/brand/csapat/adorjani-anna.jpg" alt="" width="360" height="360" loading="lazy">
+        <span class="nm">Adorjáni Anna</span>
+        <span class="rl">gyógytornász · manuálterapeuta</span>
+        <span class="plus" aria-hidden="true">+</span>
+      </summary>
+      <div class="dossier__body">
+        <div class="cv">
+          <p>Lovaglás, ritmikus gimnasztika, síelés, úszás, szörf, aerial hoop;
+          másodállásban röplabdaedző. A Szegedi Tudományegyetemen végzett,
+          szakdolgozatát a Pick Szeged férfi kézilabdacsapatánál írta.</p>
+        </div>
+        <div class="skills">
+          <h4>Továbbképzések</h4>
+          <ul>
+            <li>fasciális technikák: FDM 1, 2, 3</li>
+            <li>kinesio taping · köpölyterápia · flossing</li>
+          </ul>
+        </div>
+      </div>
+    </details>
+    <details class="dossier" data-loc="reit">
+      <summary>
+        <img class="pf" src="media/brand/csapat/osvath-bence.jpg" alt="" width="360" height="360" loading="lazy">
+        <span class="nm">Osváth Bence</span>
+        <span class="rl">személyi edző · erőnléti edző</span>
+        <span class="plus" aria-hidden="true">+</span>
+      </summary>
+      <div class="dossier__body">
+        <div class="cv">
+          <p>Több mint tíz év kosárlabda U20-ig, <b>hét év versenyszerű CrossFit.</b>
+          A Dávid Kornél Kosárlabda Akadémia fiú szakágának erőnléti felelőse volt
+          U12-től az NB I-ig: <b>a 2023/24-es szezonban NB I Zöld csoport
+          bajnoki cím.</b> Jelenleg boulderezik.</p>
+        </div>
+        <div class="skills">
+          <h4>Végzettségek</h4>
+          <ul>
+            <li>IWI fitnesz instruktor · személyi edző</li>
+            <li>TE × MKOSZ erőnléti edző</li>
+          </ul>
+        </div>
+      </div>
+    </details>
+    <details class="dossier" data-loc="reit">
+      <summary>
+        <img class="pf" src="media/brand/csapat/szegedi-botond-reitter.jpg" alt="" width="360" height="360" loading="lazy">
+        <span class="nm">Szegedi Botond</span>
+        <span class="rl">sportmasszőr <span class="loc-b">Mexikói is</span></span>
+        <span class="plus" aria-hidden="true">+</span>
+      </summary>
+      <div class="dossier__body">
+        <div class="cv">
+          <p>A Reitterben sportmasszázs, regeneráció és köpölyterápia a rehabilitáció
+          és az edzés mellé. Teljes névjegye a Mexikói út alatt.</p>
+        </div>
+        <div class="skills">
+          <h4>Területei</h4>
+          <ul>
+            <li>sportmasszázs · regeneráció</li>
+            <li>köpölyterápia</li>
+          </ul>
+        </div>
+      </div>
+    </details>
+    <details class="dossier" data-loc="reit">
+      <summary>
+        <span class="pf pf--none" aria-hidden="true">KS</span>
+        <span class="nm">Kovács Sebestyén</span>
+        <span class="rl">gyógytornász · sportrehabilitáció</span>
+        <span class="plus" aria-hidden="true">+</span>
+      </summary>
+      <div class="dossier__body">
+        <div class="cv">
+          <p>Gyógytornász-fizioterapeutaként abban hisz, hogy a mozgás nem csupán a
+          rehabilitáció része, hanem az egészséges, aktív élet egyik legfontosabb alapja.
+          <b>2024-ben diplomázott a Pécsi Tudományegyetem Egészségtudományi Karán,</b>
+          majd 2024 és 2026 között a Kútvölgyi Járóbeteg Szakrendelőben mozgásszervi
+          problémákkal küzdő páciensek rehabilitációjával foglalkozott.</p>
+          <p>A testet nem elszigetelt részek összességeként, hanem összefüggő
+          rendszerként nézi. Kiemelten fontos számára a páciens edukációja: hogy
+          értsd, mit, miért és milyen céllal végzünk.</p>
+        </div>
+        <div class="skills">
+          <h4>Továbbképzések</h4>
+          <ul>
+            <li>sportrehabilitációs tréner</li>
+            <li>fasciaelmélet · FDM 1-2-3</li>
+            <li>flossing terápia · SMR</li>
+            <li>kinesiology taping · sporttaping</li>
+            <li>vagus terápia · nyirok koncepció</li>
+          </ul>
+        </div>
+      </div>
+    </details>
+
+    <p class="roster__note" data-reveal>A csapat folyamatosan bővül. A szakemberek
+    szabad időpontjait a foglalórendszer mutatja.</p>
+  </div>
+</section>
+
+<!-- ============ ZÁRÓ: IDÉZET + FOGLALÁS KÉT HELYSZÍNRE ============ -->
+<section class="quote-close" aria-label="Időpontfoglalás">
+  <blockquote data-reveal>Két helyszín, egy szemlélet. Válaszd azt, amelyik
+  közelebb van hozzád, vagy amelyik a célodhoz illik.</blockquote>
+  <cite data-reveal>Mexikói út · XIV. kerület · Reitter Ferenc utca · XIII. kerület</cite>
+  <div class="cta" data-reveal>
+    <a class="btn btn--accent" href="https://f360.hu/idopontfoglalas/" target="_blank" rel="noopener" data-magnet>Foglalás · Mexikói út</a>
+    <a class="btn btn--ghost" href="https://f360.hu/idopontfoglalo-reitter/" target="_blank" rel="noopener">Foglalás · Reitter Ferenc utca</a>
+  </div>
+</section>
+
+</main>
+
+<!-- ============ FOOTER ============ -->
+<footer class="footer theme-ink">
+  <div class="wrap">
+    <div class="footer__grid">
+      <div class="footer__brand">
+        <a class="footer__mark" href="index.html" aria-label="Studio F360 főoldal"><img class="footer__logo" src="media/logo/brand-primary-cream-lg.png" alt="Studio F360 · Fitness · Food · Fizio · Estd 2019" width="792" height="760" loading="lazy"></a>
+        <p>Prevenció, rekreáció, rehabilitáció és teljesítményfokozás. Úgy kint, mint bent.</p>
+      </div>
+      <div>
+        <h4>Helyszínek</h4>
+        <address>
+          <a href="mexikoi.html">Mexikói út 32/b · XIV. kerület</a>
+          <a href="reitter.html">Reitter Ferenc utca 48. · XIII. kerület</a>
+          <span class="footer__hours">H-P: 7:00-20:00</span>
+        </address>
+      </div>
+      <div>
+        <h4>Oldalak</h4>
+        <ul>
+          <li><a href="mexikoi.html">Mexikói út</a></li>
+          <li><a href="reitter.html">Reitter Ferenc utca</a></li>
+          <li><a href="rolunk.html">Rólunk</a></li>
+          <li><a href="arak.html">Árak</a></li>
+          <li><a href="blog.html">Blog</a></li>
+          <li><a href="kapcsolat.html">Kapcsolat</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Kapcsolat</h4>
+        <ul>
+          <li><a href="tel:+36305030578">+36 30 503 0578</a></li>
+          <li><a href="mailto:info@f360.hu">info@f360.hu</a></li>
+          <li><a href="https://www.facebook.com/fitfoodfizio360" target="_blank" rel="noopener">Facebook</a></li>
+          <li><a href="https://www.instagram.com/studio_f360_egeszsegkozpont/" target="_blank" rel="noopener">Instagram</a></li>
+          <li><a href="https://f360.hu/idopontfoglalas/" target="_blank" rel="noopener">Időpontfoglalás</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer__bar">
+      <span>© 2026 F360 Mozgás és Vitalitás Kft.</span>
+      <span>Adószám 27970054-1-42 · Cégjegyzékszám 01-09-359579</span>
+    </div>
+  </div>
+</footer>
+
+<script src="vendor/gsap.min.js"></script>
+<script src="vendor/ScrollTrigger.min.js"></script>
+<script src="vendor/lenis.min.js"></script>
+<script src="js/core.js"></script>
+<script src="js/motion.js"></script>
+</body>
+</html>

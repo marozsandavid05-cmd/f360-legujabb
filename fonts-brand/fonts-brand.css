@@ -1,0 +1,7 @@
+/* Studio F360 arculati betűk (arculati kézikönyv 2022, KSFR.design)
+   Cherion: elsődleges, címekhez. NAGYBETŰ = kézírásos swash iniciálé, kisbetű = sima kapitális.
+   Archivo (variable, wdth 62-125 / wght 100-900): másodlagos, minden szöveg. Expanded = wdth 125. */
+@font-face{font-family:'Cherion';font-style:normal;font-weight:400;font-display:swap;src:url('Cherion-Regular.woff2') format('woff2')}
+@font-face{font-family:'Cherion';font-style:normal;font-weight:700;font-display:swap;src:url('Cherion-Bold.woff2') format('woff2')}
+@font-face{font-family:'Archivo';font-style:normal;font-weight:100 900;font-stretch:62% 125%;font-display:swap;src:url('archivo-var.woff2') format('woff2')}
+@font-face{font-family:'Archivo';font-style:italic;font-weight:100 900;font-stretch:62% 125%;font-display:swap;src:url('archivo-var-italic.woff2') format('woff2')}

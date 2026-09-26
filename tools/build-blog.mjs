@@ -1,0 +1,374 @@
+// Studio F360 · blog build
+// content/blog/*.md  →  blog/<slug>.html + blog.html (fő fal) + kategória-oldalak
+// Futtatás: node tools/build-blog.mjs   (a nav, a mobil menü és a lábléc a tools/shell.mjs közös forrásából jön)
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const { marked } = require('./marked.min.js');
+import { navBlock, menuBlock, footerBlock } from './shell.mjs';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const CONTENT = path.join(ROOT, 'content', 'blog');
+const OUT_DIR = path.join(ROOT, 'blog');
+
+const MONTHS = ['január','február','március','április','május','június',
+  'július','augusztus','szeptember','október','november','december'];
+
+// Kategóriák: a blog kategória-kulcsai
+const CATS = {
+  mozgas:      { label: 'Mozgás & Testtudat',      page: 'blog-mozgas.html',      no: '13·1', line1: 'Mozgás &', line2: 'Testtudat' },
+  sport:       { label: 'Sport & Teljesítmény',    page: 'blog-sport.html',       no: '13·2', line1: 'Sport &', line2: 'Teljesítmény' },
+  taplalkozas: { label: 'Táplálkozás & Életmód',   page: 'blog-taplalkozas.html', no: '13·3', line1: 'Táplálkozás', line2: '& Életmód' },
+};
+
+// Demó hozzászólások, hogy a fal élőnek tűnjön (a látogató sajátjai localStorage-be kerülnek)
+const DEMO_COMMENTS = {
+  mozgas: [
+    ['bogi.szabo', 'Kipróbáltam ma reggel, tényleg belefér kávéfőzés közben is.'],
+    ['t_marton', 'A macska-teve azóta a kedvencem, köszi a tippet!'],
+  ],
+  sport: [
+    ['kovacs.adam', 'Végre valaki kimondja, hogy a pihenőnap is edzésnap.'],
+    ['reka_fut', 'Ezt küldöm is az edzőpartneremnek.'],
+  ],
+  taplalkozas: [
+    ['viki.nagy', 'A grammos számok sokat segítettek, eddig csak tippeltem.'],
+    ['peter.b', 'InBody mérésen voltam nálatok, tényleg más így tervezni.'],
+  ],
+};
+
+function esc(s = '') {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function huDate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso));
+  if (!m) return String(iso);
+  return `${m[1]}. ${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}.`;
+}
+
+// determinisztikus alap-kedvelésszám a slugból (9-48 között)
+function likeBase(slug) {
+  let h = 0;
+  for (let i = 0; i < slug.length; i++) h = (h * 31 + slug.charCodeAt(i)) >>> 0;
+  return 9 + (h % 40);
+}
+
+function parseFrontmatter(raw) {
+  const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(raw);
+  if (!m) return { data: {}, body: raw };
+  const data = {};
+  for (const line of m[1].split(/\r?\n/)) {
+    const kv = /^([A-Za-z_][\w-]*):\s*(.*)$/.exec(line);
+    if (!kv) continue;
+    let v = kv[2].trim();
+    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+      v = v.slice(1, -1);
+    }
+    data[kv[1]] = v;
+  }
+  return { data, body: m[2] };
+}
+
+// ---- közös HTML darabok (prefix: relatív út a gyökérhez képest) ----
+
+function navHtml(prefix, current) {
+  // current: 'blog' | 'blog-<kat>' | null (bejegyzés) · a Blog menüpont minden blog-oldalon aktív
+  const key = current || 'blog';
+  return `<a class="skip" href="#fo">Ugrás a tartalomra</a>
+<div class="page-frame" aria-hidden="true"></div>
+<div class="page-vignette" aria-hidden="true"></div>
+
+<!-- NAV -->
+${navBlock(prefix, key, 'mex')}
+
+<!-- MOBIL MENÜ -->
+${menuBlock(prefix, key, 'mex')}`;
+}
+
+function footerHtml(prefix, extraScripts = '') {
+  return `<!-- ============ FOOTER ============ -->
+${footerBlock(prefix, 'blog', 'mex')}
+
+<script src="${prefix}vendor/gsap.min.js"></script>
+<script src="${prefix}vendor/ScrollTrigger.min.js"></script>
+<script src="${prefix}vendor/lenis.min.js"></script>
+<script src="${prefix}js/core.js"></script>
+<script src="${prefix}js/motion.js"></script>
+${extraScripts}`;
+}
+
+function headHtml(prefix, title, desc, bodyClass) {
+  return `<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>document.documentElement.className += ' js';</script>
+<title>${esc(title)}</title>
+<meta name="description" content="${esc(desc)}">
+<link rel="icon" href="${prefix}media/logo/favicon-64.png" type="image/png">
+<link rel="stylesheet" href="${prefix}fonts-brand/fonts-brand.css">
+<link rel="stylesheet" href="${prefix}css/main.css">
+<link rel="stylesheet" href="${prefix}css/pages.css">
+<link rel="stylesheet" href="${prefix}css/blog.css">
+</head>
+<body class="${bodyClass}">
+`;
+}
+
+// ---- SVG ikonok (nincs emoji) ----
+
+const SVG_HEART = `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path class="hp" d="M12 20.4 4.7 13a4.9 4.9 0 0 1 0-7 4.7 4.7 0 0 1 6.7 0l.6.6.6-.6a4.7 4.7 0 0 1 6.7 0 4.9 4.9 0 0 1 0 7Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>`;
+const SVG_BUBBLE = `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 3.5c-4.9 0-8.8 3.4-8.8 7.6 0 4.2 3.9 7.6 8.8 7.6.9 0 1.8-.1 2.6-.3l3.9 2.1-.6-3.6c1.8-1.4 2.9-3.5 2.9-5.8 0-4.2-3.9-7.6-8.8-7.6Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>`;
+
+// ---- közös közösségi blokk (kedvelés + hozzászólások) ----
+
+function socialHtml(post, { articleHref = null } = {}) {
+  const cat = CATS[post.category] || CATS.mozgas;
+  const demo = DEMO_COMMENTS[post.category] || [];
+  const cid = `c-${post.slug}`;
+  const demoLis = demo.map(([n, t]) =>
+    `<li class="cmt"><span class="cmt__n">${esc(n)}</span><span class="cmt__t">${esc(t)}</span></li>`).join('\n      ');
+  return `<div class="ig__bar">
+    <button class="like-btn" type="button" data-like aria-pressed="false" aria-label="Kedvelés">
+      ${SVG_HEART}<span class="like-n" data-like-count>${likeBase(post.slug)}</span>
+    </button>
+    <button class="cmt-btn" type="button" data-cmt-toggle aria-expanded="false" aria-controls="${esc(cid)}">
+      ${SVG_BUBBLE}<span data-cmt-count>${demo.length}</span>
+    </button>
+    ${articleHref ? `<a class="ig__more" href="${esc(articleHref)}">Elolvasom <span class="ar">→</span></a>` : ''}
+  </div>
+  <div class="ig__comments" id="${esc(cid)}" hidden>
+    <ul class="cmt-list" data-cmt-list>
+      ${demoLis}
+    </ul>
+    <form class="cmt-form" data-cmt-form>
+      <input class="cmt-form__name" name="nev" type="text" placeholder="Neved" required maxlength="40" autocomplete="name">
+      <input class="cmt-form__text" name="szoveg" type="text" placeholder="Írj hozzászólást" required maxlength="400" autocomplete="off">
+      <button class="cmt-form__send" type="submit">Küldés</button>
+    </form>
+    <p class="cmt-note">Demó: a kedvelések és hozzászólások egyelőre csak ebben a böngészőben tárolódnak.</p>
+  </div>`;
+}
+
+// ---- feed-kártya (Instagram-anatómia, editorial köntösben) ----
+
+function igCard(post, prefix, idx) {
+  const cat = CATS[post.category] || CATS.mozgas;
+  const media = post.cover
+    ? `<a class="ig__media" href="${prefix}blog/${esc(post.slug)}.html" aria-label="${esc(post.title)}"><img src="${prefix}${esc(post.cover)}" alt="" loading="lazy" width="1600" height="1200"></a>`
+    : `<a class="ig__media ig__media--empty" href="${prefix}blog/${esc(post.slug)}.html" aria-label="${esc(post.title)}"><span>F360</span></a>`;
+  return `<article class="ig${idx % 2 ? ' ig--alt' : ''}" data-slug="${esc(post.slug)}" data-likes="${likeBase(post.slug)}">
+  <div class="ig__datecol" aria-hidden="true"><span>${esc(huDate(post.date))}</span></div>
+  <div class="ig__body">
+  <header class="ig__head">
+    <span class="ig__ava" aria-hidden="true">F</span>
+    <div class="ig__who">
+      <span class="ig__handle">studio_f360_egeszsegkozpont</span>
+      <span class="ig__meta">${esc(huDate(post.date))}${post.author ? ` · ${esc(post.author)}` : ''}</span>
+    </div>
+    <a class="ig__chip" href="${prefix}${cat.page}">${esc(cat.label)}</a>
+  </header>
+  ${media}
+  <div class="ig__cap">
+    <h2 class="ig__title"><a href="${prefix}blog/${esc(post.slug)}.html">${esc(post.title)}</a></h2>
+    ${post.excerpt ? `<p class="ig__ex">${esc(post.excerpt)}</p>` : ''}
+  </div>
+  ${socialHtml(post, { articleHref: `${prefix}blog/${post.slug}.html` })}
+  </div>
+</article>`;
+}
+
+// ---- poszt-oldal ----
+
+function renderPost(post, posts) {
+  const prefix = '../';
+  const cat = CATS[post.category] || CATS.mozgas;
+  const bodyHtml = marked.parse(post.body)
+    .replace(/src="media\/blog\//g, 'src="../media/blog/');
+  const meta = [huDate(post.date), post.author].filter(Boolean).join(' · ');
+  const idx = posts.indexOf(post);
+  const prev = posts[idx + 1]; // régebbi
+  const next = posts[idx - 1]; // újabb
+
+  const coverHtml = post.cover
+    ? `<figure class="post__cover" data-scale-img>
+    <img src="../${esc(post.cover)}" alt="" width="1600" height="1000">
+  </figure>`
+    : '';
+
+  let pager = '';
+  if (prev || next) {
+    pager = `<nav class="post__pager" aria-label="További bejegyzések">
+    ${prev ? `<a class="post__pnav" href="${esc(prev.slug)}.html"><span class="no">← Korábbi</span><span class="tt">${esc(prev.title)}</span></a>` : '<span></span>'}
+    ${next ? `<a class="post__pnav post__pnav--next" href="${esc(next.slug)}.html"><span class="no">Újabb →</span><span class="tt">${esc(next.title)}</span></a>` : '<span></span>'}
+  </nav>`;
+  }
+
+  return `${headHtml(prefix, `${post.title} · Blog · Studio F360`, post.excerpt || post.title, 'p-blog-post')}
+${navHtml(prefix, null)}
+
+<main id="fo">
+
+<header class="post-open" data-hero>
+  <div class="post-open__t">
+    <p class="tag" data-reveal>Nº 13 · Blog · <a class="tag-link" href="../${cat.page}">${esc(cat.label)}</a> · ${esc(meta)}</p>
+    <h1><span class="line-mask"><span>${esc(post.title)}</span></span></h1>
+  </div>
+  ${post.excerpt ? `<p class="lead" data-reveal>${esc(post.excerpt)}</p>` : ''}
+</header>
+
+<article class="post">
+  ${coverHtml}
+  <div class="post__body">
+${bodyHtml}
+  </div>
+  <div class="post__social" data-slug="${esc(post.slug)}" data-likes="${likeBase(post.slug)}">
+    ${socialHtml(post)}
+  </div>
+  ${pager}
+  <div class="post__back">
+    <a class="btn" href="../blog.html">← Vissza a bloghoz</a>
+    <a class="btn btn--accent" href="https://f360.hu/idopontfoglalas/" target="_blank" rel="noopener">Időpontfoglalás</a>
+  </div>
+</article>
+
+</main>
+
+${footerHtml(prefix, `<script src="${prefix}js/blog-social.js"></script>`)}
+</body>
+</html>
+`;
+}
+
+// ---- fal-oldalak (fő + kategóriák): bal sticky panel + jobb feed ----
+
+function renderWall(posts, catKey) {
+  const prefix = '';
+  const cat = catKey ? CATS[catKey] : null;
+  const shown = catKey ? posts.filter((p) => p.category === catKey) : posts;
+  const countOf = (k) => posts.filter((p) => p.category === k).length;
+
+  const feed = shown.length
+    ? shown.map((p, i) => igCard(p, prefix, i)).join('\n\n')
+    : `<p class="blog-empty">Ebben a témakörben még nincs bejegyzés. Az első hamarosan érkezik.</p>`;
+
+  const tab = (href, label, count, active) =>
+    `<a class="wtab${active ? ' is-on' : ''}" href="${href}"${active ? ' aria-current="page"' : ''}>${esc(label)}<span class="n">${count}</span></a>`;
+  const tabs = [
+    tab('blog.html', 'Minden bejegyzés', posts.length, !catKey),
+    tab(CATS.mozgas.page, CATS.mozgas.label, countOf('mozgas'), catKey === 'mozgas'),
+    tab(CATS.sport.page, CATS.sport.label, countOf('sport'), catKey === 'sport'),
+    tab(CATS.taplalkozas.page, CATS.taplalkozas.label, countOf('taplalkozas'), catKey === 'taplalkozas'),
+  ].join('\n    ');
+
+  const title = cat
+    ? `<h1>
+        <span class="line-mask"><span>${esc(cat.line1)}</span></span>
+        <span class="line-mask"><span>${esc(cat.line2)}</span></span>
+      </h1>`
+    : `<h1>
+        <span class="line-mask"><span>Szakmai jegyzetek</span></span>
+      </h1>`;
+
+  const lead = cat
+    ? {
+        mozgas: 'Jegyzetek arról, hogyan mozogj okosabban: testtudat, tartás, gyógytorna és minden, amit a kezelőasztal mellett is elmondanánk.',
+        sport: 'Teljesítmény, regeneráció, sérülésmegelőzés. A Reitter utcai sportrehabos csapat jegyzetei sportolóknak és amatőr versenyzőknek.',
+        taplalkozas: 'Amit a tányérodra teszel, az is edzésterv. Táplálkozás, alvás, életmód, a hétköznapokra fordítva.',
+      }[catKey]
+    : 'Amit a kezelőasztal mellett is elmondanánk: jegyzetek mozgásról, fájdalomról, regenerációról és arról, hogyan érdemes bánni a testeddel a hétköznapokban.';
+
+  const pageTitle = cat
+    ? `${cat.no} · ${cat.label} · Blog · Studio F360`
+    : 'Nº 13 · Blog · Szakmai jegyzetek · Studio F360';
+  const pageDesc = cat
+    ? `A Studio F360 blogja, ${cat.label} témakör: ${lead}`
+    : 'A Studio F360 blogja: szakmai jegyzetek mozgásról, gyógytornáról, rehabilitációról és regenerációról.';
+
+  return `${headHtml(prefix, pageTitle, pageDesc, 'p-blog')}
+${navHtml(prefix, catKey ? `blog-${catKey}` : 'blog')}
+
+<main id="fo">
+
+<section class="blog-wall" aria-label="Blog">
+  <header class="wall-head" data-hero>
+    <div class="wall-head__t">
+      <p class="tag" data-reveal>Széljegyzetek · Blog · Nº 13</p>
+      ${title}
+    </div>
+    <p class="wall-head__lead" data-reveal>${esc(lead)}</p>
+  </header>
+  <nav class="wall-tabs" aria-label="Témakörök">
+    ${tabs}
+  </nav>
+  <div class="blog-feed">
+    ${feed}
+  </div>
+  <p class="wall-ig">Kövess minket: <a href="https://www.instagram.com/studio_f360_egeszsegkozpont/" target="_blank" rel="noopener">@studio_f360_egeszsegkozpont</a></p>
+</section>
+
+</main>
+
+${footerHtml(prefix, `<script src="${prefix}js/blog-social.js"></script>`)}
+</body>
+</html>
+`;
+}
+
+// ---- posztok beolvasása ----
+
+function readPosts() {
+  if (!fs.existsSync(CONTENT)) return [];
+  const posts = [];
+  for (const f of fs.readdirSync(CONTENT)) {
+    if (!f.endsWith('.md')) continue;
+    const raw = fs.readFileSync(path.join(CONTENT, f), 'utf8');
+    const { data, body } = parseFrontmatter(raw);
+    if (!data.title) continue;
+    posts.push({
+      slug: f.replace(/\.md$/, ''),
+      title: data.title,
+      date: data.date || '1970-01-01',
+      author: data.author || '',
+      cover: data.cover || '',
+      excerpt: data.excerpt || '',
+      category: CATS[data.category] ? data.category : 'mozgas',
+      body,
+    });
+  }
+  posts.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  return posts;
+}
+
+// ---- build ----
+
+export function build() {
+  const posts = readPosts();
+  fs.mkdirSync(OUT_DIR, { recursive: true });
+
+  // elárvult poszt-oldalak törlése (törölt md → törölt html)
+  const valid = new Set(posts.map((p) => `${p.slug}.html`));
+  for (const f of fs.readdirSync(OUT_DIR)) {
+    if (f.endsWith('.html') && !valid.has(f)) fs.unlinkSync(path.join(OUT_DIR, f));
+  }
+
+  for (const p of posts) {
+    fs.writeFileSync(path.join(OUT_DIR, `${p.slug}.html`), renderPost(p, posts), 'utf8');
+  }
+  fs.writeFileSync(path.join(ROOT, 'blog.html'), renderWall(posts, null), 'utf8');
+  for (const k of Object.keys(CATS)) {
+    fs.writeFileSync(path.join(ROOT, CATS[k].page), renderWall(posts, k), 'utf8');
+  }
+  console.log(`[blog] ${posts.length} bejegyzés → blog.html + 3 kategória-oldal + blog/*.html`);
+  return posts.length;
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  build();
+}
