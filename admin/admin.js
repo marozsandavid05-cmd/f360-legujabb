@@ -630,8 +630,19 @@
   function measureTop() {
     var t = $('.edit-top');
     if (t && t.offsetHeight) document.documentElement.style.setProperty('--toph', t.offsetHeight + 'px');
+    fitSide();
   }
   window.addEventListener('resize', measureTop);
+
+  // az oldalsáv csak akkor ragad, ha teljes magasságában kifér a felső sávok alatt
+  function fitSide() {
+    var side = $('.edit__side');
+    if (!side || !side.offsetHeight) return;
+    var cs = getComputedStyle(document.documentElement);
+    var top = (parseFloat(cs.getPropertyValue('--barh')) || 64) + (parseFloat(cs.getPropertyValue('--toph')) || 68) + 16;
+    side.classList.toggle('is-stick', side.offsetHeight + top + 16 <= window.innerHeight);
+  }
+  if (window.ResizeObserver) new ResizeObserver(fitSide).observe($('.edit__side'));
 
   /* ---- borítókép ---- */
   function setCover(path) {
@@ -855,6 +866,7 @@
       case 'ul': restoreRange(); ensureParagraph(); document.execCommand('insertUnorderedList'); break;
       case 'ol': restoreRange(); ensureParagraph(); document.execCommand('insertOrderedList'); break;
       case 'quote': toggleQuote(); break;
+      case 'hr': insertRule(); break;
       case 'link': openLink(); return;
       case 'image': openImage(); return;
       case 'undo': rte.focus(); document.execCommand('undo'); break;
@@ -867,6 +879,23 @@
   function ensureParagraph() {
     var sel = getSelection();
     if (closestIn(sel.anchorNode, 'h2,h3')) document.execCommand('formatBlock', false, 'p');
+  }
+  // elválasztó vonal: saját sorba az aktuális blokk után, utána üres bekezdés a folytatáshoz
+  function insertRule() {
+    restoreRange();
+    var top = topBlock(getSelection().anchorNode);
+    var hr = document.createElement('hr');
+    var after = document.createElement('p');
+    after.appendChild(document.createElement('br'));
+    if (top && top.nodeName === 'P' && !top.textContent.trim() && !top.querySelector('img')) {
+      rte.replaceChild(after, top);
+      rte.insertBefore(hr, after);
+    } else if (top) {
+      top.after(hr, after);
+    } else {
+      rte.append(hr, after);
+    }
+    placeCaretStart(after);
   }
   function toggleQuote() {
     restoreRange();
