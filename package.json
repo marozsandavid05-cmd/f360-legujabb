@@ -1,0 +1,16 @@
+{
+  "name": "f360-legujabb",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Studio F360 weboldal: blog-build (képméretezés sharp-pal) és a blog-admin Pages Functions",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "build": "node tools/build-blog.mjs && node tools/build-404.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "sharp": "0.35.4"
+  }
+}

@@ -1,6 +1,9 @@
 // Studio F360 · blog build
 // content/blog/*.md  →  blog/<slug>.html + blog.html (fő fal) + kategória-oldalak
 // Futtatás: node tools/build-blog.mjs   (a nav, a mobil menü és a lábléc a tools/shell.mjs közös forrásából jön)
+// Képek: a media/blog/* forrásképekből 640 / 1280 / 2000 px széles WebP készül a media/blog/meret/ mappába
+// (sharp, lásd package.json), és a blog-HTML img-jei srcset + sizes attribútumot kapnak.
+// Ha a sharp nincs telepítve, a build figyelmeztet, és srcset nélkül (az eredeti képpel) megy tovább.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +16,21 @@ import { navBlock, menuBlock, footerBlock } from './shell.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CONTENT = path.join(ROOT, 'content', 'blog');
 const OUT_DIR = path.join(ROOT, 'blog');
+const MEDIA_DIR = path.join(ROOT, 'media', 'blog');
+const SIZES_DIR = path.join(MEDIA_DIR, 'meret');
+const SIZE_WIDTHS = [640, 1280, 2000];
+const WEBP_QUALITY = 80;
+
+// A képek megjelenési szélessége (css/blog.css alapján: feed 2 oszlop 1100 px fölött, max 640 px alatta;
+// a poszt-borító a .post teljes szélessége; a szövegbe tett kép a 70ch széles .post__body-ban)
+const SIZES = {
+  card: '(min-width: 1100px) 620px, (min-width: 700px) 640px, 92vw',
+  cover: '(min-width: 1400px) 1190px, 92vw',
+  body: '(min-width: 820px) 720px, 92vw',
+};
+
+// forráskép relatív útja ('media/blog/x.jpg') → [{ w, rel: 'media/blog/meret/x-640.webp' }]
+let IMAGE_SETS = new Map();
 
 const MONTHS = ['január','február','március','április','május','június',
   'július','augusztus','szeptember','október','november','december'];
@@ -72,6 +90,90 @@ function parseFrontmatter(raw) {
     data[kv[1]] = v;
   }
   return { data, body: m[2] };
+}
+
+// ---- reszponzív képek ----
+
+// ' srcset="…" sizes="…"' egy media/blog/ forrásképhez, vagy '' ha nincs hozzá méretezett változat
+function srcsetAttrs(rel, prefix, kind) {
+  const set = IMAGE_SETS.get(String(rel).replace(/^\.\.\//, ''));
+  if (!set || !set.length) return '';
+  const list = set.map((v) => `${prefix}${esc(v.rel)} ${v.w}w`).join(', ');
+  return ` srcset="${list}" sizes="${SIZES[kind]}"`;
+}
+
+// a markdownból renderelt szöveg img-jei (src="../media/blog/…" a poszt-oldalon)
+function addBodySrcset(html, prefix) {
+  return html.replace(/<img\b([^>]*?)\ssrc="((?:\.\.\/)?media\/blog\/[^"/]+)"([^>]*)>/g, (m, pre, src, post) => {
+    if (/\ssrcset=/.test(pre + post)) return m;
+    const rel = src.replace(/^\.\.\//, '');
+    return `<img${pre} src="${src}"${srcsetAttrs(rel, prefix, 'body')}${post}>`;
+  });
+}
+
+async function loadSharp() {
+  try {
+    return (await import('sharp')).default;
+  } catch {
+    console.warn('[blog] FIGYELEM: a sharp nincs telepítve (npm install), a képek srcset nélkül maradnak.');
+    return null;
+  }
+}
+
+// Egy forráskép méretezett változatai. Nem nagyít: ha a kép keskenyebb egy célméretnél,
+// a saját szélességén készül egy változat (egyszer). Meglévő, frissebb változatot nem gyárt újra.
+async function sizeImage(sharp, file, base) {
+  const src = path.join(MEDIA_DIR, file);
+  const meta = await sharp(src).metadata();
+  const rotated = (meta.orientation || 1) >= 5;
+  const srcW = rotated ? meta.height : meta.width;
+  const widths = [...new Set(SIZE_WIDTHS.map((w) => Math.min(w, srcW)))].sort((a, b) => a - b);
+  const srcTime = fs.statSync(src).mtimeMs;
+  const out = [];
+  for (const w of widths) {
+    const name = `${base}-${w}.webp`;
+    const dest = path.join(SIZES_DIR, name);
+    if (!fs.existsSync(dest) || fs.statSync(dest).mtimeMs < srcTime) {
+      await sharp(src).rotate().resize({ width: w, withoutEnlargement: true })
+        .webp({ quality: WEBP_QUALITY, effort: 5 }).toFile(dest);
+    }
+    out.push({ w, rel: `media/blog/meret/${name}` });
+  }
+  return out;
+}
+
+export async function buildImageSets() {
+  const sets = new Map();
+  if (!fs.existsSync(MEDIA_DIR)) return sets;
+  const files = fs.readdirSync(MEDIA_DIR, { withFileTypes: true })
+    .filter((d) => d.isFile() && /\.(jpe?g|png|webp)$/i.test(d.name))
+    .map((d) => d.name)
+    .sort();
+  if (!files.length) return sets;
+  const sharp = await loadSharp();
+  if (!sharp) return sets;
+  fs.mkdirSync(SIZES_DIR, { recursive: true });
+  let failed = 0;
+  // azonos alapnév különböző kiterjesztéssel (x.jpg és x.png) ne írja felül egymás változatait
+  const baseOf = (f) => f.replace(/\.[^.]+$/, '');
+  const seen = new Map();
+  for (const f of files) seen.set(baseOf(f), (seen.get(baseOf(f)) || 0) + 1);
+  for (const f of files) {
+    const base = seen.get(baseOf(f)) > 1 ? f.replace(/\.([^.]+)$/, '-$1') : baseOf(f);
+    try {
+      sets.set(`media/blog/${f}`, await sizeImage(sharp, f, base));
+    } catch (e) {
+      failed++;
+      console.warn(`[blog] FIGYELEM: ${f} nem méretezhető (${e.message}), srcset nélkül marad.`);
+    }
+  }
+  // elárvult változatok törlése (a forráskép már nincs meg)
+  const valid = new Set([...sets.values()].flat().map((v) => path.basename(v.rel)));
+  for (const f of fs.readdirSync(SIZES_DIR)) {
+    if (f.endsWith('.webp') && !valid.has(f)) fs.unlinkSync(path.join(SIZES_DIR, f));
+  }
+  console.log(`[blog] ${sets.size} kép méretezve (${SIZE_WIDTHS.join('/')} px WebP)${failed ? `, ${failed} hibás` : ''}`);
+  return sets;
 }
 
 // ---- közös HTML darabok (prefix: relatív út a gyökérhez képest) ----
@@ -161,7 +263,7 @@ function socialHtml(post, { articleHref = null } = {}) {
 function igCard(post, prefix, idx) {
   const cat = CATS[post.category] || CATS.mozgas;
   const media = post.cover
-    ? `<a class="ig__media" href="${prefix}blog/${esc(post.slug)}.html" aria-label="${esc(post.title)}"><img src="${prefix}${esc(post.cover)}" alt="" loading="lazy" width="1600" height="1200"></a>`
+    ? `<a class="ig__media" href="${prefix}blog/${esc(post.slug)}.html" aria-label="${esc(post.title)}"><img src="${prefix}${esc(post.cover)}"${srcsetAttrs(post.cover, prefix, 'card')} alt="" loading="lazy" width="1600" height="1200"></a>`
     : `<a class="ig__media ig__media--empty" href="${prefix}blog/${esc(post.slug)}.html" aria-label="${esc(post.title)}"><span>F360</span></a>`;
   return `<article class="ig${idx % 2 ? ' ig--alt' : ''}" data-slug="${esc(post.slug)}" data-likes="${likeBase(post.slug)}">
   <div class="ig__datecol" aria-hidden="true"><span>${esc(huDate(post.date))}</span></div>
@@ -189,8 +291,8 @@ function igCard(post, prefix, idx) {
 function renderPost(post, posts) {
   const prefix = '../';
   const cat = CATS[post.category] || CATS.mozgas;
-  const bodyHtml = marked.parse(post.body)
-    .replace(/src="media\/blog\//g, 'src="../media/blog/');
+  const bodyHtml = addBodySrcset(marked.parse(post.body)
+    .replace(/src="media\/blog\//g, 'src="../media/blog/'), prefix);
   const meta = [huDate(post.date), post.author].filter(Boolean).join(' · ');
   const idx = posts.indexOf(post);
   const prev = posts[idx + 1]; // régebbi
@@ -198,7 +300,7 @@ function renderPost(post, posts) {
 
   const coverHtml = post.cover
     ? `<figure class="post__cover" data-scale-img>
-    <img src="../${esc(post.cover)}" alt="" width="1600" height="1000">
+    <img src="../${esc(post.cover)}"${srcsetAttrs(post.cover, prefix, 'cover')} alt="" width="1600" height="1000">
   </figure>`
     : '';
 
@@ -348,7 +450,8 @@ function readPosts() {
 
 // ---- build ----
 
-export function build() {
+export async function build({ images = true } = {}) {
+  IMAGE_SETS = images ? await buildImageSets() : new Map();
   const posts = readPosts();
   fs.mkdirSync(OUT_DIR, { recursive: true });
 
@@ -370,5 +473,8 @@ export function build() {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
-  build();
+  build({ images: !process.argv.includes('--no-images') }).catch((e) => {
+    console.error('[blog] a build elbukott:', e);
+    process.exit(1);
+  });
 }

@@ -1,3 +1,10 @@
 tools/oauth.env
 .claude-flow/
 nul
+node_modules/
+.dev.vars
+.dev.vars.*
+.env
+.env.*
+.wrangler/
+media/blog/meret/
