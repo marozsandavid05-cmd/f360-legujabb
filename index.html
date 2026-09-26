@@ -272,7 +272,9 @@
   </div>
 </section>
 
-<!-- ============ 6 · NAPLÓ: kiemelt bejegyzés + lista ============ -->
+<!-- ============ 6 · NAPLÓ: kiemelt bejegyzés + lista. A jelölők közti részt az npm run build
+     generálja a content/blog/*.md-ből (tools/build-naplo.mjs), kézzel ne szerkeszd ============ -->
+<!-- NAPLO:START -->
 <section class="journal" aria-label="Blog">
   <div class="journal__head">
     <div>
@@ -285,7 +287,7 @@
     <article class="journal__feat">
       <a href="blog/2026-08-24-feherje-mennyi-kell-valojaban.html">
         <figure class="duo-frame" data-scale-img>
-          <img src="media/blog/feherje-alapok.jpg" alt="Étrend-tervezés az asztalnál, gyümölcsökkel" loading="lazy" width="2000" height="1333">
+          <img src="media/blog/feherje-alapok.jpg" srcset="media/blog/meret/feherje-alapok-640.webp 640w, media/blog/meret/feherje-alapok-1280.webp 1280w, media/blog/meret/feherje-alapok-2000.webp 2000w" sizes="(min-width: 1440px) 710px, (min-width: 901px) 52vw, 92vw" alt="" loading="lazy" width="1500" height="1000">
         </figure>
         <p class="meta">Táplálkozás &amp; Életmód · 2026. 08. 24.</p>
         <h3>Fehérje: mennyi kell valójában?</h3>
@@ -295,11 +297,11 @@
     <ol class="journal__list">
       <li><a href="blog/2026-08-21-mire-szamits-az-elso-gyogytorna-alkalmon.html"><span class="meta">Mozgás &amp; Testtudat · 08. 21.</span><span class="tt">Mire számíts az első gyógytorna-alkalmon?</span></a></li>
       <li><a href="blog/2026-08-18-mit-egyel-edzes-elott-es-utan.html"><span class="meta">Táplálkozás &amp; Életmód · 08. 18.</span><span class="tt">Mit egyél edzés előtt és után?</span></a></li>
-      <li><a href="blog/2026-08-14-regeneracio-a-sportoloknak.html"><span class="meta">Sport &amp; Teljesítmény · 08. 14.</span><span class="tt">Regeneráció: a legjobban alulértékelt edzésnap</span></a></li>
       <li><a href="blog/2026-08-11-bemelegites-amit-tenyleg-megcsinalsz.html"><span class="meta">Sport &amp; Teljesítmény · 08. 11.</span><span class="tt">Bemelegítés, amit tényleg megcsinálsz</span></a></li>
     </ol>
   </div>
 </section>
+<!-- NAPLO:END -->
 
 <!-- ============ 7 · ZÁRÁS: teljes széles fotó, ráúszó krém panel (nincs réteg a fotón) ============ -->
 <section class="finale" aria-label="Időpontfoglalás">
