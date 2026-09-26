@@ -95,7 +95,7 @@ test('JWT: szemét bemenet elutasítva', async () => {
 test('slug: a meglévő bejegyzések fájlneve a címből képezhető (vagy dokumentáltan rövidebb)', () => {
   const dir = path.join(ROOT, 'content', 'blog');
   const files = fs.readdirSync(dir).filter((f) => f.endsWith('.md'));
-  assert.ok(files.length >= 7);
+  // a bejegyzések száma az adminból változik (törlés, új), ezért darabszámot nem rögzítünk
   for (const f of files) {
     const slug = f.slice(0, -3);
     assert.match(slug, SLUG_RE, `a meglévő slug illeszkedik a mintára: ${slug}`);

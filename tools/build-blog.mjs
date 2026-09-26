@@ -1,6 +1,7 @@
 // Studio F360 · blog build
 // content/blog/*.md  →  blog/<slug>.html + blog.html (fő fal) + kategória-oldalak
 // Futtatás: node tools/build-blog.mjs   (a nav, a mobil menü és a lábléc a tools/shell.mjs közös forrásából jön)
+// A főoldal (index.html) Napló-szekcióját is ez frissíti a jelölők között, lásd tools/build-naplo.mjs.
 // Képek: a media/blog/* forrásképekből 640 / 1280 / 2000 px széles WebP készül a media/blog/meret/ mappába
 // (sharp, lásd package.json), és a blog-HTML img-jei srcset + sizes attribútumot kapnak.
 // Ha a sharp nincs telepítve, a build figyelmeztet, és srcset nélkül (az eredeti képpel) megy tovább.
@@ -12,6 +13,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { marked } = require('./marked.min.js');
 import { navBlock, menuBlock, footerBlock } from './shell.mjs';
+import { writeJournal } from './build-naplo.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CONTENT = path.join(ROOT, 'content', 'blog');
@@ -27,6 +29,8 @@ const SIZES = {
   card: '(min-width: 1100px) 620px, (min-width: 700px) 640px, 92vw',
   cover: '(min-width: 1400px) 1190px, 92vw',
   body: '(min-width: 820px) 720px, 92vw',
+  // főoldal, Napló kiemelt kép (css/pages.css .journal__feat: 7/12 oszlop 900 px fölött, alatta teljes szélesség)
+  journal: '(min-width: 1440px) 710px, (min-width: 901px) 52vw, 92vw',
 };
 
 // forráskép relatív útja ('media/blog/x.jpg') → [{ w, rel: 'media/blog/meret/x-640.webp' }]
@@ -36,7 +40,7 @@ const MONTHS = ['január','február','március','április','május','június',
   'július','augusztus','szeptember','október','november','december'];
 
 // Kategóriák: a blog kategória-kulcsai
-const CATS = {
+export const CATS = {
   mozgas:      { label: 'Mozgás & Testtudat',      page: 'blog-mozgas.html',      no: '13·1', line1: 'Mozgás &', line2: 'Testtudat' },
   sport:       { label: 'Sport & Teljesítmény',    page: 'blog-sport.html',       no: '13·2', line1: 'Sport &', line2: 'Teljesítmény' },
   taplalkozas: { label: 'Táplálkozás & Életmód',   page: 'blog-taplalkozas.html', no: '13·3', line1: 'Táplálkozás', line2: '& Életmód' },
@@ -58,7 +62,7 @@ const DEMO_COMMENTS = {
   ],
 };
 
-function esc(s = '') {
+export function esc(s = '') {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
@@ -469,6 +473,7 @@ export async function build({ images = true } = {}) {
     fs.writeFileSync(path.join(ROOT, CATS[k].page), renderWall(posts, k), 'utf8');
   }
   console.log(`[blog] ${posts.length} bejegyzés → blog.html + 3 kategória-oldal + blog/*.html`);
+  writeJournal(ROOT, posts, { srcset: srcsetAttrs });
   return posts.length;
 }
 
