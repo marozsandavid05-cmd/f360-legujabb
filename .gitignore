@@ -8,3 +8,12 @@ node_modules/
 .env.*
 .wrangler/
 media/blog/meret/
+
+# a blog és a 404 a Pages buildben generálódik (npm run build), a repóban nem tároljuk,
+# különben a törölt bejegyzések régi HTML-je élve marad
+/blog/
+/blog.html
+/blog-mozgas.html
+/blog-sport.html
+/blog-taplalkozas.html
+/404.html
