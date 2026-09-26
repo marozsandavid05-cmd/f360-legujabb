@@ -1,122 +1,96 @@
-/* Studio F360 — blog kedvelés + hozzászólás (demó)
-   localStorage-ben tárol, file://-ből is működik, szerver nélkül.
-   Kulcsok: f360BlogLikes {slug:1}, f360BlogComments {slug:[{n,t}]}   */
+/* Studio F360 · blog kedvelés (valódi, közös számláló)
+   A szám a /kedveles végpontról jön (Cloudflare D1), mindenkinek ugyanaz, 0-ról indul.
+   A látogató egy véletlen azonosítót kap (localStorage), ezzel egy bejegyzést egyszer kedvelhet,
+   és vissza is vonhatja. Hozzászólás nincs. file:// alatt a gomb csendben nem csinál semmit. */
 (function () {
   'use strict';
 
-  function lsGet(key) {
-    try { return JSON.parse(localStorage.getItem(key)) || {}; }
-    catch (e) { return {}; }
+  var API = '/kedveles';
+  var VOTER_KEY = 'f360Voter';
+  var LIKED_KEY = 'f360Liked';
+  var online = location.protocol === 'http:' || location.protocol === 'https:';
+
+  function lsGet(key, def) {
+    try { var v = JSON.parse(localStorage.getItem(key)); return v == null ? def : v; }
+    catch (e) { return def; }
   }
   function lsSet(key, val) {
     try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { /* privát mód */ }
   }
+  function voterId() {
+    var v = lsGet(VOTER_KEY, '');
+    if (typeof v === 'string' && /^[a-z0-9-]{16,64}$/.test(v)) return v;
+    var a = new Uint8Array(16);
+    (window.crypto || window.msCrypto).getRandomValues(a);
+    v = Array.prototype.map.call(a, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+    lsSet(VOTER_KEY, v);
+    return v;
+  }
 
-  var LIKES_KEY = 'f360BlogLikes';
-  var CMTS_KEY = 'f360BlogComments';
+  var widgets = {}; // slug -> [{btn, count}]
 
-  function initWidget(root) {
-    var slug = root.getAttribute('data-slug');
-    if (!slug) return;
-    var base = parseInt(root.getAttribute('data-likes') || '0', 10) || 0;
-
-    var likeBtn = root.querySelector('[data-like]');
-    var likeCount = root.querySelector('[data-like-count]');
-    var cmtToggle = root.querySelector('[data-cmt-toggle]');
-    var cmtCount = root.querySelector('[data-cmt-count]');
-    var cmtList = root.querySelector('[data-cmt-list]');
-    var cmtForm = root.querySelector('[data-cmt-form]');
-    var cmtBox = cmtToggle
-      ? document.getElementById(cmtToggle.getAttribute('aria-controls'))
-      : null;
-
-    /* --- kedvelés --- */
-    function paintLike() {
-      var likes = lsGet(LIKES_KEY);
-      var liked = !!likes[slug];
-      if (likeBtn) {
-        likeBtn.classList.toggle('is-liked', liked);
-        likeBtn.setAttribute('aria-pressed', liked ? 'true' : 'false');
+  function paint(slug, count, liked) {
+    (widgets[slug] || []).forEach(function (w) {
+      if (w.count && typeof count === 'number') w.count.textContent = String(count);
+      if (w.btn) {
+        w.btn.classList.toggle('is-liked', liked);
+        w.btn.setAttribute('aria-pressed', liked ? 'true' : 'false');
       }
-      if (likeCount) likeCount.textContent = String(base + (liked ? 1 : 0));
-    }
-    if (likeBtn) {
-      likeBtn.addEventListener('click', function () {
-        var likes = lsGet(LIKES_KEY);
-        if (likes[slug]) delete likes[slug];
-        else likes[slug] = 1;
-        lsSet(LIKES_KEY, likes);
-        paintLike();
-        likeBtn.classList.remove('is-pop');
-        void likeBtn.offsetWidth; /* restart animáció */
-        likeBtn.classList.add('is-pop');
-      });
-    }
-    paintLike();
+    });
+  }
 
-    /* --- hozzászólások --- */
-    var seeded = cmtList ? cmtList.children.length : 0;
+  function send(slug, like) {
+    return fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slug: slug, voter: voterId(), like: like })
+    }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
+  }
 
-    function addCommentEl(name, text) {
-      if (!cmtList) return;
-      var li = document.createElement('li');
-      li.className = 'cmt';
-      var n = document.createElement('span');
-      n.className = 'cmt__n';
-      n.textContent = name;
-      var t = document.createElement('span');
-      t.className = 'cmt__t';
-      t.textContent = text;
-      li.appendChild(n);
-      li.appendChild(t);
-      cmtList.appendChild(li);
-    }
-
-    function paintCmtCount() {
-      if (!cmtCount || !cmtList) return;
-      cmtCount.textContent = String(cmtList.children.length);
-    }
-
-    var stored = lsGet(CMTS_KEY)[slug] || [];
-    for (var i = 0; i < stored.length; i++) {
-      if (stored[i] && stored[i].n && stored[i].t) addCommentEl(stored[i].n, stored[i].t);
-    }
-    paintCmtCount();
-
-    if (cmtToggle && cmtBox) {
-      cmtToggle.addEventListener('click', function () {
-        var open = !cmtBox.hidden;
-        cmtBox.hidden = open;
-        cmtToggle.setAttribute('aria-expanded', open ? 'false' : 'true');
-        if (!open) {
-          var firstInput = cmtBox.querySelector('input');
-          if (firstInput) firstInput.focus({ preventScroll: true });
-        }
-      });
-    }
-
-    if (cmtForm) {
-      cmtForm.addEventListener('submit', function (e) {
-        e.preventDefault();
-        var nameEl = cmtForm.querySelector('[name="nev"]');
-        var textEl = cmtForm.querySelector('[name="szoveg"]');
-        var name = (nameEl && nameEl.value || '').trim().slice(0, 40);
-        var text = (textEl && textEl.value || '').trim().slice(0, 400);
-        if (!name || !text) return;
-        var all = lsGet(CMTS_KEY);
-        if (!all[slug]) all[slug] = [];
-        all[slug].push({ n: name, t: text });
-        lsSet(CMTS_KEY, all);
-        addCommentEl(name, text);
-        paintCmtCount();
-        if (textEl) textEl.value = '';
-      });
-    }
+  function onClick(slug, btn) {
+    if (!online || btn.disabled) return;
+    var liked = lsGet(LIKED_KEY, {});
+    var next = !liked[slug];
+    var w = (widgets[slug] || [])[0];
+    var cur = w && w.count ? parseInt(w.count.textContent, 10) || 0 : 0;
+    /* azonnali visszajelzés, a szerver válasza pontosít */
+    paint(slug, Math.max(0, cur + (next ? 1 : -1)), next);
+    btn.classList.remove('is-pop'); void btn.offsetWidth; btn.classList.add('is-pop');
+    btn.disabled = true;
+    send(slug, next).then(function (d) {
+      if (next) liked[slug] = 1; else delete liked[slug];
+      lsSet(LIKED_KEY, liked);
+      paint(slug, d.count, next);
+    }).catch(function () {
+      paint(slug, cur, !next); /* hiba: vissza az előző állapotra */
+    }).then(function () { btn.disabled = false; });
   }
 
   function init() {
     var roots = document.querySelectorAll('[data-slug]');
-    for (var i = 0; i < roots.length; i++) initWidget(roots[i]);
+    var liked = lsGet(LIKED_KEY, {});
+    for (var i = 0; i < roots.length; i++) {
+      (function (root) {
+        var slug = root.getAttribute('data-slug');
+        if (!slug) return;
+        var btn = root.querySelector('[data-like]');
+        var count = root.querySelector('[data-like-count]');
+        (widgets[slug] = widgets[slug] || []).push({ btn: btn, count: count });
+        if (btn) btn.addEventListener('click', function () { onClick(slug, btn); });
+      })(roots[i]);
+    }
+    Object.keys(widgets).forEach(function (s) { paint(s, null, !!liked[s]); });
+
+    var slugs = Object.keys(widgets);
+    if (online && slugs.length) {
+      fetch(API + '?s=' + encodeURIComponent(slugs.join(',')))
+        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+        .then(function (d) {
+          var c = (d && d.counts) || {};
+          slugs.forEach(function (s) { if (typeof c[s] === 'number') paint(s, c[s], !!liked[s]); });
+        })
+        .catch(function () { /* a számláló nem elérhető: marad a 0 */ });
+    }
 
     /* keskeny nézetben az aktív kategória-chip kerüljön látótérbe */
     var list = document.querySelector('.wall-tabs');
@@ -129,9 +103,6 @@
     }
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
 })();

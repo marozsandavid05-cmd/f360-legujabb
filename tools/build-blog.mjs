@@ -46,22 +46,6 @@ export const CATS = {
   taplalkozas: { label: 'Táplálkozás & Életmód',   page: 'blog-taplalkozas.html', no: '13·3', line1: 'Táplálkozás', line2: '& Életmód' },
 };
 
-// Demó hozzászólások, hogy a fal élőnek tűnjön (a látogató sajátjai localStorage-be kerülnek)
-const DEMO_COMMENTS = {
-  mozgas: [
-    ['bogi.szabo', 'Kipróbáltam ma reggel, tényleg belefér kávéfőzés közben is.'],
-    ['t_marton', 'A macska-teve azóta a kedvencem, köszi a tippet!'],
-  ],
-  sport: [
-    ['kovacs.adam', 'Végre valaki kimondja, hogy a pihenőnap is edzésnap.'],
-    ['reka_fut', 'Ezt küldöm is az edzőpartneremnek.'],
-  ],
-  taplalkozas: [
-    ['viki.nagy', 'A grammos számok sokat segítettek, eddig csak tippeltem.'],
-    ['peter.b', 'InBody mérésen voltam nálatok, tényleg más így tervezni.'],
-  ],
-};
-
 export function esc(s = '') {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -71,13 +55,6 @@ function huDate(iso) {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso));
   if (!m) return String(iso);
   return `${m[1]}. ${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}.`;
-}
-
-// determinisztikus alap-kedvelésszám a slugból (9-48 között)
-function likeBase(slug) {
-  let h = 0;
-  for (let i = 0; i < slug.length; i++) h = (h * 31 + slug.charCodeAt(i)) >>> 0;
-  return 9 + (h % 40);
 }
 
 function parseFrontmatter(raw) {
@@ -235,30 +212,13 @@ const SVG_BUBBLE = `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden=
 // ---- közös közösségi blokk (kedvelés + hozzászólások) ----
 
 function socialHtml(post, { articleHref = null } = {}) {
-  const cat = CATS[post.category] || CATS.mozgas;
-  const demo = DEMO_COMMENTS[post.category] || [];
-  const cid = `c-${post.slug}`;
-  const demoLis = demo.map(([n, t]) =>
-    `<li class="cmt"><span class="cmt__n">${esc(n)}</span><span class="cmt__t">${esc(t)}</span></li>`).join('\n      ');
+  // Valódi kedvelés-számláló (functions/kedveles.js, D1). 0-ról indul, a szám a böngészőben töltődik be.
+  // Hozzászólás nincs (David döntése, 2026-09-26).
   return `<div class="ig__bar">
     <button class="like-btn" type="button" data-like aria-pressed="false" aria-label="Kedvelés">
-      ${SVG_HEART}<span class="like-n" data-like-count>${likeBase(post.slug)}</span>
-    </button>
-    <button class="cmt-btn" type="button" data-cmt-toggle aria-expanded="false" aria-controls="${esc(cid)}">
-      ${SVG_BUBBLE}<span data-cmt-count>${demo.length}</span>
+      ${SVG_HEART}<span class="like-n" data-like-count>0</span>
     </button>
     ${articleHref ? `<a class="ig__more" href="${esc(articleHref)}">Elolvasom <span class="ar">→</span></a>` : ''}
-  </div>
-  <div class="ig__comments" id="${esc(cid)}" hidden>
-    <ul class="cmt-list" data-cmt-list>
-      ${demoLis}
-    </ul>
-    <form class="cmt-form" data-cmt-form>
-      <input class="cmt-form__name" name="nev" type="text" placeholder="Neved" required maxlength="40" autocomplete="name">
-      <input class="cmt-form__text" name="szoveg" type="text" placeholder="Írj hozzászólást" required maxlength="400" autocomplete="off">
-      <button class="cmt-form__send" type="submit">Küldés</button>
-    </form>
-    <p class="cmt-note">Demó: a kedvelések és hozzászólások egyelőre csak ebben a böngészőben tárolódnak.</p>
   </div>`;
 }
 
@@ -269,7 +229,7 @@ function igCard(post, prefix, idx) {
   const media = post.cover
     ? `<a class="ig__media" href="${prefix}blog/${esc(post.slug)}.html" aria-label="${esc(post.title)}"><img src="${prefix}${esc(post.cover)}"${srcsetAttrs(post.cover, prefix, 'card')} alt="" loading="lazy" width="1600" height="1200"></a>`
     : `<a class="ig__media ig__media--empty" href="${prefix}blog/${esc(post.slug)}.html" aria-label="${esc(post.title)}"><span>F360</span></a>`;
-  return `<article class="ig${idx % 2 ? ' ig--alt' : ''}" data-slug="${esc(post.slug)}" data-likes="${likeBase(post.slug)}">
+  return `<article class="ig${idx % 2 ? ' ig--alt' : ''}" data-slug="${esc(post.slug)}">
   <div class="ig__datecol" aria-hidden="true"><span>${esc(huDate(post.date))}</span></div>
   <div class="ig__body">
   <header class="ig__head">
@@ -334,7 +294,7 @@ ${navHtml(prefix, null)}
   <div class="post__body">
 ${bodyHtml}
   </div>
-  <div class="post__social" data-slug="${esc(post.slug)}" data-likes="${likeBase(post.slug)}">
+  <div class="post__social" data-slug="${esc(post.slug)}">
     ${socialHtml(post)}
   </div>
   ${pager}
