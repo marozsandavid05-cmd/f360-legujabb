@@ -160,6 +160,7 @@
               <button type="button" class="linkbtn" id="cover-remove" hidden>Eltávolítás</button>
             </div>
             <p class="hint cover__hint">Ez a kép jelenik meg a blog listájában és a cikk tetején.</p>
+            <p class="hint cover__hint">Fekvő kép a legjobb, <b>4:3</b> vagy <b>16:10</b> arányú, legalább <b>1600 × 1200 px</b>. A listában felváltva 4:3 és 16:10 keretben jelenik meg, a cikk tetején szélesen. Ami nem fér bele, azt a széleknél vágja, ezért a fontos rész (arc, mozdulat) legyen a kép közepén. Álló telefonképnél a teteje és az alja levágódik. JPG, PNG, WebP vagy iPhone-kép is jó, a rendszer magától kicsinyíti és WebP-be alakítja.</p>
           </div>
         </div>
 
@@ -217,7 +218,7 @@
 <dialog class="dlg" id="dlg-image" aria-labelledby="dlg-image-h">
   <form method="dialog" class="dlg__in">
     <p class="dlg__h" id="dlg-image-h">Kép a szövegbe</p>
-    <p class="dlg__t dlg__t--sub">Ez a kép a szöveg közé kerül.</p>
+    <p class="dlg__t dlg__t--sub">Ez a kép a szöveg közé kerül. Bármilyen arányú lehet, egészben jelenik meg, vágás nélkül. Legalább 1200 px széles legyen.</p>
     <div class="imgpick" id="imgpick">
       <div class="imgpick__prev" id="imgpick-prev"><span>Még nincs kiválasztva kép</span></div>
       <p class="cover__info" id="imgpick-info" aria-live="polite"></p>
