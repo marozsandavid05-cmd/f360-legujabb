@@ -3,8 +3,8 @@ title: "Mintabejegyzés: így néz ki a jó borítókép"
 date: 2026-09-26
 author: Studio F360
 category: mozgas
-cover: media/blog/mintabejegyzes-boritokep-608a0e5e.webp
-excerpt: Egy 1600 × 1200 pixeles, 4:3 arányú fekvő fotó a Mexikói úti kezelőből. Ezen a bejegyzésen látszik, hogyan jelenik meg a borítókép a listában és a cikk tetején.
+cover: media/blog/mintabejegyzes-zita-nappali-d8ee2ef5.webp
+excerpt: Egy 1624 × 1218 pixeles, 4:3 arányú fekvő kép. Ezen a bejegyzésen látszik, hogyan jelenik meg a borítókép a listában és a cikk tetején.
 ---
 Ezt a bejegyzést tesztnek írtuk, hogy lássátok, hogyan mutat egy **ajánlott méretű** borítókép. A próba után nyugodtan töröljétek az adminban.
 
