@@ -180,16 +180,20 @@ a{color:inherit}
 .save-state[data-s="error"]{font-weight:600}
 .edit-top__act{display:flex;gap:.6rem}
 
-.edit{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:clamp(1.25rem,2.5vw,2.25rem);align-items:start;margin-top:clamp(1.25rem,3vw,2rem)}
+.edit{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:clamp(1.25rem,2.5vw,2.25rem);align-items:start;margin-top:clamp(1.25rem,3vw,2rem)}
 .edit__main{min-width:0;background:var(--paper);border-radius:var(--r);box-shadow:var(--shadow)}
 
+.f-title-l{
+  display:block;font-size:.8125rem;font-weight:600;
+  padding:clamp(1.25rem,3vw,2.25rem) clamp(1.25rem,4vw,3.25rem) 0;
+}
 .f-title{
   display:block;width:100%;resize:none;overflow:hidden;border:0;background:transparent;
-  padding:clamp(1.4rem,3.4vw,2.6rem) clamp(1.25rem,4vw,3.25rem) .6rem;
+  padding:.3rem clamp(1.25rem,4vw,3.25rem) .6rem;
   font-size:clamp(1.6rem,2.8vw,2.25rem);font-weight:400;line-height:1.18;letter-spacing:-.005em;
   font-stretch:125%;
 }
-.f-title::placeholder{color:var(--ink);opacity:.38}
+.f-title::placeholder{color:var(--ink);opacity:.45}
 .f-title:focus{outline:none}
 .field-err{font-size:.8125rem;font-weight:600;margin-top:.35rem}
 .edit__main > .field-err{padding:0 clamp(1.25rem,4vw,3.25rem)}
@@ -199,21 +203,41 @@ a{color:inherit}
 .rte{border-top:1px solid var(--rice);margin-top:.6rem}
 .tb{
   position:sticky;top:calc(var(--barh) + var(--toph,68px));z-index:20;
-  display:flex;align-items:center;gap:.25rem;overflow-x:auto;scrollbar-width:none;
-  padding:.45rem clamp(.75rem,3vw,2.6rem);background:var(--paper);border-bottom:1px solid var(--rice);
+  display:flex;align-items:center;gap:.2rem;overflow-x:auto;scrollbar-width:none;
+  padding:.4rem clamp(.5rem,1.2vw,1rem);background:var(--paper);border-bottom:1px solid var(--rice);
 }
 .tb::-webkit-scrollbar{display:none}
-.tb__grp{display:flex;align-items:center;gap:.15rem;padding-right:.35rem;margin-right:.1rem;border-right:1px solid var(--rice);flex:none}
+.tb__grp{display:flex;align-items:center;gap:.1rem;padding-right:.2rem;border-right:1px solid var(--rice);flex:none}
 .tb__grp:last-child{border-right:0}
 .tb__grp--end{margin-left:auto}
+/* ikon + felirat egymás alatt (feliratos sáv mérve 771 px); keskenyebben csak ikon marad,
+   a név aria-labelben és tooltipben; 660 px alatt (ikonos sáv 647 px) két sorba tördel */
+.rte{container-type:inline-size;container-name:rte}
 .tb__b{
-  display:inline-flex;align-items:center;justify-content:center;
-  min-width:42px;height:42px;padding:0 .55rem;border-radius:var(--r-sm);
+  display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:.2rem;
+  min-width:44px;min-height:52px;padding:.3rem .35rem;border-radius:var(--r-sm);
   font-size:1rem;line-height:1;transition:background .15s var(--ease);
 }
-.tb__b b{font-weight:800;font-size:1.05rem}
-.tb__b i{font-family:Georgia,serif;font-size:1.15rem}
-.tb__b--txt{font-size:.875rem;font-weight:500}
+.tb__i{display:grid;place-items:center;height:20px}
+.tb__c{font-size:.75rem;font-weight:500;line-height:1;white-space:nowrap;letter-spacing:.005em;font-stretch:100%}
+.tb__i b{font-weight:800;font-size:1.1rem;font-family:var(--font-body);font-stretch:100%}
+.tb__i i{font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:1.2rem}
+.tb__i--h2,.tb__i--h3{font-family:var(--font-body);font-weight:600;font-stretch:100%;align-items:end}
+.tb__i--h2{font-size:1.3rem}
+.tb__i--h3{font-size:.95rem}
+@container rte (max-width:779px){
+  .tb__c{display:none}
+  .tb__b{min-height:44px}
+  /* keskenyen a Címsor/Alcím szóval marad: a T-ikon magában nem egyértelmű */
+  .tb__b--txt .tb__i{display:none}
+  .tb__b--txt .tb__c{display:block;font-size:.875rem;padding-inline:.25rem}
+}
+/* telefonon minden gomb látszik: két sorba tördel, nincs rejtett vízszintes görgetés */
+@container rte (max-width:659px){
+  .tb{flex-wrap:wrap;overflow:visible;gap:2px;row-gap:2px}
+  .tb__grp{display:contents}
+  .tb__b--txt{padding-inline:.5rem}
+}
 .tb__b:hover{background:var(--rice)}
 .tb__b[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
 
@@ -249,7 +273,12 @@ a{color:inherit}
 .rte__foot{padding:.75rem clamp(1.25rem,4vw,3.25rem) 1rem;border-top:1px solid var(--rice);font-size:.8125rem;opacity:.8}
 
 /* oldalsáv */
-.edit__side{display:grid;gap:1rem;position:sticky;top:calc(var(--barh) + var(--toph,68px) + 1rem)}
+.edit__side{display:grid;gap:1rem}
+/* csak akkor ragad, ha az egész oldalsáv kifér (az admin.js méri: fitSide); alacsonyabb képernyőn
+   a borítókép gombja különben a cikk végéig elérhetetlen lenne */
+@media (min-width:1021px){
+  .edit__side.is-stick{position:sticky;top:calc(var(--barh) + var(--toph,68px) + 1rem)}
+}
 .card{background:var(--paper);border-radius:var(--r);padding:1.15rem 1.2rem 1.25rem}
 .card__h{font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;font-weight:600;margin-bottom:.9rem}
 .card--danger{padding:.35rem 1.2rem;background:transparent;border:1px dashed rgba(0,0,0,.18)}
@@ -280,6 +309,7 @@ a{color:inherit}
 .cover__info{font-size:.8125rem;line-height:1.45;margin:.6rem 0 .1rem;min-height:1.2em;font-variant-numeric:tabular-nums}
 .cover__info b{font-weight:600}
 .cover__act{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;margin-top:.5rem}
+.cover__hint{margin-top:1rem}
 
 /* mobil alsó sáv (csak keskenyen) */
 .mbar{display:none}
@@ -295,6 +325,7 @@ a{color:inherit}
 .dlg__in{padding:1.5rem 1.5rem 1.25rem;display:grid;gap:1rem}
 .dlg__h{font-size:1.25rem;font-weight:500;line-height:1.25}
 .dlg__t{font-size:.9375rem}
+.dlg__t--sub{margin-top:-.65rem}
 .dlg__act{display:flex;justify-content:flex-end;align-items:center;gap:.6rem;flex-wrap:wrap;margin-top:.25rem}
 .dlg__act .linkbtn{margin-right:auto}
 .imgpick{display:grid;gap:.5rem}
@@ -325,7 +356,6 @@ a{color:inherit}
 /* ============ KESKENY ============ */
 @media (max-width:1020px){
   .edit{grid-template-columns:1fr}
-  .edit__side{position:static}
 }
 @media (max-width:760px){
   :root{--barh:56px}
@@ -354,7 +384,8 @@ a{color:inherit}
   body.is-typing .mbar{display:none}
   .edit{margin-top:.75rem}
   .edit__main{border-radius:var(--r-sm)}
-  .f-title{padding:1.1rem 1rem .5rem;font-size:1.5rem;font-stretch:112%}
+  .f-title-l{padding:1rem 1rem 0}
+  .f-title{padding:.25rem 1rem .5rem;font-size:1.5rem;font-stretch:112%}
   .rte__body{padding:1.1rem 1rem 2rem;min-height:40vh}
   .post-body{font-stretch:112%}
   .rte__foot{padding-inline:1rem}
