@@ -6,9 +6,31 @@
 // cur:    az aktuális oldal kulcsa (lásd PAGE_KEYS lent), vagy null
 // world:  'mex' | 'reit' | null · melyik helyszín foglalója a nav-gomb célja
 
-export const BOOK = {
+// Időpontfoglalás: a saját foglaló (foglalas.html). EZ AZ EGYETLEN HELY, ahol a cél változik:
+// a nav, a mobil menü, a lábléc (ez a fájl), az oldalak törzsében lévő foglalás-gombok
+// (tools/apply-shell.mjs cseréli a BOOK_LEGACY címeket), a blog és a 404 (build-blog, build-404) is innen olvas.
+// Helyszín-oldalon a foglaló a helyszín kiválasztásával indul (?helyszin=mexikoi | reitter).
+export const BOOK_PAGE = 'foglalas.html';
+export const BOOK_PLACE = { mex: 'mexikoi', reit: 'reitter' };
+// a korábbi, WordPress-alapú foglaló címei: az apply-shell ezeket cseréli le az oldalak törzsében
+export const BOOK_LEGACY = {
   mex: 'https://f360.hu/idopontfoglalas/',
   reit: 'https://f360.hu/idopontfoglalo-reitter/',
+};
+// place: 'mex' | 'reit' | null (null = a foglaló a helyszín-választással indul)
+export function bookHref(prefix, place) {
+  if (/^https?:/.test(BOOK_PAGE)) return BOOK_PAGE;
+  return prefix + BOOK_PAGE + (BOOK_PLACE[place] ? `?helyszin=${BOOK_PLACE[place]}` : '');
+}
+// a teljes href (+ új lap, ha külső cím) egy foglalás-linkhez
+export function bookAttrs(prefix, place) {
+  const u = bookHref(prefix, place);
+  return /^https?:/.test(u) ? `href="${u}" target="_blank" rel="noopener"` : `href="${u}"`;
+}
+// kompatibilitás: világ szerinti cél (régi hívók)
+export const BOOK = {
+  mex: bookHref('', 'mex'),
+  reit: bookHref('', 'reit'),
 };
 
 export const SOCIAL = {
@@ -51,6 +73,13 @@ const PLACE_OF = {
   reitter: 'reit', terapia: 'reit',
 };
 
+// melyik helyszínnel induljon a foglaló: Reitter-világ = reitter, Mexikói úti oldalak = mexikoi,
+// általános oldal (főoldal, árak, rólunk, blog) = a látogató választ
+function bookPlace(cur, world) {
+  if (world === 'reit') return 'reit';
+  return PLACE_OF[cur] === 'mex' ? 'mex' : null;
+}
+
 const MAIN = [
   { key: 'rolunk', href: 'rolunk.html', label: 'Rólunk', also: ['csapat'] },
   { key: 'arak', href: 'arak.html', label: 'Árak' },
@@ -88,7 +117,7 @@ ${sub}
 }
 
 export function navBlock(prefix, cur, world) {
-  const book = BOOK[world === 'reit' ? 'reit' : 'mex'];
+  const book = bookAttrs(prefix, bookPlace(cur, world));
   const main = MAIN.map((m) => {
     const exact = cur === m.key;
     const on = isMain(m, cur);
@@ -106,7 +135,7 @@ ${main}
   </div>
   <div class="nav__end">
     ${socialLinks(prefix, 'nav__soc')}
-    <a class="nav__cta" href="${book}" target="_blank" rel="noopener">Időpontfoglalás</a>
+    <a class="nav__cta" ${book}>Időpontfoglalás</a>
     <button class="nav__burger" aria-label="Menü" aria-expanded="false" aria-controls="menu">
       <span></span><span></span><span></span>
     </button>
@@ -129,7 +158,7 @@ ${items}
 }
 
 export function menuBlock(prefix, cur, world) {
-  const book = BOOK[world === 'reit' ? 'reit' : 'mex'];
+  const book = bookAttrs(prefix, bookPlace(cur, world));
   const main = MAIN.map((m) => `    <li><a href="${prefix}${m.href}">${m.label}</a></li>`).join('\n');
   return `<div class="menu" id="menu" data-lenis-prevent>
   <div class="menu__places">
@@ -143,13 +172,13 @@ ${main}
     ${socialLinks(prefix, 'menu__soc')}
   </div>
   <div class="menu__cta">
-    <a class="btn btn--accent" href="${book}" target="_blank" rel="noopener">Időpontfoglalás</a>
+    <a class="btn btn--accent" ${book}>Időpontfoglalás</a>
   </div>
 </div>`;
 }
 
 export function footerBlock(prefix, cur, world) {
-  const book = BOOK[world === 'reit' ? 'reit' : 'mex'];
+  const book = bookAttrs(prefix, bookPlace(cur, world));
   const m = PLACES.mex, r = PLACES.reit;
   return `<footer class="footer theme-ink">
   <div class="wrap">
@@ -184,7 +213,7 @@ export function footerBlock(prefix, cur, world) {
           <li><a href="mailto:info@f360.hu">info@f360.hu</a></li>
           <li><a href="${SOCIAL.facebook}" target="_blank" rel="noopener">Facebook</a></li>
           <li><a href="${SOCIAL.instagram}" target="_blank" rel="noopener">Instagram</a></li>
-          <li><a href="${book}" target="_blank" rel="noopener">Időpontfoglalás</a></li>
+          <li><a ${book}>Időpontfoglalás</a></li>
         </ul>
       </div>
     </div>

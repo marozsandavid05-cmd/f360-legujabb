@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { navBlock, menuBlock, footerBlock, PLACES } from './shell.mjs';
+import { navBlock, menuBlock, footerBlock, PLACES, bookAttrs } from './shell.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const P = '/';
@@ -64,7 +64,7 @@ ${menuBlock(P, null, 'mex')}
     <dl class="hd-facts nf-places" data-reveal>
       <div><b>${m.district}</b><span><a href="${P}${m.href}">${m.name} · ${m.street}</a></span></div>
       <div><b>${r.district}</b><span><a href="${P}${r.href}">${r.name} · ${r.street}</a></span></div>
-      <div><b>Időpont</b><span><a href="https://f360.hu/idopontfoglalas/" target="_blank" rel="noopener">Online időpontfoglalás</a></span></div>
+      <div><b>Időpont</b><span><a ${bookAttrs(P, null)}>Online időpontfoglalás</a></span></div>
     </dl>
   </div>
 </header>

@@ -4,20 +4,21 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Blog szerkesztő · Studio F360</title>
+<title>Admin · Studio F360</title>
 <link rel="icon" href="../media/logo/favicon-64.png" type="image/png">
 <link rel="stylesheet" href="../fonts-brand/fonts-brand.css">
 <link rel="stylesheet" href="admin.css">
+<link rel="stylesheet" href="foglalo.css">
 </head>
 <body>
 
 <a class="skip" href="#fo">Ugrás a tartalomra</a>
 
 <header class="bar">
-  <a class="bar__brand" href="#/" aria-label="Bejegyzések listája">
+  <a class="bar__brand" href="#/foglalasok" aria-label="Admin kezdőlap: foglalások">
     <img src="../media/logo/brand-nav-anthracite.png" alt="Studio F360" width="146" height="44">
     <span class="bar__sep" aria-hidden="true"></span>
-    <span class="bar__app">Blog szerkesztő</span>
+    <span class="bar__app">Admin</span>
   </a>
   <div class="bar__right">
     <p class="deploy" id="deploy" role="status" aria-live="polite" hidden>
@@ -27,6 +28,17 @@
     <a class="bar__out" href="/cdn-cgi/access/logout">Kilépés</a>
   </div>
 </header>
+
+<nav class="tabs" id="tabs" aria-label="Admin részei">
+  <div class="tabs__in">
+    <a class="tabs__a" href="#/foglalasok" data-tab="foglalasok">Foglalások</a>
+    <a class="tabs__a" href="#/beosztas" data-tab="beosztas">Beosztás</a>
+    <a class="tabs__a" href="#/beallitasok" data-tab="beallitasok">Beállítások</a>
+    <a class="tabs__a" href="#/levelek" data-tab="levelek">Levelek</a>
+    <span class="tabs__sep" aria-hidden="true"></span>
+    <a class="tabs__a" href="#/" data-tab="blog">Blog</a>
+  </div>
+</nav>
 
 <main id="fo" class="main" tabindex="-1">
 
@@ -177,6 +189,75 @@
     </div>
   </section>
 
+  <!-- ============ FOGLALÓ (admin/foglalo.js) ============ -->
+  <section class="view fv" id="view-foglalasok" hidden aria-labelledby="fg-h">
+    <div class="fv-head">
+      <div>
+        <h1 id="fg-h">Foglalások</h1>
+        <p class="fv-sub" id="fg-sum" aria-live="polite"></p>
+      </div>
+      <button type="button" class="btn btn--primary" id="fg-new">
+        <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        Új foglalás
+      </button>
+    </div>
+    <div class="fg-tools">
+      <div class="seg" role="group" aria-label="Nézet">
+        <button type="button" class="seg__b" data-nezet="nap" aria-pressed="true">Nap</button>
+        <button type="button" class="seg__b" data-nezet="het" aria-pressed="false">Hét</button>
+      </div>
+      <div class="fg-date">
+        <button type="button" class="rnd" id="fg-prev" aria-label="Előző nap"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button type="button" class="btn btn--ghost fg-today" id="fg-today">Ma</button>
+        <button type="button" class="rnd" id="fg-next" aria-label="Következő nap"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M9.5 5.5 16 12l-6.5 6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <label class="fg-pick"><span class="sr">Dátum választása</span><input type="date" id="fg-date"></label>
+        <p class="fg-label" id="fg-label" aria-live="polite"></p>
+      </div>
+      <div class="fg-filters">
+        <label class="sel"><span>Helyszín</span><select id="fg-hely"></select></label>
+        <label class="sel"><span>Szakember</span><select id="fg-koll"></select></label>
+      </div>
+    </div>
+    <div class="fg-board" id="fg-board" aria-busy="true"></div>
+  </section>
+
+  <section class="view fv" id="view-beosztas" hidden aria-labelledby="bo-h">
+    <div class="fv-head">
+      <div>
+        <h1 id="bo-h">Beosztás</h1>
+        <p class="fv-sub">Ki mikor és hol dolgozik egy átlagos héten. A foglaló csak ezekre a sávokra ad időpontot.</p>
+      </div>
+    </div>
+    <div class="bo">
+      <div class="bo-people" id="bo-people" role="group" aria-label="Szakember választása"></div>
+      <div class="bo-main" id="bo-main"></div>
+    </div>
+  </section>
+
+  <section class="view fv" id="view-beallitasok" hidden aria-labelledby="be-h">
+    <div class="fv-head">
+      <div>
+        <h1 id="be-h">Beállítások</h1>
+        <p class="fv-sub">Kezelések, szakemberek, helyszínek és a foglalás szabályai.</p>
+      </div>
+    </div>
+    <form class="be" id="be-form" novalidate></form>
+  </section>
+
+  <section class="view fv" id="view-levelek" hidden aria-labelledby="le-h">
+    <div class="fv-head">
+      <div>
+        <h1 id="le-h">Levelek</h1>
+        <p class="fv-sub">A foglalásokhoz elkészült e-mailek: visszaigazolás a vendégnek, értesítő a stúdiónak, lemondás.</p>
+      </div>
+    </div>
+    <p class="note" id="le-note">Bemutató: a levelek most nem mennek ki, mert a levélküldés még nincs beállítva. Itt látod, pontosan mit kapna a vendég és a stúdió.</p>
+    <div class="le">
+      <ul class="le-list" id="le-list" aria-label="Levelek listája"></ul>
+      <div class="le-prev" id="le-prev"></div>
+    </div>
+  </section>
+
   <section class="view view--msg" id="view-msg" hidden>
     <p class="msg" id="msg"></p>
   </section>
@@ -251,10 +332,62 @@
   <div class="pv__stage"><iframe class="pv__frame" id="pv-frame" title="A cikk előnézete"></iframe></div>
 </div>
 
+<!-- foglalás részletei -->
+<dialog class="dlg dlg--wide" id="dlg-fg" aria-labelledby="dlg-fg-h">
+  <div class="dlg__in">
+    <p class="dlg__h" id="dlg-fg-h">Foglalás</p>
+    <div id="dlg-fg-body"></div>
+    <div class="dlg__act" id="dlg-fg-act"></div>
+  </div>
+</dialog>
+
+<!-- kézi felvétel -->
+<dialog class="dlg dlg--wide" id="dlg-new" aria-labelledby="dlg-new-h">
+  <form class="dlg__in" id="new-form" novalidate>
+    <p class="dlg__h" id="dlg-new-h">Új foglalás felvétele</p>
+    <p class="dlg__t dlg__t--sub">Telefonon vagy személyesen érkezett foglaláshoz. A rendszer ugyanúgy kizárja a dupla foglalást, mint a weboldalon.</p>
+    <div class="grid2">
+      <div class="field"><label for="n-hely">Helyszín</label><select id="n-hely" required></select></div>
+      <div class="field"><label for="n-szolg">Kezelés</label><select id="n-szolg" required></select></div>
+      <div class="field"><label for="n-koll">Szakember</label><select id="n-koll" required></select></div>
+      <div class="field"><label for="n-datum">Nap</label><input type="date" id="n-datum" required></div>
+    </div>
+    <fieldset class="field slotpick">
+      <legend>Szabad időpontok</legend>
+      <div class="slotpick__list" id="n-slots" aria-live="polite"></div>
+    </fieldset>
+    <div class="grid2">
+      <div class="field"><label for="n-nev">Vendég neve</label><input type="text" id="n-nev" required maxlength="100" autocomplete="off"></div>
+      <div class="field"><label for="n-tel">Telefonszám <span class="opt">(nem kötelező)</span></label><input type="tel" id="n-tel" maxlength="24" autocomplete="off" inputmode="tel"></div>
+      <div class="field"><label for="n-email">E-mail-cím <span class="opt">(nem kötelező)</span></label><input type="email" id="n-email" maxlength="254" autocomplete="off" inputmode="email" aria-describedby="n-email-h"><p class="hint" id="n-email-h">Ha megadod, a vendég visszaigazolást kap lemondó linkkel.</p></div>
+      <div class="field"><label for="n-megj">Megjegyzés <span class="opt">(nem kötelező)</span></label><input type="text" id="n-megj" maxlength="1000" autocomplete="off"></div>
+    </div>
+    <p class="form-err" id="n-err" role="alert" hidden></p>
+    <div class="dlg__act">
+      <button type="button" class="btn btn--ghost" id="n-cancel">Mégse</button>
+      <button type="submit" class="btn btn--primary" id="n-ok">Foglalás rögzítése</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- megerősítés (általános) -->
+<dialog class="dlg" id="dlg-ok" aria-labelledby="dlg-ok-h">
+  <form method="dialog" class="dlg__in">
+    <p class="dlg__h" id="dlg-ok-h"></p>
+    <p class="dlg__t" id="dlg-ok-t"></p>
+    <div class="dlg__act">
+      <button class="btn btn--ghost" value="cancel" autofocus>Mégse</button>
+      <button class="btn btn--danger" value="ok" id="dlg-ok-b">Igen</button>
+    </div>
+  </form>
+</dialog>
+
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <script src="vendor/marked.min.js"></script>
 <script src="vendor/turndown.js"></script>
+<script src="../js/foglalo-kozos.js"></script>
+<script src="foglalo.js"></script>
 <!-- A mock-api.js-t csak ?mock=1 mellett az admin.js tölti be (helyi teszt), élesben nem töltődik le -->
 <script src="admin.js"></script>
 </body>

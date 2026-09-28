@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="same-origin">
+<script>document.documentElement.className += ' js';</script>
+<title>Időpontfoglalás · Studio F360</title>
+<meta name="description" content="Foglalj időpontot a Studio F360-ba: gyógytorna, masszázs, sportrehabilitáció a Mexikói úton (XIV. kerület) és a Reitter Ferenc utcában (XIII. kerület). A foglalás azonnal érvényes.">
+<link rel="icon" href="media/logo/favicon-64.png" type="image/png">
+<link rel="stylesheet" href="fonts-brand/fonts-brand.css">
+<link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="css/pages.css">
+<link rel="stylesheet" href="css/foglalas.css">
+</head>
+<body class="p-foglalas">
+
+<a class="skip" href="#fo">Ugrás a tartalomra</a>
+<div class="page-frame" aria-hidden="true"></div>
+<div class="page-vignette" aria-hidden="true"></div>
+
+<!-- NAV -->
+<nav class="nav" aria-label="Fő navigáció">
+  <a href="index.html" class="nav__brand" aria-label="Studio F360 főoldal">
+    <img class="nav__logo nav__logo--dark" src="media/logo/brand-wide-anthracite.png" alt="Studio F360" width="571" height="120"><img class="nav__logo nav__logo--light" src="media/logo/brand-wide-cream.png" alt="" aria-hidden="true" width="571" height="120">
+  </a>
+  <div class="nav__links">
+    <div class="nav__item nav__item--sub nav__place nav__place--mex">
+      <a class="nav__link" href="mexikoi.html"><span class="nav__place-t">Mexikói út</span><span class="nav__place-k">XIV. kerület</span></a>
+      <div class="nav__sub">
+        <a class="nav__sub-lead" href="mexikoi.html">A Mexikói úti stúdió<span>Mexikói út 32/b · 7:00-21:00</span></a>
+        <a href="gyogyaszat.html">Gyógytorna &amp; manuálterápia</a>
+        <a href="gyogyaszat.html#gerinc" class="nav__sub-child">Gerincferdülés-terápia</a>
+        <a href="masszazs.html">Masszázsterápiák</a>
+        <a href="joga-pilates.html">Jóga &amp; Pilates</a>
+        <a href="taplalkozas.html">Táplálkozási tanácsadás &amp; InBody</a>
+      </div>
+    </div>
+    <div class="nav__item nav__item--sub nav__place nav__place--reit">
+      <a class="nav__link" href="reitter.html"><span class="nav__place-t">Reitter Ferenc utca</span><span class="nav__place-k">XIII. kerület</span></a>
+      <div class="nav__sub theme-rehab">
+        <a class="nav__sub-lead" href="reitter.html">Sport, rehab &amp; teljesítmény<span>Reitter Ferenc utca 48. · 8:00-20:00</span></a>
+        <a href="reitter-terapia.html">Eszközös terápiák</a>
+      </div>
+    </div>
+    <span class="nav__rule" aria-hidden="true"></span>
+    <div class="nav__item"><a class="nav__link" href="rolunk.html">Rólunk</a></div>
+    <div class="nav__item"><a class="nav__link" href="arak.html">Árak</a></div>
+    <div class="nav__item"><a class="nav__link" href="blog.html">Blog</a></div>
+    <div class="nav__item"><a class="nav__link" href="kapcsolat.html">Kapcsolat</a></div>
+  </div>
+  <div class="nav__end">
+    <a class="nav__soc" href="https://www.instagram.com/studio_f360_egeszsegkozpont/" target="_blank" rel="noopener" aria-label="Instagram"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><rect x="3.25" y="3.25" width="17.5" height="17.5" rx="5" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="4.1" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="17.3" cy="6.7" r="1.05" fill="currentColor"/></svg></a>
+    <a class="nav__soc" href="https://www.facebook.com/fitfoodfizio360" target="_blank" rel="noopener" aria-label="Facebook"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M13.4 21v-7.6h2.6l.4-3h-3V8.5c0-.9.3-1.5 1.5-1.5h1.6V4.3c-.3 0-1.2-.1-2.3-.1-2.3 0-3.9 1.4-3.9 4v2.2H7.7v3h2.6V21h3.1z" fill="currentColor"/></svg></a>
+    <a class="nav__cta" href="foglalas.html">Időpontfoglalás</a>
+    <button class="nav__burger" aria-label="Menü" aria-expanded="false" aria-controls="menu">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</nav>
+
+<!-- MOBIL MENÜ -->
+<div class="menu" id="menu" data-lenis-prevent>
+  <div class="menu__places">
+    <div class="menu__place menu__place--mex">
+      <a class="menu__place-t" href="mexikoi.html"><span class="no">XIV. kerület</span>Mexikói út</a>
+      <ul>
+        <li><a href="mexikoi.html">A Mexikói úti stúdió</a></li>
+        <li><a href="gyogyaszat.html">Gyógytorna &amp; manuálterápia</a></li>
+        <li><a href="gyogyaszat.html#gerinc" class="menu__child">Gerincferdülés-terápia</a></li>
+        <li><a href="masszazs.html">Masszázsterápiák</a></li>
+        <li><a href="joga-pilates.html">Jóga &amp; Pilates</a></li>
+        <li><a href="taplalkozas.html">Táplálkozási tanácsadás &amp; InBody</a></li>
+      </ul>
+    </div>
+    <div class="menu__place menu__place--reit">
+      <a class="menu__place-t" href="reitter.html"><span class="no">XIII. kerület</span>Reitter Ferenc utca</a>
+      <ul>
+        <li><a href="reitter.html">Sport, rehab &amp; teljesítmény</a></li>
+        <li><a href="reitter-terapia.html">Eszközös terápiák</a></li>
+      </ul>
+    </div>
+  </div>
+  <ol class="menu__main">
+    <li><a href="rolunk.html">Rólunk</a></li>
+    <li><a href="arak.html">Árak</a></li>
+    <li><a href="blog.html">Blog</a></li>
+    <li><a href="kapcsolat.html">Kapcsolat</a></li>
+  </ol>
+  <div class="menu__social">
+    <a class="menu__soc" href="https://www.instagram.com/studio_f360_egeszsegkozpont/" target="_blank" rel="noopener" aria-label="Instagram"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><rect x="3.25" y="3.25" width="17.5" height="17.5" rx="5" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="4.1" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="17.3" cy="6.7" r="1.05" fill="currentColor"/></svg></a>
+    <a class="menu__soc" href="https://www.facebook.com/fitfoodfizio360" target="_blank" rel="noopener" aria-label="Facebook"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M13.4 21v-7.6h2.6l.4-3h-3V8.5c0-.9.3-1.5 1.5-1.5h1.6V4.3c-.3 0-1.2-.1-2.3-.1-2.3 0-3.9 1.4-3.9 4v2.2H7.7v3h2.6V21h3.1z" fill="currentColor"/></svg></a>
+  </div>
+  <div class="menu__cta">
+    <a class="btn btn--accent" href="foglalas.html">Időpontfoglalás</a>
+  </div>
+</div>
+
+<main id="fo" class="bk" data-state="betolt">
+
+  <header class="bk-head wrap">
+    <h1 id="bk-h1">Időpontfoglalás</h1>
+    <div class="bk-head__t">
+      <p class="bk-lead" id="bk-lead">Néhány választás, és kész. A foglalás azonnal érvényes, a kezdés előtt 24 óráig online is lemondhatod.</p>
+      <p class="bk-minta" id="bk-minta" hidden>Bemutató: a szakemberek beosztása és a szabad időpontok mintaadatok.</p>
+    </div>
+  </header>
+
+  <noscript>
+    <div class="wrap"><p class="bk-alert__t">Az online foglaláshoz be kell kapcsolni a JavaScriptet. Telefonon is foglalhatsz: <a class="lnk" href="tel:+36305030578">+36 30 503 0578</a></p></div>
+  </noscript>
+
+  <!-- ================= FOGLALÓ ================= -->
+  <div class="bk-grid wrap" id="bk-flow-wrap">
+    <div class="bk-flow">
+
+      <ol class="bk-steps" id="bk-steps" aria-label="A foglalás lépései"></ol>
+      <p class="bk-trail" id="bk-trail" aria-hidden="true"></p>
+      <p class="sr-only" id="bk-live" aria-live="polite"></p>
+
+      <div class="bk-alert" id="bk-alert" role="alert" hidden>
+        <span class="bk-alert__i" aria-hidden="true">!</span>
+        <div>
+          <p class="bk-alert__h" id="bk-alert-h"></p>
+          <p class="bk-alert__t" id="bk-alert-t"></p>
+        </div>
+      </div>
+
+      <!-- 1. helyszín -->
+      <section class="bk-step" data-step="helyszin" aria-labelledby="h-helyszin" hidden>
+        <h2 id="h-helyszin" tabindex="-1">Hol szeretnél jönni?</h2>
+        <fieldset class="bk-fs">
+          <legend class="sr-only">Helyszín</legend>
+          <div class="locs" id="opt-helyszin"></div>
+        </fieldset>
+      </section>
+
+      <!-- 2. kezelés -->
+      <section class="bk-step" data-step="szolgaltatas" aria-labelledby="h-szolgaltatas" hidden>
+        <h2 id="h-szolgaltatas" tabindex="-1">Melyik kezelést foglalod?</h2>
+        <p class="bk-sub" id="sub-szolgaltatas"></p>
+        <fieldset class="bk-fs">
+          <legend class="sr-only">Kezelés</legend>
+          <div class="opts" id="opt-szolgaltatas"></div>
+        </fieldset>
+      </section>
+
+      <!-- 3. szakember -->
+      <section class="bk-step" data-step="kollega" aria-labelledby="h-kollega" hidden>
+        <h2 id="h-kollega" tabindex="-1">Kihez szeretnél menni?</h2>
+        <p class="bk-sub" id="sub-kollega"></p>
+        <fieldset class="bk-fs">
+          <legend class="sr-only">Szakember</legend>
+          <div class="opts opts--people" id="opt-kollega"></div>
+        </fieldset>
+      </section>
+
+      <!-- 4. időpont -->
+      <section class="bk-step" data-step="idopont" aria-labelledby="h-idopont" hidden>
+        <h2 id="h-idopont" tabindex="-1">Mikor jó neked?</h2>
+        <p class="bk-sub" id="sub-idopont"></p>
+        <div class="wk" id="wk">
+          <div class="wk__head">
+            <button type="button" class="wk__nav" id="wk-prev" aria-label="Előző hét">
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <p class="wk__label" id="wk-label" aria-live="polite"></p>
+            <button type="button" class="wk__nav" id="wk-next" aria-label="Következő hét">
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9.5 5.5 16 12l-6.5 6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+          <fieldset class="bk-fs">
+            <legend class="sr-only">Nap</legend>
+            <div class="wk__days" id="wk-days"></div>
+          </fieldset>
+        </div>
+        <div class="slots" id="slots" aria-busy="false"></div>
+      </section>
+
+      <!-- 5. adatok -->
+      <section class="bk-step" data-step="adatok" aria-labelledby="h-adatok" hidden>
+        <h2 id="h-adatok" tabindex="-1">Hogyan érünk el?</h2>
+        <p class="bk-sub">A visszaigazolást e-mailben küldjük, telefonon csak akkor keresünk, ha változik valami.</p>
+        <form class="bk-form" id="bk-form" novalidate autocomplete="on">
+          <div class="fld">
+            <label for="f-nev">Teljes név</label>
+            <input id="f-nev" name="nev" type="text" autocomplete="name" required maxlength="80" aria-describedby="e-nev">
+            <p class="fld__err" id="e-nev" hidden></p>
+          </div>
+          <div class="fld-row">
+            <div class="fld">
+              <label for="f-email">E-mail-cím</label>
+              <input id="f-email" name="email" type="email" inputmode="email" autocomplete="email" required maxlength="120" aria-describedby="e-email">
+              <p class="fld__err" id="e-email" hidden></p>
+            </div>
+            <div class="fld">
+              <label for="f-telefon">Telefonszám</label>
+              <input id="f-telefon" name="telefon" type="tel" inputmode="tel" autocomplete="tel" required maxlength="24" placeholder="+36 30 123 4567" aria-describedby="h-telefon e-telefon">
+              <p class="fld__hint" id="h-telefon">Ha a szakember megbetegszik, ezen a számon szólunk.</p>
+              <p class="fld__err" id="e-telefon" hidden></p>
+            </div>
+          </div>
+          <div class="fld">
+            <label for="f-megjegyzes">Megjegyzés <span class="fld__opt">(nem kötelező)</span></label>
+            <textarea id="f-megjegyzes" name="megjegyzes" rows="3" maxlength="600" aria-describedby="h-megjegyzes"></textarea>
+            <p class="fld__hint" id="h-megjegyzes">Például: panasz, korábbi sérülés, vagy hogy először jössz.</p>
+          </div>
+          <div class="fld fld--hp" aria-hidden="true">
+            <label for="f-web">Weboldal</label>
+            <input id="f-web" name="web" type="text" tabindex="-1" autocomplete="off">
+          </div>
+          <div class="fld fld--check">
+            <label class="chk" for="f-hozzajarul">
+              <input id="f-hozzajarul" name="hozzajarul" type="checkbox" required aria-describedby="e-hozzajarul">
+              <span class="chk__box" aria-hidden="true"></span>
+              <span>Hozzájárulok, hogy a Studio F360 a megadott adataimat a foglalás kezeléséhez és a kapcsolódó értesítésekhez felhasználja.</span>
+            </label>
+            <!-- KÉRENDŐ Lillától: az adatkezelési tájékoztató (link ide kerül élesítés előtt) -->
+            <p class="fld__err" id="e-hozzajarul" hidden></p>
+          </div>
+          <button type="submit" hidden tabindex="-1" aria-hidden="true"></button>
+        </form>
+      </section>
+
+      <!-- 6. összegzés -->
+      <section class="bk-step" data-step="osszegzes" aria-labelledby="h-osszegzes" hidden>
+        <h2 id="h-osszegzes" tabindex="-1">Ellenőrizd a foglalást</h2>
+        <dl class="rev" id="rev"></dl>
+        <p class="bk-fine">A díjat a helyszínen fizeted: bankkártyával, SZÉP-kártyával vagy egészségpénztári kártyával. Lemondani a kezdés előtt 24 óráig tudsz online.</p>
+      </section>
+
+      <!-- akciósáv: asztalin a lépés alatt, telefonon a képernyő alján -->
+      <div class="bk-bar" id="bk-bar">
+        <button type="button" class="btn bk-back" id="bk-back">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Vissza</span>
+        </button>
+        <button type="button" class="btn bk-next" id="bk-next">
+          <span id="bk-next-t">Tovább</span>
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M9.5 5.5 16 12l-6.5 6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- foglalási lap: ahogy választasz, soronként kitöltődik -->
+    <section class="bk-card" id="bk-card" aria-labelledby="bk-card-h">
+      <p class="bk-card__h" id="bk-card-h">A foglalásod</p>
+      <p class="bk-card__hint" id="bk-card-hint">Ahogy választasz, itt áll össze a foglalásod.</p>
+      <dl class="bk-card__rows" id="bk-card-rows"></dl>
+      <div class="bk-card__foot">
+        <p><b>Fizetés</b> a helyszínen</p>
+        <p><b>Lemondás</b> 24 óráig online</p>
+      </div>
+    </section>
+  </div>
+
+  <!-- ================= KÉSZ ================= -->
+  <section class="bk-done wrap" id="bk-done" aria-labelledby="h-done" hidden>
+    <div class="done">
+      <div class="done__main">
+        <p class="done__k" id="done-k">Foglalás rögzítve</p>
+        <h1 id="h-done" tabindex="-1">Várunk</h1>
+        <p class="done__when" id="done-when"></p>
+        <dl class="rev rev--done" id="done-rev"></dl>
+        <div class="done__act">
+          <a class="btn bk-next" id="done-ics" href="foglalas.html" download>
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 9.5h17M8 3v4M16 3v4M12 12.5v5M9.5 15h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            <span>Hozzáadás a naptárhoz</span>
+          </a>
+          <a class="btn" id="done-cancel" href="foglalas.html">Foglalás lemondása</a>
+        </div>
+        <p class="bk-fine" id="done-fine">A lemondó link a visszaigazoló levélben is benne van. A kezdés előtt 24 óráig online lemondhatod, utána hívj minket: <a class="lnk" id="done-tel" href="tel:+36305030578">+36 30 503 0578</a></p>
+        <p class="done__new"><a class="lnk" href="foglalas.html" id="done-new">Újabb időpontot foglalok</a></p>
+      </div>
+      <section class="done__mail" aria-labelledby="mail-h">
+        <div class="demo">
+          <p class="demo__h" id="mail-h">Bemutató</p>
+          <p>A visszaigazoló e-mail most nem megy ki, élesben ezt kapná meg a vendég a megadott címre.</p>
+        </div>
+        <div class="mailprev">
+          <p class="mailprev__meta"><span>Tárgy</span><b id="mail-subj"></b></p>
+          <iframe class="mailprev__frame" id="mail-frame" title="A visszaigazoló levél előnézete" loading="lazy"></iframe>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <!-- ================= LEMONDÁS (a levélben lévő tokenes linkről) ================= -->
+  <section class="bk-cancel wrap" id="bk-cancel" aria-labelledby="h-cancel" hidden>
+    <div class="cx">
+      <h1 id="h-cancel" tabindex="-1">Foglalás lemondása</h1>
+      <p class="cx__lead" id="cx-lead"></p>
+      <dl class="rev rev--done" id="cx-rev"></dl>
+      <div class="cx__act" id="cx-act"></div>
+      <p class="sr-only" id="cx-live" aria-live="polite"></p>
+    </div>
+    <section class="cx-side" aria-labelledby="cx-side-h">
+      <h2 class="cx-side__h" id="cx-side-h">Jó tudni</h2>
+      <p>A kezdés előtt 24 óráig itt, díj nélkül lemondhatod. Ezen belül hívj minket, és megbeszéljük.</p>
+      <p><a class="lnk" id="cx-tel" href="tel:+36305030578">+36 30 503 0578</a></p>
+      <p>Ha csak másik időpont kell, előbb foglald le az újat, aztán mondd le ezt.</p>
+    </section>
+  </section>
+
+</main>
+
+<!-- LÁBLÉC -->
+<footer class="footer theme-ink">
+  <div class="wrap">
+    <div class="footer__grid">
+      <div class="footer__brand">
+        <a class="footer__mark" href="index.html" aria-label="Studio F360 főoldal"><img class="footer__logo" src="media/logo/brand-primary-cream-lg.png" alt="Studio F360 · Fitness · Food · Fizio · Estd 2019" width="792" height="760" loading="lazy"></a>
+        <p>Prevenció, rekreáció, rehabilitáció és teljesítményfokozás. Úgy kint, mint bent.</p>
+      </div>
+      <div>
+        <h4>Helyszínek</h4>
+        <address>
+          <a href="mexikoi.html">Mexikói út 32/b · XIV. kerület</a>
+          <a href="reitter.html">Reitter Ferenc utca 48. · XIII. kerület</a>
+          <span class="footer__hours">H-P: 7:00-20:00</span>
+        </address>
+      </div>
+      <div>
+        <h4>Oldalak</h4>
+        <ul>
+          <li><a href="mexikoi.html">Mexikói út</a></li>
+          <li><a href="reitter.html">Reitter Ferenc utca</a></li>
+          <li><a href="rolunk.html">Rólunk</a></li>
+          <li><a href="arak.html">Árak</a></li>
+          <li><a href="blog.html">Blog</a></li>
+          <li><a href="kapcsolat.html">Kapcsolat</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Kapcsolat</h4>
+        <ul>
+          <li><a href="tel:+36305030578">+36 30 503 0578</a></li>
+          <li><a href="mailto:info@f360.hu">info@f360.hu</a></li>
+          <li><a href="https://www.facebook.com/fitfoodfizio360" target="_blank" rel="noopener">Facebook</a></li>
+          <li><a href="https://www.instagram.com/studio_f360_egeszsegkozpont/" target="_blank" rel="noopener">Instagram</a></li>
+          <li><a href="foglalas.html">Időpontfoglalás</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer__bar">
+      <span>© 2026 F360 Mozgás és Vitalitás Kft.</span>
+      <span>Adószám 27970054-1-42 · Cégjegyzékszám 01-09-359579</span>
+    </div>
+  </div>
+</footer>
+
+<script src="vendor/gsap.min.js" defer></script>
+<script src="vendor/ScrollTrigger.min.js" defer></script>
+<script src="vendor/lenis.min.js" defer></script>
+<script src="js/core.js" defer></script>
+<script src="js/foglalo-kozos.js" defer></script>
+<script src="js/foglalas.js" defer></script>
+</body>
+</html>

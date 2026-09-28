@@ -412,10 +412,20 @@
   function show(id) {
     $$('.view').forEach(function (v) { v.hidden = v.id !== id; });
     document.body.dataset.view = id;
+    // fülsor: a blog nézetei a „Blog” fül alá tartoznak
+    var tab = /^view-(foglalasok|beosztas|beallitasok|levelek)$/.exec(id);
+    $$('.tabs__a').forEach(function (a) {
+      var on = a.getAttribute('data-tab') === (tab ? tab[1] : 'blog');
+      if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    });
   }
+  window.F360AdminShow = show;
   function route() {
     var h = location.hash.replace(/^#\/?/, '');
     clearTimeout(deployTimer);
+    // az időpontfoglaló fülei (admin/foglalo.js)
+    var fg = /^(foglalasok|beosztas|beallitasok|levelek)(\/.*)?$/.exec(h);
+    if (fg && window.F360AdminFoglalo) { show('view-' + fg[1]); return window.F360AdminFoglalo.open(fg[1], fg[2] ? fg[2].slice(1) : ''); }
     if (h === 'uj') return openEditor(null);
     var m = /^szerk\/(.+)$/.exec(h);
     if (m) return openEditor(decodeURIComponent(m[1]));
@@ -1205,13 +1215,19 @@
       if (me && me.email) $('#user').textContent = me.email;
     }).catch(function () { /* a lista hibája mutatja */ });
     checkDeploy();
-    if (!location.hash) history.replaceState(null, '', '#/');
+    if (!location.hash) history.replaceState(null, '', '#/foglalasok');
     route();
   }
   if (MOCK) {
     var s = document.createElement('script');
     s.src = 'mock-api.js';
-    s.onload = function () { (window.F360MockReady || Promise.resolve()).then(boot); };
+    // a blog-mock után a foglaló mock-ja is (az /api/foglalo/* kéréseket ez szolgálja ki)
+    s.onload = function () {
+      var s2 = document.createElement('script');
+      s2.src = '../js/foglalo-mock.js';
+      s2.onload = s2.onerror = function () { (window.F360MockReady || Promise.resolve()).then(boot); };
+      document.head.appendChild(s2);
+    };
     s.onerror = function () { toast('A teszt-API nem töltődött be.', 'error'); boot(); };
     document.head.appendChild(s);
   } else {
