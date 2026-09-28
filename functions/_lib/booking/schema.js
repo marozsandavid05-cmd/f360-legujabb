@@ -1,0 +1,70 @@
+// Időpontfoglaló · séma, törzsadat-betöltés, titok
+import { SEED_TORZS, SEED_BEOSZTAS } from './seed.js';
+import { hhmmToPerc } from './ido.js';
+
+// Ugyanaz, mint a schema.sql (a tests/foglalo-egyseg.test.mjs összeveti)
+export const SEMA = [
+  `CREATE TABLE IF NOT EXISTS settings (kulcs TEXT PRIMARY KEY, ertek TEXT NOT NULL, modositva INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS schedule (staff_id TEXT NOT NULL, weekday INTEGER NOT NULL CHECK (weekday BETWEEN 1 AND 7), location_id TEXT NOT NULL, start_min INTEGER NOT NULL, end_min INTEGER NOT NULL, CHECK (start_min < end_min), PRIMARY KEY (staff_id, weekday, location_id, start_min))`,
+  `CREATE TABLE IF NOT EXISTS exceptions (id TEXT PRIMARY KEY, staff_id TEXT, location_id TEXT, date_from TEXT NOT NULL, date_to TEXT NOT NULL, start_min INTEGER, end_min INTEGER, note TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS bookings (id TEXT PRIMARY KEY, location_id TEXT NOT NULL, service_id TEXT NOT NULL, staff_id TEXT NOT NULL, date TEXT NOT NULL, start_min INTEGER NOT NULL, dur_min INTEGER NOT NULL, buffer_min INTEGER NOT NULL, price INTEGER, name TEXT NOT NULL, email TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'megerositett' CHECK (status IN ('megerositett', 'lemondva')), source TEXT NOT NULL DEFAULT 'web', token_salt TEXT NOT NULL, created_at INTEGER NOT NULL, cancelled_at INTEGER)`,
+  `CREATE INDEX IF NOT EXISTS bookings_date ON bookings (date, start_min)`,
+  `CREATE TABLE IF NOT EXISTS slot_locks (staff_id TEXT NOT NULL, date TEXT NOT NULL, slot_min INTEGER NOT NULL, booking_id TEXT NOT NULL, PRIMARY KEY (staff_id, date, slot_min))`,
+  `CREATE INDEX IF NOT EXISTS slot_locks_booking ON slot_locks (booking_id)`,
+  `CREATE INDEX IF NOT EXISTS slot_locks_date ON slot_locks (date)`,
+  `CREATE TABLE IF NOT EXISTS outbox (id INTEGER PRIMARY KEY AUTOINCREMENT, booking_id TEXT, tipus TEXT NOT NULL, cimzett TEXT NOT NULL, targy TEXT NOT NULL, html TEXT NOT NULL, szoveg TEXT NOT NULL, ics TEXT, sent INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS foglalas_korlat (iph TEXT NOT NULL, nap TEXT NOT NULL, n INTEGER NOT NULL, PRIMARY KEY (iph, nap))`,
+  `CREATE TABLE IF NOT EXISTS titkok (nev TEXT PRIMARY KEY, ertek TEXT NOT NULL)`,
+];
+
+// A kész sémájú adatbázisok (isolate-on belül, kötés-objektumonként)
+const kesz = new WeakSet();
+
+export async function sema(db) {
+  if (kesz.has(db)) return;
+  await db.batch(SEMA.map((s) => db.prepare(s)));
+  kesz.add(db);
+}
+
+/**
+ * A törzsadat (helyszínek, szolgáltatások, kollégák, szabályok) a settings táblában, JSON-ként.
+ * Ha még nincs, a MINTA seed kerül be a heti minta-beosztással együtt (INSERT OR IGNORE, így két
+ * párhuzamos első kérés sem duplikál, és a már szerkesztett adatot soha nem írja felül).
+ */
+export async function torzsBetolt(db) {
+  await sema(db);
+  const sor = await db.prepare(`SELECT ertek FROM settings WHERE kulcs = 'torzs'`).first();
+  if (sor) return JSON.parse(sor.ertek);
+  const most = Date.now();
+  await db.batch([
+    db.prepare(`INSERT OR IGNORE INTO settings (kulcs, ertek, modositva) VALUES ('torzs', ?, ?)`).bind(JSON.stringify(SEED_TORZS), most),
+    ...SEED_BEOSZTAS.map((b) => db.prepare(
+      `INSERT OR IGNORE INTO schedule (staff_id, weekday, location_id, start_min, end_min) VALUES (?, ?, ?, ?, ?)`,
+    ).bind(b.kollega, b.nap, b.helyszin, hhmmToPerc(b.kezd), hhmmToPerc(b.veg))),
+  ]);
+  const ujra = await db.prepare(`SELECT ertek FROM settings WHERE kulcs = 'torzs'`).first();
+  return JSON.parse(ujra.ertek);
+}
+
+/** A számításhoz használt alak: nyitvatartás percben. */
+export function szamitasiTorzs(torzs) {
+  return {
+    ...torzs,
+    helyszinek: torzs.helyszinek.map((h) => ({ ...h, nyit: hhmmToPerc(h.nyit), zar: hhmmToPerc(h.zar) })),
+  };
+}
+
+const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+
+/**
+ * A lemondó-token és az IP-hash kulcsa. Élesben BOOKING_SECRET env (Pages secret).
+ * Bemutatóban, ha nincs env, egy véletlen kulcs a D1-ben (első használatkor jön létre).
+ * FIGYELEM: ha később beállítják a BOOKING_SECRET-et, a korábban kiadott lemondó linkek érvénytelenek lesznek.
+ */
+export async function titok(env, db) {
+  if (env.BOOKING_SECRET && String(env.BOOKING_SECRET).length >= 16) return String(env.BOOKING_SECRET);
+  await sema(db);
+  const uj = hex(crypto.getRandomValues(new Uint8Array(32)));
+  await db.prepare(`INSERT OR IGNORE INTO titkok (nev, ertek) VALUES ('lemondas', ?)`).bind(uj).run();
+  return db.prepare(`SELECT ertek FROM titkok WHERE nev = 'lemondas'`).first('ertek');
+}
