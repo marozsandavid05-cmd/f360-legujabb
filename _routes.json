@@ -1,5 +1,5 @@
 {
   "version": 1,
-  "include": ["/api/*", "/kedveles"],
+  "include": ["/api/*", "/kedveles", "/foglalas-api/*"],
   "exclude": []
 }
