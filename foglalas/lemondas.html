@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<title>Foglalás lemondása · Studio F360</title>
+<link rel="icon" href="../media/logo/favicon-64.png" type="image/png">
+<!-- A levélben lévő lemondó link (/foglalas/lemondas?t=TOKEN) ide érkezik, és a tokent megtartva
+     a foglalas.html lemondó nézetére visz. A token az URL-ben van, ezért nincs Referer (no-referrer),
+     és replace() cseréli az előzményt, hogy a token ne maradjon a vissza gomb mögött. -->
+<script>
+(function () {
+  var q = new URLSearchParams(location.search), t = q.get('t') || '', out = new URLSearchParams();
+  if (q.get('mock') === '1') out.set('mock', '1');
+  if (t) out.set('t', t);
+  var s = out.toString();
+  location.replace('../foglalas.html' + (s ? '?' + s : ''));
+})();
+</script>
+<noscript><meta http-equiv="refresh" content="0; url=../foglalas.html"></noscript>
+</head>
+<body>
+<p><a href="../foglalas.html">Tovább a foglaláshoz</a></p>
+</body>
+</html>

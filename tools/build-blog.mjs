@@ -12,7 +12,7 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const { marked } = require('./marked.min.js');
-import { navBlock, menuBlock, footerBlock } from './shell.mjs';
+import { navBlock, menuBlock, footerBlock, bookAttrs } from './shell.mjs';
 import { writeJournal } from './build-naplo.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -300,7 +300,7 @@ ${bodyHtml}
   ${pager}
   <div class="post__back">
     <a class="btn" href="../blog.html">← Vissza a bloghoz</a>
-    <a class="btn btn--accent" href="https://f360.hu/idopontfoglalas/" target="_blank" rel="noopener">Időpontfoglalás</a>
+    <a class="btn btn--accent" ${bookAttrs('../', null)}>Időpontfoglalás</a>
   </div>
 </article>
 
