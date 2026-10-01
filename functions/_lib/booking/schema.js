@@ -1,6 +1,7 @@
 // Időpontfoglaló · séma, törzsadat-betöltés, titok
 import { SEED_TORZS, SEED_BEOSZTAS } from './seed.js';
 import { hhmmToPerc } from './ido.js';
+import { szinKioszt, szinNormal } from './szin.js';
 
 // Ugyanaz, mint a schema.sql (a tests/foglalo-egyseg.test.mjs összeveti)
 export const SEMA = [
@@ -34,7 +35,7 @@ export async function sema(db) {
 export async function torzsBetolt(db) {
   await sema(db);
   const sor = await db.prepare(`SELECT ertek FROM settings WHERE kulcs = 'torzs'`).first();
-  if (sor) return JSON.parse(sor.ertek);
+  if (sor) return szinPotlas(db, sor.ertek);
   const most = Date.now();
   await db.batch([
     db.prepare(`INSERT OR IGNORE INTO settings (kulcs, ertek, modositva) VALUES ('torzs', ?, ?)`).bind(JSON.stringify(SEED_TORZS), most),
@@ -43,7 +44,27 @@ export async function torzsBetolt(db) {
     ).bind(b.kollega, b.nap, b.helyszin, hhmmToPerc(b.kezd), hhmmToPerc(b.veg))),
   ]);
   const ujra = await db.prepare(`SELECT ertek FROM settings WHERE kulcs = 'torzs'`).first();
-  return JSON.parse(ujra.ertek);
+  return szinPotlas(db, ujra.ertek);
+}
+
+/**
+ * Adat-migráció a kolléga-színhez: a kollégák a settings.torzs JSON-ban élnek (nincs külön tábla,
+ * ezért ALTER TABLE sem kell). Ha egy kollégának nincs érvényes színe (a szín előtti adatbázis),
+ * a palettából kap egyet, és a törzsadat visszaíródik. A mentés feltételes (csak ha közben senki nem
+ * írta át), így egy párhuzamos admin-mentést nem ír felül; ütközéskor a friss adatot olvassa újra.
+ */
+async function szinPotlas(db, ertek) {
+  const torzs = JSON.parse(ertek);
+  const kollegak = Array.isArray(torzs.kollegak) ? torzs.kollegak : [];
+  if (kollegak.every((k) => szinNormal(k.szin) === k.szin)) return torzs;
+  const uj = { ...torzs, kollegak: szinKioszt(kollegak) };
+  const r = await db.prepare(`UPDATE settings SET ertek = ?, modositva = ? WHERE kulcs = 'torzs' AND ertek = ?`)
+    .bind(JSON.stringify(uj), Date.now(), ertek).run();
+  if (Number(r.meta && r.meta.changes)) return uj;
+  const friss = await db.prepare(`SELECT ertek FROM settings WHERE kulcs = 'torzs'`).first();
+  const t = JSON.parse(friss.ertek);
+  // a közben mentett változatnak is lehet szín nélküli kollégája: válaszban pótoljuk, a következő betöltés menti
+  return { ...t, kollegak: szinKioszt(Array.isArray(t.kollegak) ? t.kollegak : []) };
 }
 
 /** A számításhoz használt alak: nyitvatartás percben. */

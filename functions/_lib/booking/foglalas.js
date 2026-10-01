@@ -138,7 +138,7 @@ export function nezet(row, torzs) {
     allapot: row.status,
     helyszin: { id: hely.id, nev: hely.nev, cim: hely.cim },
     szolgaltatas: { id: szolg.id, nev: szolg.nev, perc: row.dur_min, ar: row.price },
-    kollega: { id: koll.id, nev: koll.nev },
+    kollega: { id: koll.id, nev: koll.nev, ...(koll.szin ? { szin: koll.szin } : {}) },
     datum: row.date,
     kezd: percToHHMM(row.start_min),
     veg: percToHHMM(row.start_min + row.dur_min),
@@ -154,7 +154,7 @@ export function nezet(row, torzs) {
 /** Az ügyfélnek visszaadható rész (e-mail, telefon és megjegyzés nélkül). */
 export function publikusNezet(f) {
   const { azonosito, allapot, helyszin, szolgaltatas, kollega, datum, kezd, veg, nev } = f;
-  return { azonosito, allapot, helyszin, szolgaltatas, kollega, datum, kezd, veg, nev };
+  return { azonosito, allapot, helyszin, szolgaltatas, kollega: { id: kollega.id, nev: kollega.nev }, datum, kezd, veg, nev };
 }
 
 // ---------------------------------------------------------------- IP-korlát

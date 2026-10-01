@@ -1,7 +1,8 @@
 // Időpontfoglaló · admin API (/api/foglalo/*). A hitelesítést és a CSRF-védelmet a
 // functions/api/_middleware.js végzi (Cloudflare Access JWT), ide csak belépett kérés jut.
 //
-//   GET|PUT  /api/foglalo/beallitasok                  helyszínek, szolgáltatások, kollégák, szabályok
+//   GET|PUT  /api/foglalo/beallitasok                  helyszínek, szolgáltatások, kollégák (szin: #rrggbb), szabályok
+//   PATCH    /api/foglalo/kollegak?kollega=            egy kolléga színe ({ szin: '#rrggbb' })
 //   GET|PUT  /api/foglalo/beosztas?kollega=            heti minta ({ sorok:[{nap,helyszin,kezd,veg}] })
 //   GET|POST|DELETE /api/foglalo/kivetelek             DELETE: ?id=
 //   GET      /api/foglalo/foglalasok?tol=&ig=&helyszin=&kollega=&allapot=
@@ -11,7 +12,7 @@
 
 import { HttpError, errorResponse, json, readJson } from '../../_lib/http.js';
 import { adminLemond, dbVagy503, foglal, foglalasBemenet, foglalasLista } from '../../_lib/booking/foglalas.js';
-import { beallitasokMent, beosztasLekerd, beosztasMent, kivetelFelvesz, kivetelLista, kivetelTorol } from '../../_lib/booking/admin.js';
+import { beallitasokMent, beosztasLekerd, beosztasMent, kivetelFelvesz, kivetelLista, kivetelTorol, kollegaSzinMent } from '../../_lib/booking/admin.js';
 import { torzsBetolt } from '../../_lib/booking/schema.js';
 import { mailMod, outboxLista } from '../../_lib/booking/mailer.js';
 
@@ -19,6 +20,9 @@ const UTAK = {
   beallitasok: {
     GET: async ({ db }) => json(await torzsBetolt(db)),
     PUT: async ({ db, request }) => json(await beallitasokMent(db, await readJson(request, 256 * 1024))),
+  },
+  kollegak: {
+    PATCH: async ({ db, url, request }) => json(await kollegaSzinMent(db, url.searchParams.get('kollega'), await readJson(request, 4 * 1024))),
   },
   beosztas: {
     GET: async ({ db, url }) => json(await beosztasLekerd(db, url.searchParams.get('kollega'))),

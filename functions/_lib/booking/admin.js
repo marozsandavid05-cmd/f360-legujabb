@@ -2,6 +2,7 @@
 import { HttpError } from '../http.js';
 import { ervenyesDatum, hhmmToPerc, percToHHMM } from './ido.js';
 import { torzsBetolt } from './schema.js';
+import { szinKioszt, szinNormal } from './szin.js';
 import { beosztasBetolt, kivetelekBetolt } from './foglalas.js';
 
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,59}$/;
@@ -63,13 +64,21 @@ export function torzsEllenoriz(d) {
     };
   });
   egyediId(d.kollegak, 'kolléga');
-  const kollegak = d.kollegak.map((k) => ({
-    id: k.id,
-    nev: str(k.nev, 'név', 100),
-    szerep: str(k.szerep, 'szerep', 200, { kotelezo: false }),
-    helyszinek: idLista(k.helyszinek, 'kolléga helyszínei', hIds),
-    szolgaltatasok: idLista(k.szolgaltatasok, 'kolléga szolgáltatásai', sIds),
-  }));
+  const kollegak = d.kollegak.map((k) => {
+    let szin = null;
+    if (k.szin != null && k.szin !== '') {
+      szin = szinNormal(k.szin);
+      if (!szin) throw hiba(`Hibás szín (${k.id}): #rrggbb alakú hex kell, például #4f6d8a.`);
+    }
+    return {
+      id: k.id,
+      ...(szin ? { szin } : {}),
+      nev: str(k.nev, 'név', 100),
+      szerep: str(k.szerep, 'szerep', 200, { kotelezo: false }),
+      helyszinek: idLista(k.helyszinek, 'kolléga helyszínei', hIds),
+      szolgaltatasok: idLista(k.szolgaltatasok, 'kolléga szolgáltatásai', sIds),
+    };
+  });
   const sz = d.szabalyok || {};
   const szabalyok = {
     minEloreOra: egesz(sz.minEloreOra, 'minEloreOra', 0, 168),
@@ -82,10 +91,35 @@ export function torzsEllenoriz(d) {
 }
 
 export async function beallitasokMent(db, d) {
-  const torzs = torzsEllenoriz(d);
-  await torzsBetolt(db); // séma + seed, ha még nincs
+  const be = torzsEllenoriz(d);
+  const regi = await torzsBetolt(db); // séma + seed, ha még nincs
+  // a szín nélkül küldött kolléga megtartja a mentett színét; az új kolléga szabad színt kap
+  const regiSzin = new Map(regi.kollegak.map((k) => [k.id, k.szin]));
+  const kollegak = szinKioszt(be.kollegak.map((k) => (k.szin ? k : { ...k, szin: regiSzin.get(k.id) })));
+  const torzs = { ...be, kollegak };
   await db.prepare(`UPDATE settings SET ertek = ?, modositva = ? WHERE kulcs = 'torzs'`).bind(JSON.stringify(torzs), Date.now()).run();
   return torzs;
+}
+
+/**
+ * Egy kolléga színének módosítása (PATCH /api/foglalo/kollegak?kollega=) a teljes törzsadat
+ * újraküldése nélkül. Csak a szín változik; a mentés feltételes, így egy közben érkezett
+ * beállítás-mentést nem ír felül (ütközéskor 409, a felület újratölt).
+ */
+export async function kollegaSzinMent(db, kollega, d) {
+  if (!kollega) throw hiba('Hiányzó paraméter: kollega.');
+  if (!d || typeof d !== 'object' || Array.isArray(d)) throw hiba('Hibás kérés.');
+  const szin = szinNormal(d.szin);
+  if (!szin) throw hiba('Hibás szín: #rrggbb alakú hex kell, például #4f6d8a.');
+  await torzsBetolt(db); // séma, seed és szín-pótlás, ha kell
+  const regi = await db.prepare(`SELECT ertek FROM settings WHERE kulcs = 'torzs'`).first('ertek');
+  const torzs = JSON.parse(regi);
+  if (!torzs.kollegak.some((k) => k.id === kollega)) throw new HttpError(404, 'Ismeretlen szakember.');
+  const uj = { ...torzs, kollegak: szinKioszt(torzs.kollegak.map((k) => (k.id === kollega ? { ...k, szin } : k))) };
+  const r = await db.prepare(`UPDATE settings SET ertek = ?, modositva = ? WHERE kulcs = 'torzs' AND ertek = ?`)
+    .bind(JSON.stringify(uj), Date.now(), regi).run();
+  if (!Number(r.meta && r.meta.changes)) throw new HttpError(409, 'A beállításokat közben módosították. Töltsd újra az oldalt.');
+  return { id: kollega, szin };
 }
 
 // ---------------------------------------------------------------- beosztás
@@ -96,7 +130,7 @@ export async function beosztasLekerd(db, kollega) {
   const torzs = await torzsBetolt(db);
   const osszes = await beosztasBetolt(db);
   if (!kollega) {
-    return { kollegak: torzs.kollegak.map((k) => ({ id: k.id, nev: k.nev, sorok: osszes.filter((b) => b.kollega === k.id).map(kiBeosztas) })) };
+    return { kollegak: torzs.kollegak.map((k) => ({ id: k.id, nev: k.nev, szin: k.szin, sorok: osszes.filter((b) => b.kollega === k.id).map(kiBeosztas) })) };
   }
   if (!torzs.kollegak.some((k) => k.id === kollega)) throw hiba('Ismeretlen szakember.');
   return { kollega, sorok: osszes.filter((b) => b.kollega === kollega).map(kiBeosztas) };
