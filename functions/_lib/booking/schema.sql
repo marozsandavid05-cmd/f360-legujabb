@@ -38,3 +38,24 @@ CREATE TABLE IF NOT EXISTS foglalas_korlat (iph TEXT NOT NULL, nap TEXT NOT NULL
 
 -- Bemutató-tartalék: ha nincs BOOKING_SECRET env, a lemondó-token kulcsa itt él (véletlen, 32 bájt).
 CREATE TABLE IF NOT EXISTS titkok (nev TEXT PRIMARY KEY, ertek TEXT NOT NULL);
+
+
+-- Csoportos órák (2026-10). Óratípus → heti sablon → konkrét óra (session) → résztvevő.
+-- A sablonból a generálás (orak.js oraGeneral) a következő 8 hétre hozza létre az órákat; a
+-- UNIQUE (class_type_id, datum, kezd_min) miatt idempotens. Az óra a kapacitást és a hosszt a
+-- létrehozáskor rögzíti (a típus későbbi módosítása a már létrehozott órákat nem írja át).
+CREATE TABLE IF NOT EXISTS class_types (id TEXT PRIMARY KEY, nev TEXT NOT NULL, leiras TEXT NOT NULL DEFAULT '', helyszin_id TEXT NOT NULL, perc INTEGER NOT NULL, ar INTEGER, kapacitas INTEGER NOT NULL CHECK (kapacitas BETWEEN 1 AND 100), kategoria TEXT NOT NULL CHECK (kategoria IN ('joga', 'pilates', 'aerial', 'core', 'gerinc', 'egyeb')), aktiv INTEGER NOT NULL DEFAULT 1, kapacitas_megerositendo INTEGER NOT NULL DEFAULT 0, ar_megerositendo INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL);
+
+CREATE TABLE IF NOT EXISTS class_templates (id TEXT PRIMARY KEY, class_type_id TEXT NOT NULL, kollega_id TEXT, weekday INTEGER NOT NULL CHECK (weekday BETWEEN 1 AND 7), kezd_min INTEGER NOT NULL, ervenyes_tol TEXT NOT NULL DEFAULT '', ervenyes_ig TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL);
+
+CREATE TABLE IF NOT EXISTS class_sessions (id TEXT PRIMARY KEY, class_type_id TEXT NOT NULL, kollega_id TEXT, datum TEXT NOT NULL, kezd_min INTEGER NOT NULL, perc INTEGER NOT NULL, kapacitas INTEGER NOT NULL CHECK (kapacitas BETWEEN 1 AND 100), status TEXT NOT NULL DEFAULT 'aktiv' CHECK (status IN ('aktiv', 'elmarad')), megjegyzes TEXT NOT NULL DEFAULT '', template_id TEXT, created_at INTEGER NOT NULL, UNIQUE (class_type_id, datum, kezd_min));
+
+CREATE INDEX IF NOT EXISTS class_sessions_datum ON class_sessions (datum, kezd_min);
+
+-- A helyfoglalás a beszúrás feltételében atomikus: csak akkor kerül be a sor, ha a megerősített
+-- résztvevők száma kisebb a kapacitásnál és az óra aktív. Egy e-mail egy órára egyszer (részleges UNIQUE).
+CREATE TABLE IF NOT EXISTS class_bookings (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, nev TEXT NOT NULL, email TEXT NOT NULL DEFAULT '', telefon TEXT NOT NULL DEFAULT '', megjegyzes TEXT NOT NULL DEFAULT '', ar INTEGER, status TEXT NOT NULL DEFAULT 'megerositett' CHECK (status IN ('megerositett', 'lemondva')), rogzites TEXT NOT NULL DEFAULT 'web', forras TEXT, so TEXT NOT NULL, created_at INTEGER NOT NULL, lemondva_at INTEGER, emlekeztetve_at INTEGER);
+
+CREATE INDEX IF NOT EXISTS class_bookings_session ON class_bookings (session_id, status);
+
+CREATE UNIQUE INDEX IF NOT EXISTS class_bookings_egy ON class_bookings (session_id, email) WHERE status = 'megerositett' AND email != '';

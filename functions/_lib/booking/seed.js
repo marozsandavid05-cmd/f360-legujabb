@@ -4,6 +4,16 @@
 // az adminban (/api/foglalo/beallitasok, /api/foglalo/beosztas) szerkeszthető.
 // A seed csak akkor kerül be, ha az adatbázisban még nincs törzsadat; a szerkesztettet nem írja felül.
 
+// A taplalkozas.html „Mérés előtt” listája szó szerint: az InBody-mérést tartalmazó foglalás
+// visszaigazolójába kerül (a szolgáltatás `elokeszites` mezője).
+export const MERES_ELOTT = Object.freeze([
+  'a mérés előtt 2 órával már ne étkezz',
+  'csak tiszta víz vagy ízesítetlen tea',
+  'előtte pár órával ne végezz megerőltető edzést',
+  'fém ékszereket vedd le',
+  'a mérés fehérneműben történik',
+]);
+
 // MINTA
 export const SEED_TORZS = {
   minta: true,
@@ -24,20 +34,38 @@ export const SEED_TORZS = {
     { id: 'sportmasszazs', nev: 'Sportmasszázs, regeneráció', perc: 50, ar: 15000, puffer: 10, helyszinek: ['reitter'] },
     { id: 'kinvent-pro', nev: 'Kinvent PRO', perc: 60, ar: 20000, puffer: 10, helyszinek: ['reitter'] },
     { id: 'gepi-nyirokmasszazs', nev: 'Gépi nyirokmasszázs, nyirokcsizma', perc: 45, ar: 10000, puffer: 10, helyszinek: ['reitter'] },
-  ],
-  // a rolunk.html csapatából azok, akiknek van foglalható szolgáltatása (a jógaoktatók csoportos órát
-  // tartanak, a táplálkozási tanácsadás nincs a foglalható listában, ezért ők most nem szerepelnek).
-  // szin: az admin naptárában a kolléga színe, a szin.js PALETTA első hat eleme sorban.
-  kollegak: [
-    { id: 'kodacsine-labancz-agnes', szin: '#4f6d8a', nev: 'Kodácsiné Labancz Ágnes', szerep: 'gyógytornász, manuálterapeuta', helyszinek: ['mexikoi'], szolgaltatasok: ['gyogytorna'] },
-    { id: 'vas-luca', szin: '#a0553c', nev: 'Vas Luca', szerep: 'gyógytornász, perinatális tréner', helyszinek: ['mexikoi'], szolgaltatasok: ['gyogytorna', 'kismama-masszazs'] },
+    // táplálkozás (Kovács Anna, Mexikói út), az arak.html szerint; az időtartam Lillától megerősítendő
     {
-      id: 'szegedi-botond', szin: '#5b7d55', nev: 'Szegedi Botond', szerep: 'gyógymasszőr, nyirokmasszőr, sportmasszőr', helyszinek: ['mexikoi', 'reitter'],
-      szolgaltatasok: ['gyogymasszazs-50', 'gyogymasszazs-90', 'relaxalo-masszazs', 'nyirokmasszazs-teljes', 'kismama-masszazs', 'sportmasszazs', 'gepi-nyirokmasszazs'],
+      id: 'taplalkozas-alapcsomag', nev: 'Táplálkozási alapcsomag (felmérés + InBody + 3 konzultáció)', perc: 60, ar: 60000, puffer: 10, helyszinek: ['mexikoi'],
+      leiras: 'Az alapcsomag további 3 konzultációját az első alkalmon egyeztetjük.', elokeszites: MERES_ELOTT, idotartam_megerositendo: true,
     },
-    { id: 'adorjani-anna', szin: '#7d5a8e', nev: 'Adorjáni Anna', szerep: 'gyógytornász, manuálterapeuta', helyszinek: ['reitter'], szolgaltatasok: ['sportrehab-felmeres', 'sportrehab-gyogytorna'] },
+    { id: 'taplalkozas-kiegeszito', nev: 'Kiegészítő tanácsadás', perc: 45, ar: 10000, puffer: 10, helyszinek: ['mexikoi'], idotartam_megerositendo: true },
+    {
+      id: 'inbody-770', nev: 'InBody 770 testösszetétel-elemzés, önálló', perc: 20, ar: 10000, puffer: 10, helyszinek: ['mexikoi'],
+      elokeszites: MERES_ELOTT, idotartam_megerositendo: true,
+    },
+  ],
+  // a rolunk.html csapata (9 szakember). A jógaoktatók (Barbara, Gabriella) csoportos órát tartanak,
+  // egyéni szolgáltatásuk nincs. Kovács Annának nincs kitalált beosztása: Lilla adja meg az adminban.
+  // szin: az admin naptárában a kolléga színe, a szin.js PALETTA elemei sorban (egyediek).
+  // foto: a Rólunk oldal portréja (media/brand/csapat/), Kovács Sebestyénnek nincs.
+  kollegak: [
+    { id: 'kodacsine-labancz-agnes', szin: '#4f6d8a', nev: 'Kodácsiné Labancz Ágnes', szerep: 'gyógytornász, manuálterapeuta', helyszinek: ['mexikoi'], szolgaltatasok: ['gyogytorna'], foto: '/media/brand/csapat/kodacsine-labancz-agnes.jpg' },
+    { id: 'vas-luca', szin: '#a0553c', nev: 'Vas Luca', szerep: 'gyógytornász, perinatális tréner, SEAS terapeuta', helyszinek: ['mexikoi'], szolgaltatasok: ['gyogytorna', 'kismama-masszazs'], foto: '/media/brand/csapat/vas-luca.jpg' },
+    {
+      id: 'szegedi-botond', szin: '#5b7d55', nev: 'Szegedi Botond', szerep: 'gyógymasszőr, nyirokmasszőr (Mexikói út), sportmasszőr (Reitter)', helyszinek: ['mexikoi', 'reitter'],
+      szolgaltatasok: ['gyogymasszazs-50', 'gyogymasszazs-90', 'relaxalo-masszazs', 'nyirokmasszazs-teljes', 'kismama-masszazs', 'sportmasszazs', 'gepi-nyirokmasszazs'],
+      foto: '/media/brand/csapat/szegedi-botond.jpg',
+    },
+    { id: 'adorjani-anna', szin: '#7d5a8e', nev: 'Adorjáni Anna', szerep: 'gyógytornász, manuálterapeuta', helyszinek: ['reitter'], szolgaltatasok: ['sportrehab-felmeres', 'sportrehab-gyogytorna'], foto: '/media/brand/csapat/adorjani-anna.jpg' },
     { id: 'kovacs-sebestyen', szin: '#8c6b2a', nev: 'Kovács Sebestyén', szerep: 'gyógytornász, sportrehabilitáció', helyszinek: ['reitter'], szolgaltatasok: ['sportrehab-felmeres', 'sportrehab-gyogytorna', 'kinvent-pro', 'gepi-nyirokmasszazs'] },
-    { id: 'osvath-bence', szin: '#2f6e6e', nev: 'Osváth Bence', szerep: 'személyi edző, erőnléti edző', helyszinek: ['reitter'], szolgaltatasok: ['kinvent-pro'] },
+    { id: 'osvath-bence', szin: '#2f6e6e', nev: 'Osváth Bence', szerep: 'személyi edző, erőnléti edző', helyszinek: ['reitter'], szolgaltatasok: ['kinvent-pro'], foto: '/media/brand/csapat/osvath-bence.jpg' },
+    { id: 'barkoczy-barbara', szin: '#94485e', nev: 'Barkóczy Barbara', szerep: 'jógaoktató, aerial jóga, aerial trapéz', helyszinek: ['mexikoi'], szolgaltatasok: [], foto: '/media/brand/csapat/barkoczy-barbara.jpg' },
+    { id: 'aczel-gabriella', szin: '#5a5f30', nev: 'Aczél Gabriella', szerep: 'jógaoktató, gerincjóga, Yin jóga', helyszinek: ['mexikoi'], szolgaltatasok: [], foto: '/media/brand/csapat/aczel-gabriella.jpg' },
+    {
+      id: 'kovacs-anna', szin: '#3b4580', nev: 'Kovács Anna', szerep: 'táplálkozási tanácsadó, InBody, alapító', helyszinek: ['mexikoi'],
+      szolgaltatasok: ['taplalkozas-alapcsomag', 'taplalkozas-kiegeszito', 'inbody-770'], foto: '/media/brand/csapat/kovacs-anna.jpg',
+    },
   ],
   szabalyok: {
     minEloreOra: 2, // legkorábban ennyi órával előre

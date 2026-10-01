@@ -65,7 +65,7 @@ test('katalógus: két helyszín, MINTA szolgáltatások és kollégák, szabál
   assert.ok(k.helyszinek[0].cim.includes('Mexikói út 32/b'));
   const gy = k.szolgaltatasok.find((s) => s.id === 'gyogymasszazs-50');
   assert.deepEqual({ nev: gy.nev, perc: gy.perc, ar: gy.ar, helyszinek: gy.helyszinek }, { nev: 'Gyógymasszázs', perc: 50, ar: 13500, helyszinek: ['mexikoi'] });
-  assert.equal(k.szolgaltatasok.length, 11);
+  assert.equal(k.szolgaltatasok.length, 14); // 11 egyéni + 3 táplálkozási (csoportos-kör)
   const sb = k.kollegak.find((x) => x.id === 'szegedi-botond');
   assert.deepEqual(sb.helyszinek, ['mexikoi', 'reitter']);
   assert.ok(sb.szolgaltatasok.includes('gyogymasszazs-50'));

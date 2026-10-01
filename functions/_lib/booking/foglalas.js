@@ -55,12 +55,21 @@ async function foglaltBetolt(db, tol, ig, kiveveFoglalas = null) {
 export async function katalogus(db) {
   const t = await torzsBetolt(db);
   const ma = budapestMost().datum;
+  const beosztas = await beosztasBetolt(db);
+  const aktivK = t.kollegak.filter((k) => k.archivalt !== true && !(k.aktiv_ig && k.aktiv_ig < ma));
+  // van-e foglalható beosztás a szolgáltatáshoz (ha nincs, a felület a telefonszámot mutatja)
+  const vanBeosztas = (s) => aktivK.some((k) => k.szolgaltatasok.includes(s.id)
+    && beosztas.some((b) => b.kollega === k.id && s.helyszinek.includes(b.helyszin) && k.helyszinek.includes(b.helyszin)));
   return {
     minta: t.minta === true,
     helyszinek: t.helyszinek.map(({ id, nev, cim, nyit, zar }) => ({ id, nev, cim, nyit, zar })),
-    szolgaltatasok: t.szolgaltatasok.map(({ id, nev, perc, ar, helyszinek }) => ({ id, nev, perc, ar, helyszinek })),
+    szolgaltatasok: t.szolgaltatasok.map((s) => ({
+      id: s.id, nev: s.nev, perc: s.perc, ar: s.ar, helyszinek: s.helyszinek,
+      ...(s.leiras ? { leiras: s.leiras } : {}), ...(s.elokeszites ? { elokeszites: s.elokeszites } : {}),
+      vanBeosztas: vanBeosztas(s),
+    })),
     // az archivált és a már kilépett kolléga nem látszik; a privát e-mail soha nem kerül ide
-    kollegak: t.kollegak.filter((k) => k.archivalt !== true && !(k.aktiv_ig && k.aktiv_ig < ma))
+    kollegak: aktivK
       .map(({ id, nev, szerep, helyszinek, szolgaltatasok, foto, bemutatkozas }) => ({ id, nev, szerep, helyszinek, szolgaltatasok, foto, bemutatkozas })),
     szabalyok: {
       lemondasOra: t.szabalyok.lemondasOra, minEloreOra: t.szabalyok.minEloreOra, maxEloreNap: t.szabalyok.maxEloreNap, telefon: t.szabalyok.telefon,
@@ -141,7 +150,8 @@ function szoveg(v, max, { egysoros = false } = {}) {
   return s;
 }
 
-export function foglalasBemenet(d, { admin = false } = {}) {
+/** Az ügyfél adatai (név, e-mail, telefon, megjegyzés, hozzájárulás); az egyéni és a csoportos foglalás közös része. */
+export function ugyfelBemenet(d, { admin = false } = {}) {
   const nev = szoveg(d.nev, 100, { egysoros: true });
   const email = szoveg(d.email, 254, { egysoros: true }).toLowerCase();
   const telefon = szoveg(d.telefon, 24, { egysoros: true });
@@ -154,13 +164,18 @@ export function foglalasBemenet(d, { admin = false } = {}) {
     if (!TEL_RE.test(telefon) || telefon.replace(/\D/g, '').length < 6) throw new HttpError(400, 'Kérjük, adj meg egy érvényes telefonszámot.');
   }
   if (!admin && d.hozzajarul !== true) throw new HttpError(400, 'A foglaláshoz el kell fogadnod az adatkezelési tájékoztatót.');
+  return { nev, email, telefon, megjegyzes, forras: forrasBemenet(d.forras) };
+}
+
+export function foglalasBemenet(d, { admin = false } = {}) {
+  const { nev, email, telefon, megjegyzes, forras } = ugyfelBemenet(d, { admin });
   if (!ervenyesDatum(d.datum)) throw new HttpError(400, 'Hibás dátum.');
   const kezdPerc = hhmmToPerc(d.kezd);
   if (kezdPerc == null) throw new HttpError(400, 'Hibás időpont.');
   for (const k of ['helyszin', 'szolgaltatas']) if (typeof d[k] !== 'string') throw new HttpError(400, 'Hibás kérés.');
   const kollega = d.kollega == null || d.kollega === '' ? 'barki' : d.kollega;
   if (typeof kollega !== 'string') throw new HttpError(400, 'Hibás kérés.');
-  return { helyszin: d.helyszin, szolgaltatas: d.szolgaltatas, kollega, datum: d.datum, kezdPerc, nev, email, telefon, megjegyzes, forras: forrasBemenet(d.forras) };
+  return { helyszin: d.helyszin, szolgaltatas: d.szolgaltatas, kollega, datum: d.datum, kezdPerc, nev, email, telefon, megjegyzes, forras };
 }
 
 // ---------------------------------------------------------------- nézetek
@@ -173,7 +188,7 @@ export function nezet(row, torzs) {
     azonosito: row.id,
     allapot: row.status,
     helyszin: { id: hely.id, nev: hely.nev, cim: hely.cim },
-    szolgaltatas: { id: szolg.id, nev: szolg.nev, perc: row.dur_min, ar: row.price },
+    szolgaltatas: { id: szolg.id, nev: szolg.nev, perc: row.dur_min, ar: row.price, ...(szolg.elokeszites ? { elokeszites: szolg.elokeszites } : {}) },
     kollega: { id: koll.id, nev: koll.nev, ...(koll.szin ? { szin: koll.szin } : {}) },
     datum: row.date,
     kezd: percToHHMM(row.start_min),

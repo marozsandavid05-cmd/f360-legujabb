@@ -3,6 +3,7 @@ import { SEED_TORZS, SEED_BEOSZTAS } from './seed.js';
 import { hhmmToPerc } from './ido.js';
 import { szinKioszt, szinNormal } from './szin.js';
 import { torzsAlap } from './torzs-alap.js';
+import { MIGRACIO_KULCS, csoportosMigral } from './migracio-csoportos.js';
 
 // Ugyanaz, mint a schema.sql (a tests/foglalo-egyseg.test.mjs összeveti)
 export const SEMA = [
@@ -18,6 +19,13 @@ export const SEMA = [
   `CREATE INDEX IF NOT EXISTS outbox_kuldendo ON outbox (sent, id)`,
   `CREATE TABLE IF NOT EXISTS foglalas_korlat (iph TEXT NOT NULL, nap TEXT NOT NULL, n INTEGER NOT NULL, PRIMARY KEY (iph, nap))`,
   `CREATE TABLE IF NOT EXISTS titkok (nev TEXT PRIMARY KEY, ertek TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS class_types (id TEXT PRIMARY KEY, nev TEXT NOT NULL, leiras TEXT NOT NULL DEFAULT '', helyszin_id TEXT NOT NULL, perc INTEGER NOT NULL, ar INTEGER, kapacitas INTEGER NOT NULL CHECK (kapacitas BETWEEN 1 AND 100), kategoria TEXT NOT NULL CHECK (kategoria IN ('joga', 'pilates', 'aerial', 'core', 'gerinc', 'egyeb')), aktiv INTEGER NOT NULL DEFAULT 1, kapacitas_megerositendo INTEGER NOT NULL DEFAULT 0, ar_megerositendo INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS class_templates (id TEXT PRIMARY KEY, class_type_id TEXT NOT NULL, kollega_id TEXT, weekday INTEGER NOT NULL CHECK (weekday BETWEEN 1 AND 7), kezd_min INTEGER NOT NULL, ervenyes_tol TEXT NOT NULL DEFAULT '', ervenyes_ig TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS class_sessions (id TEXT PRIMARY KEY, class_type_id TEXT NOT NULL, kollega_id TEXT, datum TEXT NOT NULL, kezd_min INTEGER NOT NULL, perc INTEGER NOT NULL, kapacitas INTEGER NOT NULL CHECK (kapacitas BETWEEN 1 AND 100), status TEXT NOT NULL DEFAULT 'aktiv' CHECK (status IN ('aktiv', 'elmarad')), megjegyzes TEXT NOT NULL DEFAULT '', template_id TEXT, created_at INTEGER NOT NULL, UNIQUE (class_type_id, datum, kezd_min))`,
+  `CREATE INDEX IF NOT EXISTS class_sessions_datum ON class_sessions (datum, kezd_min)`,
+  `CREATE TABLE IF NOT EXISTS class_bookings (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, nev TEXT NOT NULL, email TEXT NOT NULL DEFAULT '', telefon TEXT NOT NULL DEFAULT '', megjegyzes TEXT NOT NULL DEFAULT '', ar INTEGER, status TEXT NOT NULL DEFAULT 'megerositett' CHECK (status IN ('megerositett', 'lemondva')), rogzites TEXT NOT NULL DEFAULT 'web', forras TEXT, so TEXT NOT NULL, created_at INTEGER NOT NULL, lemondva_at INTEGER, emlekeztetve_at INTEGER)`,
+  `CREATE INDEX IF NOT EXISTS class_bookings_session ON class_bookings (session_id, status)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS class_bookings_egy ON class_bookings (session_id, email) WHERE status = 'megerositett' AND email != ''`,
 ];
 
 /**
@@ -71,10 +79,13 @@ async function migral(db) {
 export async function torzsBetolt(db) {
   await sema(db);
   const sor = await db.prepare(`SELECT ertek FROM settings WHERE kulcs = 'torzs'`).first();
-  if (sor) return szinPotlas(db, sor.ertek);
+  // a meglévő (élő) adatbázis egyszeri adat-migrációja: új kollégák, táplálkozás, fotók
+  if (sor) return szinPotlas(db, await csoportosMigral(db, sor.ertek));
   const most = Date.now();
   await db.batch([
     db.prepare(`INSERT OR IGNORE INTO settings (kulcs, ertek, modositva) VALUES ('torzs', ?, ?)`).bind(JSON.stringify(SEED_TORZS), most),
+    // a friss seed már tartalmazza a csoportos-kör adatait: a migráció ne fusson rá
+    db.prepare(`INSERT OR IGNORE INTO settings (kulcs, ertek, modositva) VALUES (?, '1', ?)`).bind(MIGRACIO_KULCS, most),
     ...SEED_BEOSZTAS.map((b) => db.prepare(
       `INSERT OR IGNORE INTO schedule (staff_id, weekday, location_id, start_min, end_min) VALUES (?, ?, ?, ?, ?)`,
     ).bind(b.kollega, b.nap, b.helyszin, hhmmToPerc(b.kezd), hhmmToPerc(b.veg))),

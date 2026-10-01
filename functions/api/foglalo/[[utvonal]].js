@@ -18,6 +18,16 @@
 //   GET      /api/foglalo/outbox                       elkészült levelek (elkuldve, sikertelen, hiba)
 //   POST     /api/foglalo/emlekezteto/futtat           emlékeztetők kézi indítása (+ küldés, ha van szolgáltató)
 //   GET      /api/foglalo/riport/forrasok?tol=&ig=     foglalások száma forrás, kampány, szolgáltatás szerint
+//
+//   Csoportos órák:
+//   GET      /api/foglalo/orak?tol=&ig=&helyszin=      órák (max 92 nap) + foglalt létszám, kolléga-szín
+//   POST     /api/foglalo/orak/general                 a következő 8 hét óráinak létrehozása (idempotens)
+//   PATCH    /api/foglalo/orak/:id                     egy óra felülírása {kapacitas?, kollega?, megjegyzes?}
+//   GET|POST /api/foglalo/orak/:id/resztvevok          résztvevők; kézi felvétel {nev, email?, telefon?, megjegyzes?} (201)
+//   POST     /api/foglalo/orak/:id/elmarad             {ok?}  az óra elmarad, levél a résztvevőknek
+//   POST     /api/foglalo/ora-foglalasok/:id/lemondas  egy jelentkezés lemondása (határidő nélkül)
+//   GET|POST /api/foglalo/ora-tipusok, PATCH /api/foglalo/ora-tipusok/:id
+//   GET|POST /api/foglalo/ora-sablonok, PATCH|DELETE /api/foglalo/ora-sablonok/:id
 
 import { HttpError, errorResponse, json, readJson } from '../../_lib/http.js';
 import { adminLemond, adminModosit, dbVagy503, foglal, foglalasBemenet, foglalasLista, szabad } from '../../_lib/booking/foglalas.js';
@@ -26,6 +36,11 @@ import { torzsBetolt } from '../../_lib/booking/schema.js';
 import { hatterKuldes, mailMod, outboxKuld, outboxLista } from '../../_lib/booking/mailer.js';
 import { emlekeztetoFuttat } from '../../_lib/booking/emlekezteto.js';
 import { forrasRiport } from '../../_lib/booking/forras.js';
+import { ugyfelBemenet } from '../../_lib/booking/foglalas.js';
+import {
+  oraAdminLemond, oraElmarad, oraFoglal, oraGeneral, oraLista, oraModositAdmin, oraResztvevok, oraSablonLetrehoz, oraSablonLista, oraSablonModosit,
+  oraSablonTorol, oraTipusLetrehoz, oraTipusLista, oraTipusModosit,
+} from '../../_lib/booking/orak.js';
 
 const UTAK = {
   beallitasok: {
@@ -59,7 +74,60 @@ const UTAK = {
   outbox: {
     GET: async ({ env, db }) => json({ mod: mailMod(env), levelek: await outboxLista(db) }),
   },
+  orak: {
+    GET: async ({ db, url }) => json(await oraLista(db, url.searchParams, { admin: true })),
+  },
+  'ora-tipusok': {
+    GET: async ({ db }) => json(await oraTipusLista(db)),
+    POST: async ({ db, request }) => json(await oraTipusLetrehoz(db, await readJson(request, 8 * 1024)), 201),
+  },
+  'ora-sablonok': {
+    GET: async ({ db }) => json(await oraSablonLista(db)),
+    POST: async ({ db, request }) => json(await oraSablonLetrehoz(db, await readJson(request, 4 * 1024)), 201),
+  },
 };
+
+const tiltott = (allow) => json({ error: 'Ez a művelet itt nem engedélyezett.' }, 405, { Allow: allow });
+
+// csoportos órák többszintű útvonalai (orak/:id, orak/:id/resztvevok, ora-tipusok/:id, ...)
+async function csoportos(context, request, env, url, reszek) {
+  const m = request.method;
+  const [a, b, c] = reszek;
+  if (reszek.length === 2 && a === 'orak' && b === 'general') {
+    if (m !== 'POST') return tiltott('POST');
+    return json(await oraGeneral(dbVagy503(env)));
+  }
+  if (reszek.length === 2 && a === 'orak') {
+    if (m !== 'PATCH') return tiltott('PATCH');
+    return json(await oraModositAdmin(dbVagy503(env), b, await readJson(request, 4 * 1024)));
+  }
+  if (reszek.length === 3 && a === 'orak' && c === 'resztvevok') {
+    const db = dbVagy503(env);
+    if (m === 'GET') return json(await oraResztvevok(db, b));
+    if (m !== 'POST') return tiltott('GET, POST');
+    const be = { ...ugyfelBemenet(await readJson(request, 8 * 1024), { admin: true }), ora: b };
+    return json(await oraFoglal(env, db, be, { origin: url.origin, admin: true }), 201);
+  }
+  if (reszek.length === 3 && a === 'orak' && c === 'elmarad') {
+    if (m !== 'POST') return tiltott('POST');
+    const d = (request.headers.get('Content-Type') || '').includes('application/json') ? await readJson(request, 4 * 1024) : {};
+    return json(await oraElmarad(env, dbVagy503(env), b, d));
+  }
+  if (reszek.length === 3 && a === 'ora-foglalasok' && c === 'lemondas') {
+    if (m !== 'POST') return tiltott('POST');
+    return json(await oraAdminLemond(env, dbVagy503(env), b));
+  }
+  if (reszek.length === 2 && a === 'ora-tipusok') {
+    if (m !== 'PATCH') return tiltott('PATCH');
+    return json(await oraTipusModosit(dbVagy503(env), b, await readJson(request, 8 * 1024)));
+  }
+  if (reszek.length === 2 && a === 'ora-sablonok') {
+    if (m === 'PATCH') return json(await oraSablonModosit(dbVagy503(env), b, await readJson(request, 4 * 1024)));
+    if (m === 'DELETE') return json(await oraSablonTorol(dbVagy503(env), b));
+    return tiltott('PATCH, DELETE');
+  }
+  return null;
+}
 
 // /api/foglalo/emlekezteto/futtat: az emlékeztetők kézi indítása az adminból (és ha van szolgáltató,
 // a küldendő levelek elküldése, ugyanúgy, mint a cron)
@@ -74,10 +142,10 @@ export async function onRequest(context) {
   const url = new URL(request.url);
   const reszek = url.pathname.replace(/^\/api\/foglalo\/?/, '').split('/').filter(Boolean);
   try {
-    const valasz = await kezel(context, request, env, url, reszek);
-    // foglalás felvétele, lemondása vagy áthelyezése után a friss levelek a háttérben mennek ki
-    // (ha van beállított szolgáltató; outbox-módban semmi nem történik)
-    if (valasz.ok && reszek[0] === 'foglalasok' && request.method !== 'GET') hatterKuldes(context, env, env.BOOKING_DB);
+    const valasz = (await csoportos(context, request, env, url, reszek)) || await kezel(context, request, env, url, reszek);
+    // foglalás felvétele, lemondása vagy áthelyezése (és a csoportos jelentkezések, elmaradás) után a friss
+    // levelek a háttérben mennek ki (ha van beállított szolgáltató; outbox-módban semmi nem történik)
+    if (valasz.ok && ['foglalasok', 'orak', 'ora-foglalasok'].includes(reszek[0]) && request.method !== 'GET') hatterKuldes(context, env, env.BOOKING_DB);
     return valasz;
   } catch (e) {
     return errorResponse(e);

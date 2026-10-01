@@ -10,6 +10,11 @@
 //   POST /foglalas-api/lemondas        {t}  lemond
 //   POST /foglalas-api/modositas       {t,datum,kezd,kollega}  áthelyez (helyszín és szolgáltatás marad; token és azonosító marad)
 //   GET  /foglalas-api/foglalas.ics?t= naptárfájl
+//   GET  /foglalas-api/orak?helyszin=&tol=&ig=   csoportos órák (max 14 nap): szabad helyek, oktató, ár, foglalhato, ok
+//   POST /foglalas-api/ora-foglalas    {ora,nev,email,telefon,megjegyzes,hozzajarul,web,forras}  jelentkezés egy órára
+//                                      betelt: 409 {kod:'betelt'}, már jelentkezett: 409 {kod:'mar_jelentkezett'}
+//   A tokenes végpontok (lemondas, foglalas?t=, foglalas.ics) a csoportos tokent („C” előtag) is kezelik,
+//   a válaszban tipus: 'csoportos'. Csoportos áthelyezés: POST /foglalas-api/modositas {t, ora}.
 //   POST /foglalas-api/cron/emlekezteto  X-Cron-Kulcs: <CRON_SECRET>  emlékeztetők (az ütemező hívja)
 //
 // Minden válasz JSON (kivéve az .ics), a hibaüzenet magyarul az `error` mezőben.
@@ -20,6 +25,11 @@ import {
   dbVagy503, foglal, foglalasBemenet, foglalasTokennel, icsTokennel, ipKorlat, katalogus, lemond, lemondasInfo, modosit, modositasBemenet, szabad, tokenFoglalas,
 } from '../_lib/booking/foglalas.js';
 import { emlekeztetoFuttat } from '../_lib/booking/emlekezteto.js';
+import { ugyfelBemenet } from '../_lib/booking/foglalas.js';
+import {
+  csoportosToken, oraBemenet, oraEmlekeztetoFuttat, oraFoglal, oraFoglalasTokennel, oraGeneralHaKell, oraIcsTokennel, oraLemond, oraLemondasInfo, oraLista,
+  oraModosit, oraTokenFoglalas,
+} from '../_lib/booking/orak.js';
 import { hatterKuldes, outboxKuld } from '../_lib/booking/mailer.js';
 
 const MAX_BODY = 8 * 1024;
@@ -62,10 +72,14 @@ const UTAK = {
     POST: async ({ env, request, url }) => {
       const db = dbVagy503(env);
       await cronKulcs(env, request);
-      const emlek = await emlekeztetoFuttat(env, db, { origin: env.PUBLIC_ORIGIN || url.origin });
+      const origin = env.PUBLIC_ORIGIN || url.origin;
+      const emlek = await emlekeztetoFuttat(env, db, { origin });
+      // csoportos órák: a napi generálás (8 hét) és az emlékeztetők ugyanitt
+      const orak = await oraGeneralHaKell(db);
+      const oraEmlek = await oraEmlekeztetoFuttat(env, db, { origin });
       // ugyanez a futás küldi el (ha van szolgáltató) az új és a korábban sikertelen leveleket
       const levelek = await outboxKuld(env, db);
-      return json({ mod: levelek.mod, ...emlek, levelek });
+      return json({ mod: levelek.mod, ...emlek, csoportos: { generalva: orak.letrehozva, emlekeztetve: oraEmlek.emlekeztetve }, levelek });
     },
   },
 
@@ -73,9 +87,27 @@ const UTAK = {
 
   szabad: { GET: async ({ env, url }) => json(await szabad(dbVagy503(env), url.searchParams, { env })) },
 
+  orak: { GET: async ({ env, url }) => json(await oraLista(dbVagy503(env), url.searchParams)) },
+
+  'ora-foglalas': {
+    POST: async ({ env, request, url }) => {
+      const db = dbVagy503(env);
+      sajatOrigin(request);
+      const d = await jsonBody(request);
+      if (d.web != null && String(d.web).trim() !== '') return json({ ok: true }); // honeypot, mint a foglalásnál
+      await ipKorlat(env, db, request);
+      const be = { ...ugyfelBemenet(d), ora: oraBemenet(d) };
+      return json(await oraFoglal(env, db, be, { origin: url.origin }), 201);
+    },
+  },
+
   foglalas: {
     // a köszönő oldal adatai (frissítés után is): GET ?t=<token>
-    GET: async ({ env, url }) => json(await foglalasTokennel(env, dbVagy503(env), url.searchParams.get('t'), url.origin)),
+    GET: async ({ env, url }) => {
+      const t = url.searchParams.get('t');
+      const db = dbVagy503(env);
+      return json(csoportosToken(t) ? await oraFoglalasTokennel(env, db, t, url.origin) : await foglalasTokennel(env, db, t, url.origin));
+    },
     POST: async ({ env, request, url }) => {
       const db = dbVagy503(env);
       sajatOrigin(request);
@@ -90,14 +122,19 @@ const UTAK = {
   },
 
   lemondas: {
-    GET: async ({ env, url }) => json(await lemondasInfo(env, dbVagy503(env), url.searchParams.get('t'))),
+    GET: async ({ env, url }) => {
+      const t = url.searchParams.get('t');
+      return json(csoportosToken(t) ? await oraLemondasInfo(env, dbVagy503(env), t) : await lemondasInfo(env, dbVagy503(env), t));
+    },
     POST: async ({ env, request }) => {
       const db = dbVagy503(env);
       sajatOrigin(request);
       const d = await jsonBody(request);
       // ugyanaz a napi IP-korlát, mint a foglalásnál és a módosításnál: a token-találgatást is fékezi
       await ipKorlat(env, db, request);
-      const row = await tokenFoglalas(env, db, typeof d.t === 'string' ? d.t : '');
+      const t = typeof d.t === 'string' ? d.t : '';
+      if (csoportosToken(t)) return json(await oraLemond(env, db, await oraTokenFoglalas(env, db, t)));
+      const row = await tokenFoglalas(env, db, t);
       return json(await lemond(env, db, row));
     },
   },
@@ -109,14 +146,23 @@ const UTAK = {
       const d = await jsonBody(request);
       // ugyanaz a napi IP-korlát, mint a foglalásnál: a módosítás is levelet ír és zárakat cserél
       await ipKorlat(env, db, request);
-      const row = await tokenFoglalas(env, db, typeof d.t === 'string' ? d.t : '');
+      const t = typeof d.t === 'string' ? d.t : '';
+      // csoportos tokennel: {t, ora}; egyéni tokennel: {t, datum, kezd, kollega}; a kettő nem keverhető
+      if (csoportosToken(t)) {
+        if ('datum' in d || 'kezd' in d || 'kollega' in d) throw new HttpError(400, 'Csoportos jelentkezésnél másik órát kell választani (ora).');
+        const row = await oraTokenFoglalas(env, db, t);
+        return json(await oraModosit(env, db, row, oraBemenet(d), { origin: url.origin }));
+      }
+      if ('ora' in d) throw new HttpError(400, 'Egyéni foglalásnál az időpontot kell megadni (datum, kezd).');
+      const row = await tokenFoglalas(env, db, t);
       return json(await modosit(env, db, row, modositasBemenet(d), { origin: url.origin }));
     },
   },
 
   'foglalas.ics': {
     GET: async ({ env, url }) => {
-      const { azonosito, ics } = await icsTokennel(env, dbVagy503(env), url.searchParams.get('t'), url.origin);
+      const t = url.searchParams.get('t');
+      const { azonosito, ics } = csoportosToken(t) ? await oraIcsTokennel(env, dbVagy503(env), t, url.origin) : await icsTokennel(env, dbVagy503(env), t, url.origin);
       return new Response(ics, {
         headers: {
           'Content-Type': 'text/calendar; charset=utf-8',

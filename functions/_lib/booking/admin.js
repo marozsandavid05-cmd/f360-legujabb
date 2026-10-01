@@ -42,6 +42,31 @@ function egyediId(lista, mezo) {
   return ids;
 }
 
+/**
+ * A szolgáltatás nem kötelező mezői (csoportos-kör): leiras (a foglalóban és a levélben),
+ * elokeszites (teendők a visszaigazolóban, például az InBody „Mérés előtt” listája),
+ * idotartam_megerositendo (az időtartam még nem végleges, Lillától kérendő). Csak a megadottak.
+ */
+function szolgaltatasExtra(s) {
+  const ki = {};
+  if (s.leiras != null && s.leiras !== '') {
+    if (typeof s.leiras !== 'string') throw hiba(`Hibás mező: leírás (${s.id}).`);
+    const l = s.leiras.trim().replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
+    if (l.length > 1000) throw hiba(`Túl hosszú: leírás (${s.id}, legfeljebb 1000 karakter).`);
+    if (l) ki.leiras = l;
+  }
+  if (s.elokeszites != null) {
+    if (!Array.isArray(s.elokeszites) || s.elokeszites.length > 10) throw hiba(`Hibás mező: előkészítés (${s.id}, legfeljebb 10 sor).`);
+    const sorok = s.elokeszites.map((x) => str(x, `előkészítés (${s.id})`, 200, { kotelezo: false })).filter(Boolean);
+    if (sorok.length) ki.elokeszites = sorok;
+  }
+  if (s.idotartam_megerositendo != null) {
+    if (typeof s.idotartam_megerositendo !== 'boolean') throw hiba(`Hibás mező: idotartam_megerositendo (${s.id}).`);
+    if (s.idotartam_megerositendo) ki.idotartam_megerositendo = true;
+  }
+  return ki;
+}
+
 /** A teljes törzsadat ellenőrzése és normalizálása (PUT /api/foglalo/beallitasok). */
 export function torzsEllenoriz(d) {
   if (!d || typeof d !== 'object') throw hiba('Hibás kérés.');
@@ -67,6 +92,7 @@ export function torzsEllenoriz(d) {
       ar: s.ar == null ? null : egesz(s.ar, 'ár', 0, 10000000),
       puffer: s.puffer == null ? 10 : egesz(s.puffer, 'puffer', 0, 120),
       helyszinek: idLista(s.helyszinek, 'szolgáltatás helyszínei', hIds),
+      ...szolgaltatasExtra(s),
     };
   });
   egyediId(d.kollegak, 'kolléga');

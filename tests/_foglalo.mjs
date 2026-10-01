@@ -44,6 +44,13 @@ export function celHetfo() {
 }
 export const NAP = celHetfo();
 
+/** Az első adott hétköznap (1 = hétfő ... 7 = vasárnap) legalább `min` nap múlva. */
+export function kovNap(nap, min = 3) {
+  let d = datumPlusz(budapestMost().datum, min);
+  while (hetNapja(d) !== nap) d = datumPlusz(d, 1);
+  return d;
+}
+
 export const alap = (o = {}) => ({
   helyszin: 'mexikoi', szolgaltatas: 'gyogymasszazs-50', kollega: 'szegedi-botond', datum: NAP, kezd: '10:00',
   nev: TESZT_NEV, email: 'david.teszt@example.com', telefon: '+36 30 123 4567', megjegyzes: '', hozzajarul: true, ...o,

@@ -42,8 +42,12 @@ test('a MINTA seed átmegy az admin-ellenőrzésen, és minden hivatkozása érv
     assert.ok(k, b.kollega);
     assert.ok(hely.has(b.helyszin) && k.helyszinek.includes(b.helyszin), `${b.kollega} ${b.helyszin}`);
   }
-  // minden szolgáltatáshoz van legalább egy kolléga, aki végzi, és be is van osztva arra a helyszínre
+  // minden szolgáltatáshoz van legalább egy kolléga, aki végzi, és be is van osztva arra a helyszínre;
+  // kivétel Kovács Anna táplálkozási szolgáltatásai: neki szándékosan nincs kitalált beosztása (Lilla adja meg)
+  const BEOSZTAS_NELKUL = new Set(['taplalkozas-alapcsomag', 'taplalkozas-kiegeszito', 'inbody-770']);
   for (const s of SEED_TORZS.szolgaltatasok) {
+    assert.ok(SEED_TORZS.kollegak.some((k) => k.szolgaltatasok.includes(s.id)), `${s.id}: nincs kolléga`);
+    if (BEOSZTAS_NELKUL.has(s.id)) continue;
     const ok = SEED_TORZS.kollegak.some((k) => k.szolgaltatasok.includes(s.id)
       && SEED_BEOSZTAS.some((b) => b.kollega === k.id && s.helyszinek.includes(b.helyszin)));
     assert.ok(ok, s.id);

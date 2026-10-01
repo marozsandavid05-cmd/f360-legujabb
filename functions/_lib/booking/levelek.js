@@ -67,16 +67,25 @@ const naptarHtml = (icsUrl, googleUrl) => `<p>A naptáradhoz a csatolt fájllal 
 const naptarSzoveg = (icsUrl, googleUrl) => `Naptárhoz adás: ${icsUrl}\nGoogle Naptárhoz: ${googleUrl}`;
 const regiIdopont = (r) => `${szepDatum(r.datum)}, ${r.kezd} és ${r.veg} között, ${r.kollega.nev}`;
 
+// teendők az időpont előtt (például az InBody-mérés előtt), ha a szolgáltatásnak van ilyen listája
+const elokeszitesHtml = (f) => (f.szolgaltatas.elokeszites && f.szolgaltatas.elokeszites.length
+  ? `<p><strong>Mérés előtt</strong></p><ul style="margin:0 0 16px;padding-left:20px">${f.szolgaltatas.elokeszites.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>`
+  : '');
+const elokeszitesSzoveg = (f) => (f.szolgaltatas.elokeszites && f.szolgaltatas.elokeszites.length
+  ? `Mérés előtt:\n${f.szolgaltatas.elokeszites.map((x) => `- ${x}`).join('\n')}\n\n`
+  : '');
+
 /** Visszaigazolás az ügyfélnek, lemondó és módosító linkkel és .ics csatolmánnyal. */
 export function visszaigazolas(f, { lemondasUrl, icsUrl, szabalyok, ics }) {
   const targy = `Időpontfoglalás visszaigazolása · ${szepDatum(f.datum)} ${f.kezd} · Studio F360`;
   const html = keret(targy, `<p>Kedves ${esc(f.nev)}!</p>`
     + `<p>Köszönjük a foglalásodat, az időpontodat rögzítettük.</p>`
     + adatTabla(f)
+    + elokeszitesHtml(f)
     + naptarHtml(icsUrl, googleNaptarUrl(f, { lemondasUrl }))
     + kezeloHtml(lemondasUrl, szabalyok)
     + `<p>Várunk szeretettel,<br>a Studio F360 csapata</p>`);
-  const szoveg = `Kedves ${f.nev}!\n\nKöszönjük a foglalásodat, az időpontodat rögzítettük.\n\n${adatSzoveg(f)}\n\n`
+  const szoveg = `Kedves ${f.nev}!\n\nKöszönjük a foglalásodat, az időpontodat rögzítettük.\n\n${adatSzoveg(f)}\n\n${elokeszitesSzoveg(f)}`
     + `${naptarSzoveg(icsUrl, googleNaptarUrl(f, { lemondasUrl }))}\n\n${kezeloSzoveg(lemondasUrl, szabalyok)}\n\nVárunk szeretettel,\na Studio F360 csapata\n`;
   return { tipus: 'visszaigazolas', cimzett: f.email, targy, html, szoveg, ics };
 }
@@ -87,11 +96,12 @@ export function modositasLevel(f, { regi, lemondasUrl, icsUrl, szabalyok, ics })
   const html = keret(targy, `<p>Kedves ${esc(f.nev)}!</p>`
     + `<p>Az időpontodat módosítottuk. A korábbi időpont (${esc(regiIdopont(regi))}) már nem érvényes, az új:</p>`
     + adatTabla(f)
+    + elokeszitesHtml(f)
     + naptarHtml(icsUrl, googleNaptarUrl(f, { lemondasUrl }))
     + `<p>Ha a naptáradban a korábbi időpont is szerepel, azt töröld.</p>`
     + kezeloHtml(lemondasUrl, szabalyok)
     + `<p>Várunk szeretettel,<br>a Studio F360 csapata</p>`);
-  const szoveg = `Kedves ${f.nev}!\n\nAz időpontodat módosítottuk. A korábbi időpont (${regiIdopont(regi)}) már nem érvényes, az új:\n\n${adatSzoveg(f)}\n\n`
+  const szoveg = `Kedves ${f.nev}!\n\nAz időpontodat módosítottuk. A korábbi időpont (${regiIdopont(regi)}) már nem érvényes, az új:\n\n${adatSzoveg(f)}\n\n${elokeszitesSzoveg(f)}`
     + `${naptarSzoveg(icsUrl, googleNaptarUrl(f, { lemondasUrl }))}\nHa a naptáradban a korábbi időpont is szerepel, azt töröld.\n\n${kezeloSzoveg(lemondasUrl, szabalyok)}\n\nVárunk szeretettel,\na Studio F360 csapata\n`;
   return { tipus: 'modositas', cimzett: f.email, targy, html, szoveg, ics };
 }

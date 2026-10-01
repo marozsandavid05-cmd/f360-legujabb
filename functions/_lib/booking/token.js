@@ -7,9 +7,10 @@
 const enc = new TextEncoder();
 const ID_ABC = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'; // Crockford base32, nincs I, L, O, U
 
-export function ujAzonosito() {
+/** Új azonosító: F = egyéni foglalás, C = csoportos jelentkezés, S = csoportos óra (session). */
+export function ujAzonosito(elotag = 'F') {
   const b = crypto.getRandomValues(new Uint8Array(10));
-  return `F${[...b].map((x) => ID_ABC[x & 31]).join('')}`;
+  return `${elotag}${[...b].map((x) => ID_ABC[x & 31]).join('')}`;
 }
 
 export function ujSo() {
@@ -42,7 +43,8 @@ export async function tokenKeszit(secret, id, so) {
 
 /** A tokenből az azonosító (az adatbázis-kereséshez); rossz alakra null. */
 export function tokenAzonosito(token) {
-  const m = /^(F[0-9A-Z]{10})\.([A-Za-z0-9_-]{43})$/.exec(String(token || ''));
+  // F: egyéni foglalás, C: csoportos jelentkezés (ugyanaz a link és ugyanaz a titok)
+  const m = /^([FC][0-9A-Z]{10})\.([A-Za-z0-9_-]{43})$/.exec(String(token || ''));
   return m ? m[1] : null;
 }
 

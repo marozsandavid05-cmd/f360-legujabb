@@ -15,7 +15,7 @@ import { HttpError } from '../http.js';
 import { ervenyesDatum } from './ido.js';
 
 export const KOLLEGA_UJ_MEZOK = ['email', 'aktiv_tol', 'aktiv_ig', 'foto', 'bemutatkozas', 'archivalt'];
-export const SZABALY_UJ_ALAP = Object.freeze({ ertesitKollega: true, emlekeztetoBe: true, emlekeztetoOra: 30 });
+export const SZABALY_UJ_ALAP = Object.freeze({ ertesitKollega: true, emlekeztetoBe: true, emlekeztetoOra: 30, reggeliHatarOra: 22, reggeliKezdesElott: 10 });
 
 const EMAIL_RE = /^[^\s@<>"]{1,64}@[^\s@<>"]+\.[^\s@<>"]{2,}$/;
 const hiba = (m) => new HttpError(400, m);
@@ -133,6 +133,15 @@ export function szabalyUjMezok(sz) {
       throw hiba('Hibás szám: emlekeztetoOra (1 és 168 között).');
     }
     ki.emlekeztetoOra = sz.emlekeztetoOra;
+  }
+  // csoportos órák: a reggeli órákra (kezdés reggeliKezdesElott óra előtt) az előző nap reggeliHatarOra:00 a határ
+  if ('reggeliHatarOra' in sz) {
+    if (!Number.isInteger(sz.reggeliHatarOra) || sz.reggeliHatarOra < 0 || sz.reggeliHatarOra > 23) throw hiba('Hibás szám: reggeliHatarOra (0 és 23 között).');
+    ki.reggeliHatarOra = sz.reggeliHatarOra;
+  }
+  if ('reggeliKezdesElott' in sz) {
+    if (!Number.isInteger(sz.reggeliKezdesElott) || sz.reggeliKezdesElott < 0 || sz.reggeliKezdesElott > 24) throw hiba('Hibás szám: reggeliKezdesElott (0 és 24 között).');
+    ki.reggeliKezdesElott = sz.reggeliKezdesElott;
   }
   return ki;
 }
