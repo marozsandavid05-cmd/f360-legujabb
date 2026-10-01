@@ -2,9 +2,11 @@
 //
 //   GET  /foglalas-api/katalogus
 //   GET  /foglalas-api/szabad?helyszin=&szolgaltatas=&kollega=(id|barki)&tol=YYYY-MM-DD&ig=YYYY-MM-DD   (max 14 nap)
+//   GET  /foglalas-api/szabad?t=&kollega=&tol=&ig=   módosításhoz: a saját foglalás ideje szabadnak számít
 //   POST /foglalas-api/foglalas        {helyszin,szolgaltatas,kollega,datum,kezd,nev,email,telefon,megjegyzes,hozzajarul,web}
 //   GET  /foglalas-api/lemondas?t=     a foglalás adatai (NEM mond le)
 //   POST /foglalas-api/lemondas        {t}  lemond
+//   POST /foglalas-api/modositas       {t,datum,kezd,kollega}  áthelyez (helyszín és szolgáltatás marad; token és azonosító marad)
 //   GET  /foglalas-api/foglalas.ics?t= naptárfájl
 //
 // Minden válasz JSON (kivéve az .ics), a hibaüzenet magyarul az `error` mezőben.
@@ -12,7 +14,7 @@
 
 import { HttpError, errorResponse, json } from '../_lib/http.js';
 import {
-  dbVagy503, foglal, foglalasBemenet, icsTokennel, ipKorlat, katalogus, lemond, lemondasInfo, szabad, tokenFoglalas,
+  dbVagy503, foglal, foglalasBemenet, icsTokennel, ipKorlat, katalogus, lemond, lemondasInfo, modosit, modositasBemenet, szabad, tokenFoglalas,
 } from '../_lib/booking/foglalas.js';
 
 const MAX_BODY = 8 * 1024;
@@ -35,7 +37,7 @@ async function jsonBody(request) {
 const UTAK = {
   katalogus: { GET: async ({ env }) => json(await katalogus(dbVagy503(env))) },
 
-  szabad: { GET: async ({ env, url }) => json(await szabad(dbVagy503(env), url.searchParams)) },
+  szabad: { GET: async ({ env, url }) => json(await szabad(dbVagy503(env), url.searchParams, { env })) },
 
   foglalas: {
     POST: async ({ env, request, url }) => {
@@ -59,6 +61,18 @@ const UTAK = {
       const d = await jsonBody(request);
       const row = await tokenFoglalas(env, db, typeof d.t === 'string' ? d.t : '');
       return json(await lemond(env, db, row));
+    },
+  },
+
+  modositas: {
+    POST: async ({ env, request, url }) => {
+      const db = dbVagy503(env);
+      sajatOrigin(request);
+      const d = await jsonBody(request);
+      // ugyanaz a napi IP-korlát, mint a foglalásnál: a módosítás is levelet ír és zárakat cserél
+      await ipKorlat(env, db, request);
+      const row = await tokenFoglalas(env, db, typeof d.t === 'string' ? d.t : '');
+      return json(await modosit(env, db, row, modositasBemenet(d), { origin: url.origin }));
     },
   },
 

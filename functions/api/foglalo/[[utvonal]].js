@@ -7,11 +7,13 @@
 //   GET|POST|DELETE /api/foglalo/kivetelek             DELETE: ?id=
 //   GET      /api/foglalo/foglalasok?tol=&ig=&helyszin=&kollega=&allapot=
 //   POST     /api/foglalo/foglalasok                   kézi felvétel (e-mail és telefon nem kötelező)
+//   PATCH    /api/foglalo/foglalasok/:azonosito        áthelyezés { datum, kezd, kollega } (lemondási határ és minEloreOra nélkül)
 //   POST     /api/foglalo/foglalasok/:azonosito/lemondas
+//   GET      /api/foglalo/szabad?foglalas=&kollega=&tol=&ig=   az áthelyezés szabad időpontjai (a saját idő szabad)
 //   GET      /api/foglalo/outbox                       elkészült, el nem küldött levelek
 
 import { HttpError, errorResponse, json, readJson } from '../../_lib/http.js';
-import { adminLemond, dbVagy503, foglal, foglalasBemenet, foglalasLista } from '../../_lib/booking/foglalas.js';
+import { adminLemond, adminModosit, dbVagy503, foglal, foglalasBemenet, foglalasLista, szabad } from '../../_lib/booking/foglalas.js';
 import { beallitasokMent, beosztasLekerd, beosztasMent, kivetelFelvesz, kivetelLista, kivetelTorol, kollegaSzinMent } from '../../_lib/booking/admin.js';
 import { torzsBetolt } from '../../_lib/booking/schema.js';
 import { mailMod, outboxLista } from '../../_lib/booking/mailer.js';
@@ -40,6 +42,10 @@ const UTAK = {
       return json(await foglal(env, db, be, { origin: url.origin, admin: true }), 201);
     },
   },
+  // az áthelyezés időpontválasztója: ?foglalas=<azonosító>&kollega=&tol=&ig= (minEloreOra és maxEloreNap nélkül)
+  szabad: {
+    GET: async ({ env, db, url }) => json(await szabad(db, url.searchParams, { env, admin: true })),
+  },
   outbox: {
     GET: async ({ env, db }) => json({ mod: mailMod(env), levelek: await outboxLista(db) }),
   },
@@ -54,6 +60,12 @@ export async function onRequest(context) {
     if (reszek.length === 3 && reszek[0] === 'foglalasok' && reszek[2] === 'lemondas') {
       if (request.method !== 'POST') return json({ error: 'Ez a művelet itt nem engedélyezett.' }, 405, { Allow: 'POST' });
       return json(await adminLemond(env, dbVagy503(env), reszek[1]));
+    }
+    // PATCH /api/foglalo/foglalasok/:azonosito  áthelyezés { datum, kezd, kollega }
+    if (reszek.length === 2 && reszek[0] === 'foglalasok') {
+      if (request.method !== 'PATCH') return json({ error: 'Ez a művelet itt nem engedélyezett.' }, 405, { Allow: 'PATCH' });
+      const db = dbVagy503(env);
+      return json(await adminModosit(env, db, reszek[1], await readJson(request, 4 * 1024), { origin: url.origin }));
     }
     const ut = reszek.length === 1 && Object.prototype.hasOwnProperty.call(UTAK, reszek[0]) ? UTAK[reszek[0]] : null;
     if (!ut) throw new HttpError(404, 'Ismeretlen API-végpont.');

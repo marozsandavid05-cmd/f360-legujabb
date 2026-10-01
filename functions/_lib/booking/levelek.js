@@ -52,21 +52,58 @@ const adatSzoveg = (f) => [
 
 const gomb = (url, felirat) => `<p style="margin:24px 0"><a href="${esc(url)}" style="display:inline-block;padding:12px 22px;background:${SZIN.accent};color:${SZIN.ink};text-decoration:none">${esc(felirat)}</a></p>`;
 
-/** Visszaigazolás az ügyfélnek, lemondó linkkel és .ics csatolmánnyal. */
+/** A páciens leveleiben a tokenes link gombja (lemondás és módosítás ugyanott). */
+export const KEZELO_GOMB = 'Időpont lemondása / módosítása';
+
+const kezeloHtml = (lemondasUrl, szabalyok) => `<p>Ha mégsem tudsz jönni, vagy másik időpont kellene, a kezdés előtt ${szabalyok.lemondasOra} óráig itt lemondhatod vagy módosíthatod:</p>`
+  + gomb(lemondasUrl, KEZELO_GOMB)
+  + `<p>${szabalyok.lemondasOra} órán belül telefonon tudunk segíteni: ${esc(szabalyok.telefon)}.</p>`;
+const kezeloSzoveg = (lemondasUrl, szabalyok) => `Ha mégsem tudsz jönni, vagy másik időpont kellene, a kezdés előtt ${szabalyok.lemondasOra} óráig itt lemondhatod vagy módosíthatod (${KEZELO_GOMB}):\n${lemondasUrl}\n\n`
+  + `${szabalyok.lemondasOra} órán belül telefonon tudunk segíteni: ${szabalyok.telefon}.`;
+const naptarHtml = (icsUrl) => `<p>A naptáradhoz a csatolt fájllal vagy <a href="${esc(icsUrl)}" style="color:${SZIN.ink}">ezzel a linkkel</a> adhatod hozzá.</p>`;
+const regiIdopont = (r) => `${szepDatum(r.datum)}, ${r.kezd} és ${r.veg} között, ${r.kollega.nev}`;
+
+/** Visszaigazolás az ügyfélnek, lemondó és módosító linkkel és .ics csatolmánnyal. */
 export function visszaigazolas(f, { lemondasUrl, icsUrl, szabalyok, ics }) {
   const targy = `Időpontfoglalás visszaigazolása · ${szepDatum(f.datum)} ${f.kezd} · Studio F360`;
   const html = keret(targy, `<p>Kedves ${esc(f.nev)}!</p>`
     + `<p>Köszönjük a foglalásodat, az időpontodat rögzítettük.</p>`
     + adatTabla(f)
-    + `<p>A naptáradhoz a csatolt fájllal vagy <a href="${esc(icsUrl)}" style="color:${SZIN.ink}">ezzel a linkkel</a> adhatod hozzá.</p>`
-    + `<p>Ha mégsem tudsz jönni, a kezdés előtt ${szabalyok.lemondasOra} óráig itt mondhatod le:</p>`
-    + gomb(lemondasUrl, 'Időpont lemondása')
-    + `<p>${szabalyok.lemondasOra} órán belül telefonon tudunk segíteni: ${esc(szabalyok.telefon)}.</p>`
+    + naptarHtml(icsUrl)
+    + kezeloHtml(lemondasUrl, szabalyok)
     + `<p>Várunk szeretettel,<br>a Studio F360 csapata</p>`);
   const szoveg = `Kedves ${f.nev}!\n\nKöszönjük a foglalásodat, az időpontodat rögzítettük.\n\n${adatSzoveg(f)}\n\n`
-    + `Naptárhoz adás: ${icsUrl}\n\nHa mégsem tudsz jönni, a kezdés előtt ${szabalyok.lemondasOra} óráig itt mondhatod le:\n${lemondasUrl}\n\n`
-    + `${szabalyok.lemondasOra} órán belül telefonon tudunk segíteni: ${szabalyok.telefon}.\n\nVárunk szeretettel,\na Studio F360 csapata\n`;
+    + `Naptárhoz adás: ${icsUrl}\n\n${kezeloSzoveg(lemondasUrl, szabalyok)}\n\nVárunk szeretettel,\na Studio F360 csapata\n`;
   return { tipus: 'visszaigazolas', cimzett: f.email, targy, html, szoveg, ics };
+}
+
+/** Visszaigazolás a módosításról az ügyfélnek: a régi és az új időpont, új .ics, ugyanaz a link. */
+export function modositasLevel(f, { regi, lemondasUrl, icsUrl, szabalyok, ics }) {
+  const targy = `Időpont módosítva · ${szepDatum(f.datum)} ${f.kezd} · Studio F360`;
+  const html = keret(targy, `<p>Kedves ${esc(f.nev)}!</p>`
+    + `<p>Az időpontodat módosítottuk. A korábbi időpont (${esc(regiIdopont(regi))}) már nem érvényes, az új:</p>`
+    + adatTabla(f)
+    + naptarHtml(icsUrl)
+    + `<p>Ha a naptáradban a korábbi időpont is szerepel, azt töröld.</p>`
+    + kezeloHtml(lemondasUrl, szabalyok)
+    + `<p>Várunk szeretettel,<br>a Studio F360 csapata</p>`);
+  const szoveg = `Kedves ${f.nev}!\n\nAz időpontodat módosítottuk. A korábbi időpont (${regiIdopont(regi)}) már nem érvényes, az új:\n\n${adatSzoveg(f)}\n\n`
+    + `Naptárhoz adás: ${icsUrl}\nHa a naptáradban a korábbi időpont is szerepel, azt töröld.\n\n${kezeloSzoveg(lemondasUrl, szabalyok)}\n\nVárunk szeretettel,\na Studio F360 csapata\n`;
+  return { tipus: 'modositas', cimzett: f.email, targy, html, szoveg, ics };
+}
+
+/** Értesítő a stúdiónak, ha a páciens a linkkel módosította a foglalását. */
+export function studioModositas(f, { regi, szabalyok }) {
+  const targy = `Módosított foglalás · ${f.helyszin.nev} · ${szepDatum(f.datum)} ${f.kezd} · ${f.kollega.nev}`;
+  const kapcsolat = [f.email && `E-mail: ${f.email}`, f.telefon && `Telefon: ${f.telefon}`].filter(Boolean);
+  const html = keret(targy, `<p><strong>${esc(f.nev)}</strong> módosította a foglalását a weboldalon.</p>`
+    + `<p>Korábbi időpont: ${esc(regiIdopont(regi))}. Ez az időpont felszabadult.</p>`
+    + `<p>Új időpont:</p>`
+    + adatTabla(f)
+    + `<p>${kapcsolat.map(esc).join('<br>')}</p>`);
+  const szoveg = `${f.nev} módosította a foglalását a weboldalon.\n\nKorábbi időpont: ${regiIdopont(regi)}. Ez az időpont felszabadult.\n\n`
+    + `Új időpont:\n${adatSzoveg(f)}\n\n${kapcsolat.join('\n')}\n`;
+  return { tipus: 'studio-modositas', cimzett: szabalyok.studioEmail, targy, html, szoveg };
 }
 
 /** Értesítő a stúdiónak az új foglalásról. */

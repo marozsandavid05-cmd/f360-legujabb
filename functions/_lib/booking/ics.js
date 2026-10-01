@@ -43,6 +43,8 @@ export function icsKeszit(f, { host = 'f360', most = Date.now(), lemondasUrl = '
     'BEGIN:VEVENT',
     `UID:${f.azonosito}@${host}`,
     `DTSTAMP:${utc(most)}`,
+    // a módosításkor ugyanaz a UID megy ki; a növekvő SEQUENCE miatt a naptár frissíti az eseményt, nem duplikálja
+    `SEQUENCE:${Math.floor(most / 1000)}`,
     `DTSTART:${utc(kezd)}`,
     `DTEND:${utc(veg)}`,
     `SUMMARY:${esc(`${f.szolgaltatas.nev} · Studio F360`)}`,

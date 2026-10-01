@@ -7,12 +7,13 @@ import { foglalasSlotjai, szabadIdopontok } from './szabad.js';
 import { sema, szamitasiTorzs, titok, torzsBetolt } from './schema.js';
 import { tokenAzonosito, tokenEllenoriz, tokenKeszit, ujAzonosito, ujSo } from './token.js';
 import { icsKeszit } from './ics.js';
-import { lemondasLevel, studioErtesito, visszaigazolas } from './levelek.js';
+import { lemondasLevel, modositasLevel, studioErtesito, studioModositas, visszaigazolas } from './levelek.js';
 import { levelSorok, mailMod } from './mailer.js';
 
 export const NAPI_KORLAT = 20; // foglalási kísérlet IP-nként naponta
 export const MAX_NAP_EGY_KERESBEN = 14;
 const UTKOZES = 'Ezt az időpontot közben lefoglalták. Kérjük, válassz másikat.';
+const KOZBEN_MODOSULT = 'A foglalást közben módosították. Kérjük, töltsd újra az oldalt.';
 const NEM_FOGLALHATO = 'Ez az időpont nem foglalható. Kérjük, válassz a szabad időpontok közül.';
 
 export function dbVagy503(env) {
@@ -39,10 +40,10 @@ export async function kivetelekBetolt(db, tol, ig) {
   }));
 }
 
-async function foglaltBetolt(db, tol, ig) {
+async function foglaltBetolt(db, tol, ig, kiveveFoglalas = null) {
   const { results } = await db.prepare(
-    `SELECT staff_id, date, slot_min FROM slot_locks WHERE date >= ? AND date <= ?`,
-  ).bind(tol, ig).all();
+    `SELECT staff_id, date, slot_min FROM slot_locks WHERE date >= ? AND date <= ? AND booking_id != ?`,
+  ).bind(tol, ig, kiveveFoglalas || '').all();
   return (results || []).map((r) => ({ kollega: r.staff_id, datum: r.date, slot: r.slot_min }));
 }
 
@@ -77,19 +78,46 @@ function hivatkozasok(torzs, { helyszin, szolgaltatas, kollega }) {
   return { hely, szolg, koll };
 }
 
-export async function szabad(db, q, most = Date.now()) {
+/**
+ * Szabad időpontok. Módosításhoz a foglalás is megadható: nyilvánosan `t` (lemondó/módosító
+ * token), az adminban `foglalas` (azonosító). Ilyenkor a helyszín és a szolgáltatás a foglalásból
+ * jön (eltérő érték 400), a saját foglalás zárai szabadnak számítanak, és a foglaláskor rögzített
+ * időtartam és puffer számít. Az admin nézetben nincs minEloreOra és maxEloreNap.
+ */
+export async function szabad(db, q, { env = {}, most = Date.now(), admin = false } = {}) {
   const tol = q.get('tol');
   const ig = q.get('ig');
   if (!ervenyesDatum(tol) || !ervenyesDatum(ig) || ig < tol) throw new HttpError(400, 'Hibás dátum-tartomány.');
   if (napok(tol, ig, MAX_NAP_EGY_KERESBEN + 1).length > MAX_NAP_EGY_KERESBEN) {
     throw new HttpError(400, `Egyszerre legfeljebb ${MAX_NAP_EGY_KERESBEN} nap kérhető le.`);
   }
-  const torzs = await torzsBetolt(db);
   const kollega = q.get('kollega') || 'barki';
-  const p = { helyszin: q.get('helyszin'), szolgaltatas: q.get('szolgaltatas'), kollega };
-  hivatkozasok(torzs, p);
-  const [beosztas, kivetelek, foglalt] = await Promise.all([beosztasBetolt(db), kivetelekBetolt(db, tol, ig), foglaltBetolt(db, tol, ig)]);
-  return szabadIdopontok({ torzs: szamitasiTorzs(torzs), beosztas, kivetelek, foglalt, most, ...p, tol, ig });
+  let row = null;
+  if (!admin && q.has('t')) row = await tokenFoglalas(env, db, q.get('t'));
+  if (admin && q.has('foglalas')) row = await foglalasAzonositoval(db, q.get('foglalas'));
+  const alapTorzs = await torzsBetolt(db);
+  if (row) {
+    modosithatoAllapot(row, alapTorzs, { admin, most });
+    for (const [p, col] of [['helyszin', 'location_id'], ['szolgaltatas', 'service_id']]) {
+      if (q.get(p) && q.get(p) !== row[col]) throw new HttpError(400, 'Módosításkor a helyszín és a szolgáltatás nem változhat.');
+    }
+  }
+  const p = { helyszin: row ? row.location_id : q.get('helyszin'), szolgaltatas: row ? row.service_id : q.get('szolgaltatas'), kollega };
+  hivatkozasok(alapTorzs, p);
+  const [beosztas, kivetelek, foglalt] = await Promise.all([beosztasBetolt(db), kivetelekBetolt(db, tol, ig), foglaltBetolt(db, tol, ig, row && row.id)]);
+  return szabadIdopontok({ torzs: szamitasiTorzs(szamitasra(alapTorzs, { admin, row })), beosztas, kivetelek, foglalt, most, ...p, tol, ig });
+}
+
+/**
+ * A számításhoz használt törzs: adminnak nincs minEloreOra és maxEloreNap korlát; módosításnál a
+ * szolgáltatás a foglaláskor rögzített időtartammal és pufferrel számít (ha azóta átírták is).
+ */
+function szamitasra(torzs, { admin = false, row = null } = {}) {
+  let t = admin ? { ...torzs, szabalyok: { ...torzs.szabalyok, minEloreOra: 0, maxEloreNap: 3660 } } : torzs;
+  if (row) {
+    t = { ...t, szolgaltatasok: t.szolgaltatasok.map((s) => (s.id === row.service_id ? { ...s, perc: row.dur_min, puffer: row.buffer_min } : s)) };
+  }
+  return t;
 }
 
 // ---------------------------------------------------------------- bemenet ellenőrzése
@@ -193,7 +221,7 @@ const linkek = (origin, token) => ({
 export async function foglal(env, db, be, { origin, admin = false, most = Date.now() }) {
   const torzs = await torzsBetolt(db);
   const { hely, szolg } = hivatkozasok(torzs, be);
-  const szTorzs = szamitasiTorzs(admin ? { ...torzs, szabalyok: { ...torzs.szabalyok, minEloreOra: 0, maxEloreNap: 3660 } } : torzs);
+  const szTorzs = szamitasiTorzs(szamitasra(torzs, { admin }));
   const [beosztas, kivetelek, foglalt] = await Promise.all([
     beosztasBetolt(db), kivetelekBetolt(db, be.datum, be.datum), foglaltBetolt(db, be.datum, be.datum),
   ]);
@@ -274,6 +302,8 @@ export async function lemondasInfo(env, db, token, most = Date.now()) {
     azonosito: row.id,
     allapot: row.status,
     lemondhato: a.lemondhato,
+    // a módosítás határa ugyanaz, mint a lemondásé (a felület ebből dönti el, mutatja-e a gombot)
+    modosithato: a.lemondhato,
     hatarido: new Date(a.hataridoMs).toISOString(),
     telefon: torzs.szabalyok.telefon,
     foglalas: publikusNezet(nezet(row, torzs)),
@@ -298,7 +328,10 @@ export async function lemond(env, db, row, { admin = false, most = Date.now() } 
   const f = nezet({ ...row, status: 'lemondva' }, torzs);
   const level = lemondasLevel(f, { szabalyok: torzs.szabalyok });
   const stmts = [
-    db.prepare(`UPDATE bookings SET status = 'lemondva', cancelled_at = ? WHERE id = ? AND status = 'megerositett'`).bind(most, row.id),
+    // csak akkor mond le, ha a foglalás még pontosan a beolvasott időpontban van: ha közben
+    // módosították, a lemondó levél és a határidő a régi időpontról szólna
+    db.prepare(`UPDATE bookings SET status = 'lemondva', cancelled_at = ? WHERE id = ? AND status = 'megerositett' AND staff_id = ? AND date = ? AND start_min = ?`)
+      .bind(most, row.id, row.staff_id, row.date, row.start_min),
   ];
   if (level.cimzett) {
     stmts.push(db.prepare(
@@ -306,18 +339,123 @@ export async function lemond(env, db, row, { admin = false, most = Date.now() } 
        SELECT ?, ?, ?, ?, ?, ?, NULL, 0, ? WHERE changes() = 1`,
     ).bind(row.id, level.tipus, level.cimzett, level.targy, level.html, level.szoveg, most));
   }
-  stmts.push(db.prepare(`DELETE FROM slot_locks WHERE booking_id = ?`).bind(row.id));
+  // a zárak csak akkor törlődnek, ha a foglalás lemondott (ez a batch vagy egy korábbi mondta le);
+  // ha közben módosították és itt nem mondtunk le, az új időpont zárai maradnak
+  stmts.push(db.prepare(`DELETE FROM slot_locks WHERE booking_id = ? AND (SELECT status FROM bookings WHERE id = ?) = 'lemondva'`).bind(row.id, row.id));
   mailMod(env);
   const eredmeny = await db.batch(stmts);
-  if (!eredmeny[0] || Number(eredmeny[0].meta && eredmeny[0].meta.changes) !== 1) throw new HttpError(410, 'Ezt a foglalást már lemondták.');
+  if (!eredmeny[0] || Number(eredmeny[0].meta && eredmeny[0].meta.changes) !== 1) {
+    const friss = await foglalasSor(db, row.id);
+    if (friss && friss.status === 'megerositett') throw new HttpError(409, KOZBEN_MODOSULT);
+    throw new HttpError(410, 'Ezt a foglalást már lemondták.');
+  }
   return { azonosito: row.id, allapot: 'lemondva' };
 }
 
 export async function adminLemond(env, db, id, most = Date.now()) {
+  return lemond(env, db, await foglalasAzonositoval(db, id), { admin: true, most });
+}
+
+async function foglalasAzonositoval(db, id) {
   await sema(db);
-  const row = /^F[0-9A-Z]{10}$/.test(id) ? await foglalasSor(db, id) : null;
+  const row = /^F[0-9A-Z]{10}$/.test(String(id || '')) ? await foglalasSor(db, id) : null;
   if (!row) throw new HttpError(404, 'Nincs ilyen foglalás.');
-  return lemond(env, db, row, { admin: true, most });
+  return row;
+}
+
+// ---------------------------------------------------------------- módosítás (áthelyezés)
+
+/**
+ * Módosítható-e a foglalás. Lemondott 410, elmúlt 410 (az adminnak is: múltbeli foglalást nem
+ * helyezünk át); a páciensnek a lemondási határon belül 409 a telefonszámmal, ugyanúgy, mint a
+ * lemondásnál. Az admin a határon belül is áthelyezhet.
+ */
+export function modosithatoAllapot(row, torzs, { admin = false, most = Date.now() } = {}) {
+  if (row.status !== 'megerositett') throw new HttpError(410, 'Ezt a foglalást már lemondták, nem módosítható.');
+  const a = lemondasAllapot(row, torzs, most);
+  if (a.elmult) throw new HttpError(410, 'Ez az időpont már elmúlt, a link lejárt.');
+  if (!admin && !a.lemondhato) {
+    throw new HttpError(409, `A kezdés előtti ${torzs.szabalyok.lemondasOra} órán belül a link már nem módosít. Kérjük, hívj minket: ${torzs.szabalyok.telefon}.`, { telefon: torzs.szabalyok.telefon });
+  }
+}
+
+/** A módosítás bemenete: új nap, kezdés, kolléga (vagy „barki”). Helyszín és szolgáltatás nem változik. */
+export function modositasBemenet(d) {
+  if (!ervenyesDatum(d.datum)) throw new HttpError(400, 'Hibás dátum.');
+  const kezdPerc = hhmmToPerc(d.kezd);
+  if (kezdPerc == null) throw new HttpError(400, 'Hibás időpont.');
+  const kollega = d.kollega == null || d.kollega === '' ? 'barki' : d.kollega;
+  if (typeof kollega !== 'string') throw new HttpError(400, 'Hibás kérés.');
+  return { datum: d.datum, kezdPerc, kollega };
+}
+
+/**
+ * Módosítás. Az azonosító és a token marad; az új időpontra ugyanazok a szabályok, mint foglaláskor
+ * (adminnál minEloreOra és maxEloreNap nélkül). Egy batch: a régi zárak törlése, az újak beszúrása,
+ * a foglalás frissítése, a levelek. Az új zárak booking_id-ja egy alkérdés, ami csak akkor ad
+ * értéket, ha a foglalás még pontosan az, amit beolvastunk (megerősített, régi időpont); ha közben
+ * lemondták vagy módosították, NULL lesz, a NOT NULL megszorítás eldobja az egész batch-et. Foglalt
+ * új slotnál a PRIMARY KEY dobja el; a régi foglalás így mindkét esetben érintetlen marad.
+ */
+export async function modosit(env, db, row, be, { origin, admin = false, most = Date.now() }) {
+  const torzs = await torzsBetolt(db);
+  modosithatoAllapot(row, torzs, { admin, most });
+  hivatkozasok(torzs, { helyszin: row.location_id, szolgaltatas: row.service_id, kollega: be.kollega });
+  if (be.datum === row.date && be.kezdPerc === row.start_min && (be.kollega === 'barki' || be.kollega === row.staff_id)) {
+    throw new HttpError(400, 'Ez a jelenlegi időpontod. Válassz másikat.');
+  }
+  const szTorzs = szamitasiTorzs(szamitasra(torzs, { admin, row }));
+  const [beosztas, kivetelek, foglalt] = await Promise.all([
+    beosztasBetolt(db), kivetelekBetolt(db, be.datum, be.datum), foglaltBetolt(db, be.datum, be.datum, row.id),
+  ]);
+  const kezd = percToHHMM(be.kezdPerc);
+  const alap = { torzs: szTorzs, beosztas, kivetelek, most, helyszin: row.location_id, szolgaltatas: row.service_id, kollega: be.kollega, tol: be.datum, ig: be.datum };
+  const beosztasSzerint = (szabadIdopontok({ ...alap, foglalt: [] }).napok[be.datum] || []).find((s) => s.kezd === kezd);
+  if (!beosztasSzerint) throw new HttpError(409, NEM_FOGLALHATO);
+  const mostSzabad = new Set(((szabadIdopontok({ ...alap, foglalt }).napok[be.datum] || []).find((s) => s.kezd === kezd) || { kollegak: [] }).kollegak);
+  const jeloltek = [...beosztasSzerint.kollegak].sort((a, b) => Number(mostSzabad.has(b)) - Number(mostSzabad.has(a)));
+
+  const token = await tokenKeszit(await titok(env, db), row.id, row.token_salt);
+  const { lemondasUrl, icsUrl } = linkek(origin, token);
+  const regi = nezet(row, torzs);
+  for (const kollega of jeloltek) {
+    const f = nezet({ ...row, staff_id: kollega, date: be.datum, start_min: be.kezdPerc }, torzs);
+    const ics = icsKeszit(f, { host: new URL(origin).host, most, lemondasUrl });
+    const levelek = [modositasLevel(f, { regi, lemondasUrl, icsUrl, szabalyok: torzs.szabalyok, ics })];
+    if (!admin) levelek.push(studioModositas(f, { regi, szabalyok: torzs.szabalyok }));
+    const stmts = [
+      db.prepare(`DELETE FROM slot_locks WHERE booking_id = ?`).bind(row.id),
+      ...foglalasSlotjai({ kollega, datum: be.datum, kezd: be.kezdPerc, perc: row.dur_min, puffer: row.buffer_min }).map((s) => db.prepare(
+        `INSERT INTO slot_locks (staff_id, date, slot_min, booking_id) VALUES (?, ?, ?, (SELECT id FROM bookings
+         WHERE id = ? AND status = 'megerositett' AND staff_id = ? AND date = ? AND start_min = ?))`,
+      ).bind(kollega, s.datum, s.slot, row.id, row.staff_id, row.date, row.start_min)),
+      db.prepare(`UPDATE bookings SET staff_id = ?, date = ?, start_min = ? WHERE id = ?`).bind(kollega, be.datum, be.kezdPerc, row.id),
+      ...levelSorok(db, row.id, levelek, most),
+    ];
+    mailMod(env);
+    try {
+      await db.batch(stmts);
+    } catch (e) {
+      const uzenet = String(e && e.message);
+      if (/UNIQUE constraint failed: slot_locks/.test(uzenet)) continue; // az új időpontot közben lefoglalták
+      if (/NOT NULL constraint failed: slot_locks\.booking_id/.test(uzenet)) {
+        const most2 = await foglalasSor(db, row.id);
+        if (!most2 || most2.status !== 'megerositett') throw new HttpError(410, 'Ezt a foglalást közben lemondták.');
+        throw new HttpError(409, KOZBEN_MODOSULT);
+      }
+      throw e;
+    }
+    return {
+      azonosito: row.id, lemondasUrl, ics: icsUrl, modositva: true,
+      level: { targy: levelek[0].targy, html: levelek[0].html, szoveg: levelek[0].szoveg }, foglalas: publikusNezet(f),
+    };
+  }
+  throw new HttpError(409, UTKOZES);
+}
+
+export async function adminModosit(env, db, id, d, { origin, most = Date.now() }) {
+  const row = await foglalasAzonositoval(db, id);
+  return modosit(env, db, row, modositasBemenet(d), { origin, admin: true, most });
 }
 
 export async function icsTokennel(env, db, token, origin) {
