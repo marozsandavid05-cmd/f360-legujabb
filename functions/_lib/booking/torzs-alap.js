@@ -15,7 +15,24 @@ import { HttpError } from '../http.js';
 import { ervenyesDatum } from './ido.js';
 
 export const KOLLEGA_UJ_MEZOK = ['email', 'aktiv_tol', 'aktiv_ig', 'foto', 'bemutatkozas', 'archivalt'];
-export const SZABALY_UJ_ALAP = Object.freeze({ ertesitKollega: true, emlekeztetoBe: true, emlekeztetoOra: 30, reggeliHatarOra: 22, reggeliKezdesElott: 10 });
+export const SZABALY_UJ_ALAP = Object.freeze({ ertesitKollega: true, emlekeztetoBe: true, emlekeztetoOra: 30, reggeliHatarOra: 22, reggeliKezdesElott: 10, kinalas: 'igazitott' });
+
+// A felkínált kezdések lépése (a belső 15 perces rács ettől nem változik):
+//   globálisan (szabalyok.kinalas): 'igazitott' (időtartam + puffer, felfelé a 15 többszörösére) | 15 | 30 | 60
+//   szolgáltatásonként (kinalas): null (a globálisat követi) | 'igazitott' | 15 többszöröse 15 és 240 között
+export const KINALAS_GLOBALIS = Object.freeze(['igazitott', 15, 30, 60]);
+
+export function kinalasGlobalis(v) {
+  if (!KINALAS_GLOBALIS.includes(v)) throw hiba("Hibás beállítás: kinalas ('igazitott', 15, 30 vagy 60).");
+  return v;
+}
+
+/** A szolgáltatás felülírása; null: a globálisat követi. */
+export function kinalasSzolgaltatas(v, id = '') {
+  if (v === null || v === 'igazitott') return v;
+  if (Number.isInteger(v) && v >= 15 && v <= 240 && v % 15 === 0) return v;
+  throw hiba(`Hibás kínálás${id ? ` (${id})` : ''}: null, 'igazitott', vagy 15 többszöröse 15 és 240 perc között.`);
+}
 
 const EMAIL_RE = /^[^\s@<>"]{1,64}@[^\s@<>"]+\.[^\s@<>"]{2,}$/;
 const hiba = (m) => new HttpError(400, m);
@@ -143,5 +160,6 @@ export function szabalyUjMezok(sz) {
     if (!Number.isInteger(sz.reggeliKezdesElott) || sz.reggeliKezdesElott < 0 || sz.reggeliKezdesElott > 24) throw hiba('Hibás szám: reggeliKezdesElott (0 és 24 között).');
     ki.reggeliKezdesElott = sz.reggeliKezdesElott;
   }
+  if ('kinalas' in sz) ki.kinalas = kinalasGlobalis(sz.kinalas);
   return ki;
 }

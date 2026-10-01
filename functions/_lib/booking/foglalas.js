@@ -2,8 +2,8 @@
 // functions/foglalas-api és functions/api/foglalo alatti routerekben van.
 
 import { HttpError } from '../http.js';
-import { budapestMost, datumPlusz, ervenyesDatum, helyiToUtc, hhmmToPerc, napok, percToHHMM } from './ido.js';
-import { foglalasSlotjai, szabadIdopontok } from './szabad.js';
+import { RACS, budapestMost, datumPlusz, ervenyesDatum, helyiToUtc, hhmmToPerc, napok, percToHHMM } from './ido.js';
+import { foglalasSlotjai, kinalasLepes, szabadIdopontok } from './szabad.js';
 import { sema, szamitasiTorzs, titok, torzsBetolt } from './schema.js';
 import { tokenAzonosito, tokenEllenoriz, tokenKeszit, ujAzonosito, ujSo } from './token.js';
 import { icsKeszit } from './ics.js';
@@ -65,6 +65,7 @@ export async function katalogus(db) {
     helyszinek: t.helyszinek.map(({ id, nev, cim, nyit, zar }) => ({ id, nev, cim, nyit, zar })),
     szolgaltatasok: t.szolgaltatasok.map((s) => ({
       id: s.id, nev: s.nev, perc: s.perc, ar: s.ar, helyszinek: s.helyszinek,
+      lepes: kinalasLepes(s, t.szabalyok), // a felkínált kezdések lépése percben
       ...(s.leiras ? { leiras: s.leiras } : {}), ...(s.elokeszites ? { elokeszites: s.elokeszites } : {}),
       vanBeosztas: vanBeosztas(s),
     })),
@@ -124,11 +125,16 @@ export async function szabad(db, q, { env = {}, most = Date.now(), admin = false
 }
 
 /**
- * A számításhoz használt törzs: adminnak nincs minEloreOra és maxEloreNap korlát; módosításnál a
- * szolgáltatás a foglaláskor rögzített időtartammal és pufferrel számít (ha azóta átírták is).
+ * A számításhoz használt törzs: adminnak nincs minEloreOra és maxEloreNap korlát, és bármely 15 perces
+ * rácspontra vehet fel (a kínálás-beállítás rá nem vonatkozik); módosításnál a szolgáltatás a foglaláskor
+ * rögzített időtartammal és pufferrel számít (ha azóta átírták is).
  */
 function szamitasra(torzs, { admin = false, row = null } = {}) {
-  let t = admin ? { ...torzs, szabalyok: { ...torzs.szabalyok, minEloreOra: 0, maxEloreNap: 3660 } } : torzs;
+  let t = admin ? {
+    ...torzs,
+    szabalyok: { ...torzs.szabalyok, minEloreOra: 0, maxEloreNap: 3660 },
+    szolgaltatasok: torzs.szolgaltatasok.map((s) => ({ ...s, kinalas: RACS })),
+  } : torzs;
   if (row) {
     t = { ...t, szolgaltatasok: t.szolgaltatasok.map((s) => (s.id === row.service_id ? { ...s, perc: row.dur_min, puffer: row.buffer_min } : s)) };
   }
@@ -228,6 +234,19 @@ export async function ipKorlat(env, db, request) {
   if (Number(n) > NAPI_KORLAT) throw new HttpError(429, 'Ma már túl sok foglalási kísérlet érkezett erről a hálózatról. Kérjük, hívj minket telefonon.');
 }
 
+/**
+ * A kezdésre jelölt kollégák. Felkínált kezdés a beosztás szerinti rács (foglalások nélkül számolva) és
+ * a meglévő foglalások utáni hézagkitöltő kezdés (a foglalásokkal számolva). Előbb a most szabadnak
+ * látszók, utána a többi (hátha közben felszabadult); a végső döntést a slot_locks hozza meg.
+ */
+function jeloltKollegak(alap, foglalt, datum, kezd) {
+  const keres = (f) => ((szabadIdopontok({ ...alap, foglalt: f }).napok[datum] || []).find((s) => s.kezd === kezd) || { kollegak: [] }).kollegak;
+  const mostSzabad = keres(foglalt);
+  const jeloltek = [...new Set([...mostSzabad, ...keres([])])];
+  if (!jeloltek.length) throw new HttpError(409, NEM_FOGLALHATO);
+  return jeloltek;
+}
+
 // ---------------------------------------------------------------- foglalás
 
 const linkek = (origin, token) => ({
@@ -250,12 +269,8 @@ export async function foglal(env, db, be, { origin, admin = false, most = Date.n
   ]);
   const kezd = percToHHMM(be.kezdPerc);
   const alap = { torzs: szTorzs, beosztas, kivetelek, most, helyszin: be.helyszin, szolgaltatas: be.szolgaltatas, kollega: be.kollega, tol: be.datum, ig: be.datum };
-  // a beosztás szerint alkalmas kollégák (foglalások nélkül): ha itt nincs, az időpont eleve nem foglalható
-  const beosztasSzerint = (szabadIdopontok({ ...alap, foglalt: [] }).napok[be.datum] || []).find((s) => s.kezd === kezd);
-  if (!beosztasSzerint) throw new HttpError(409, NEM_FOGLALHATO);
-  const mostSzabad = new Set(((szabadIdopontok({ ...alap, foglalt }).napok[be.datum] || []).find((s) => s.kezd === kezd) || { kollegak: [] }).kollegak);
-  // előbb a most szabadnak látszók, utána a többi (hátha közben felszabadult)
-  const jeloltek = [...beosztasSzerint.kollegak].sort((a, b) => Number(mostSzabad.has(b)) - Number(mostSzabad.has(a)));
+  // csak felkínált kezdésre (a rács vagy hézagkitöltés szerint); ha egyik kolléga sem, 409
+  const jeloltek = jeloltKollegak(alap, foglalt, be.datum, kezd);
 
   const secret = await titok(env, db);
   const puffer = szolg.puffer ?? 10;
@@ -447,10 +462,7 @@ export async function modosit(env, db, row, be, { origin, admin = false, most = 
   ]);
   const kezd = percToHHMM(be.kezdPerc);
   const alap = { torzs: szTorzs, beosztas, kivetelek, most, helyszin: row.location_id, szolgaltatas: row.service_id, kollega: be.kollega, tol: be.datum, ig: be.datum };
-  const beosztasSzerint = (szabadIdopontok({ ...alap, foglalt: [] }).napok[be.datum] || []).find((s) => s.kezd === kezd);
-  if (!beosztasSzerint) throw new HttpError(409, NEM_FOGLALHATO);
-  const mostSzabad = new Set(((szabadIdopontok({ ...alap, foglalt }).napok[be.datum] || []).find((s) => s.kezd === kezd) || { kollegak: [] }).kollegak);
-  const jeloltek = [...beosztasSzerint.kollegak].sort((a, b) => Number(mostSzabad.has(b)) - Number(mostSzabad.has(a)));
+  const jeloltek = jeloltKollegak(alap, foglalt, be.datum, kezd);
 
   const token = await tokenKeszit(await titok(env, db), row.id, row.token_salt);
   const { lemondasUrl, icsUrl } = linkek(origin, token);

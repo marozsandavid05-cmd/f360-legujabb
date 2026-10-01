@@ -104,6 +104,7 @@ test('módosítás: 200, ugyanaz az azonosító és token, a zárak cserélődne
 
 test('módosítás a saját időpontjával átfedő időre (10:00 → 10:30) és másik napra, másik kollégához', async () => {
   const e = ujEnv();
+  assert.equal((await admin(e, 'PATCH', '/api/foglalo/beallitasok', { kinalas: 15 })).status, 200); // negyedórás kínálás
   const f = await foglalj(e);
   assert.equal((await modosit(e, { t: f.t, datum: NAP, kezd: '10:30', kollega: 'szegedi-botond' })).status, 200);
   assert.deepEqual(zarak(e, f.azonosito), [630, 645, 660, 675].map((s) => `szegedi-botond|${NAP}|${s}`));
@@ -253,6 +254,7 @@ test('párhuzamos módosítás és lemondás: a foglalás vagy lemondva zár né
 
 test('szabad ?t=: a saját foglalás ideje szabadnak számít; helyszín és szolgáltatás a foglalásból jön', async () => {
   const e = ujEnv();
+  assert.equal((await admin(e, 'PATCH', '/api/foglalo/beallitasok', { kinalas: 15 })).status, 200); // negyedórás kínálás
   const f = await foglalj(e);
   await foglalj(e, { kezd: '12:00', nev: 'David teszt' }, '2.2.2.2');
   const q = `kollega=szegedi-botond&tol=${NAP}&ig=${NAP}`;

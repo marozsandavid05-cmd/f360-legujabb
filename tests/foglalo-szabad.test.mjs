@@ -20,7 +20,8 @@ const T = {
     { id: 'b', helyszinek: ['mex', 'rei'], szolgaltatasok: ['gy50', 'gep45', 'kin60'] },
     { id: 'c', helyszinek: ['mex'], szolgaltatasok: ['gy50'] },
   ],
-  szabalyok: { minEloreOra: 2, maxEloreNap: 60 },
+  // a kínált kezdések lépése 15 perc: ezek a tesztek a rácsot és a szabályokat nézik (a kínálás: foglalo-kinalas.test.mjs)
+  szabalyok: { minEloreOra: 2, maxEloreNap: 60, kinalas: 15 },
 };
 const H = (h, m = 0) => h * 60 + m;
 const BEOSZTAS = [

@@ -359,6 +359,7 @@ test('admin beosztás: GET kollégánként, PUT felülírja, a szabad időpontok
   const e = ujEnv();
   const g = await (await admin(e, 'GET', '/api/foglalo/beosztas?kollega=szegedi-botond')).json();
   assert.ok(g.sorok.some((s) => s.nap === 1 && s.helyszin === 'mexikoi'));
+  assert.equal((await admin(e, 'PATCH', '/api/foglalo/beallitasok', { kinalas: 15 })).status, 200); // negyedórás kínálás
   const p = await admin(e, 'PUT', '/api/foglalo/beosztas?kollega=szegedi-botond', { sorok: [{ nap: 1, helyszin: 'mexikoi', kezd: '14:00', veg: '16:00' }] });
   assert.equal(p.status, 200);
   const sz = await (await get(e, `/foglalas-api/szabad?helyszin=mexikoi&szolgaltatas=gyogymasszazs-50&kollega=szegedi-botond&tol=${NAP}&ig=${NAP}`)).json();

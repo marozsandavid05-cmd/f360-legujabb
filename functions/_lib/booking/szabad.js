@@ -19,15 +19,44 @@ export function foglalasSlotjai({ kollega, datum, kezd, perc, puffer = 0 }) {
 
 const atfed = (a1, a2, b1, b2) => a1 < b2 && b1 < a2;
 
-function kivetelUtkozik(kivetelek, { kollega, helyszin, datum, kezd, veg }) {
-  return kivetelek.some((k) => {
+/** Az adott kollégára, helyszínre és napra vonatkozó kivételek (az időponttól függetlenül). */
+function napiKivetelek(kivetelek, { kollega, helyszin, datum }) {
+  return kivetelek.filter((k) => {
     if (k.kollega && k.kollega !== kollega) return false;
     if (k.helyszin && k.helyszin !== helyszin) return false;
     if (!k.kollega && !k.helyszin) return false;
-    if (datum < k.tol || datum > k.ig) return false;
-    if (k.kezd == null || k.veg == null) return true; // egész nap
-    return atfed(kezd, veg, k.kezd, k.veg);
+    return datum >= k.tol && datum <= k.ig;
   });
+}
+
+function kivetelUtkozik(kivetelek, { kollega, helyszin, datum, kezd, veg }) {
+  return napiKivetelek(kivetelek, { kollega, helyszin, datum })
+    .some((k) => k.kezd == null || k.veg == null || atfed(kezd, veg, k.kezd, k.veg));
+}
+
+/**
+ * A felkínált kezdések lépése percben. A szolgáltatás `kinalas` mezője erősebb (null vagy hiányzó:
+ * a globális szabalyok.kinalas, annak alapja 'igazitott'). 'igazitott' = időtartam + puffer, felfelé
+ * a 15 perces rács többszörösére (50 + 10 = 60; 90 + 10 = 100 → 105; 20 + 10 = 30). A belső rács és a
+ * zárak ettől függetlenül 15 percesek maradnak.
+ */
+export function kinalasLepes(szolg, szabalyok = {}) {
+  const k = szolg.kinalas ?? szabalyok.kinalas ?? 'igazitott';
+  if (Number.isInteger(k) && k >= RACS && k <= 240 && k % RACS === 0) return k;
+  return Math.max(RACS, Math.ceil((szolg.perc + (szolg.puffer ?? 10)) / RACS) * RACS);
+}
+
+/** A [tol, ig) szakasz azon részei, amelyeket egyik részleges kivétel sem fed; egész napos kivételnél üres. */
+function szabadSzakaszok(tol, ig, kivetelek) {
+  let szakaszok = [[tol, ig]];
+  for (const k of kivetelek) {
+    if (k.kezd == null || k.veg == null) return [];
+    szakaszok = szakaszok.flatMap(([a, b]) => {
+      if (!atfed(a, b, k.kezd, k.veg)) return [[a, b]];
+      return [[a, Math.min(b, k.kezd)], [Math.max(a, k.veg), b]].filter(([x, y]) => x < y);
+    });
+  }
+  return szakaszok;
 }
 
 /**
@@ -55,6 +84,7 @@ export function szabadIdopontok({ torzs, beosztas, kivetelek = [], foglalt = [],
   const utolsoNap = datumPlusz(budapestMost(most).datum, szabalyok.maxEloreNap ?? 60);
   const foglaltSet = new Set(foglalt.map((f) => `${f.kollega}|${f.datum}|${f.slot}`));
   const puffer = szolg.puffer ?? 10;
+  const lepes = kinalasLepes(szolg, szabalyok);
 
   for (const datum of osszesNap) {
     if (datum > utolsoNap) continue;
@@ -63,19 +93,29 @@ export function szabadIdopontok({ torzs, beosztas, kivetelek = [], foglalt = [],
     const kezdesek = new Map(); // perc → [kolléga-id]
     // belépés előtt és kilépés után a kolléga nem foglalható (a „bárki” sem osztja rá)
     for (const kid of jeloltek.filter((k) => aktivANapon(k, datum)).map((k) => k.id)) {
+      const napiKiv = napiKivetelek(kivetelek, { kollega: kid, helyszin, datum });
+      // a kolléga aznapi foglalásainak vége: egy zár-sorozat utolsó rácspontja utáni rácspont
+      const foglalasVegek = foglalt
+        .filter((f) => f.kollega === kid && f.datum === datum && !foglaltSet.has(`${kid}|${datum}|${f.slot + RACS}`))
+        .map((f) => f.slot + RACS);
       for (const b of beosztas) {
         if (b.kollega !== kid || b.nap !== nap || b.helyszin !== helyszin) continue;
-        const tol0 = Math.max(b.kezd, hely.nyit);
-        const ig0 = Math.min(b.veg, hely.zar);
-        const elso = Math.ceil(tol0 / RACS) * RACS;
-        for (let k = elso; k + szolg.perc <= ig0; k += RACS) {
-          if (helyiToUtc(datum, k) < legkorabbiMs) continue;
-          if (kivetelUtkozik(kivetelek, { kollega: kid, helyszin, datum, kezd: k, veg: k + szolg.perc })) continue;
-          const slotok = foglalasSlotjai({ kollega: kid, datum, kezd: k, perc: szolg.perc, puffer });
-          if (slotok.some((s) => foglaltSet.has(`${kid}|${datum}|${s.slot}`))) continue;
-          const lista = kezdesek.get(k) || [];
-          if (!lista.includes(kid)) lista.push(kid);
-          kezdesek.set(k, lista);
+        // a rács horgonya a beosztási blokk, illetve a részleges kivétel utáni szabad szakasz eleje
+        for (const [tol0, ig0] of szabadSzakaszok(Math.max(b.kezd, hely.nyit), Math.min(b.veg, hely.zar), napiKiv)) {
+          const elso = Math.ceil(tol0 / RACS) * RACS;
+          const jelolt = new Set();
+          for (let k = elso; k + szolg.perc <= ig0; k += lepes) jelolt.add(k);
+          // hézagkitöltés: a foglalás vége utáni első rácspont is, ha a kezelés belefér
+          for (const v of foglalasVegek) if (v >= elso && v + szolg.perc <= ig0) jelolt.add(v);
+          for (const k of jelolt) {
+            if (helyiToUtc(datum, k) < legkorabbiMs) continue;
+            if (kivetelUtkozik(kivetelek, { kollega: kid, helyszin, datum, kezd: k, veg: k + szolg.perc })) continue;
+            const slotok = foglalasSlotjai({ kollega: kid, datum, kezd: k, perc: szolg.perc, puffer });
+            if (slotok.some((s) => foglaltSet.has(`${kid}|${datum}|${s.slot}`))) continue;
+            const lista = kezdesek.get(k) || [];
+            if (!lista.includes(kid)) lista.push(kid);
+            kezdesek.set(k, lista);
+          }
         }
       }
     }

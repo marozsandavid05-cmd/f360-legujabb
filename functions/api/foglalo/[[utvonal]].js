@@ -2,7 +2,9 @@
 // functions/api/_middleware.js végzi (Cloudflare Access JWT), ide csak belépett kérés jut.
 //
 //   GET|PUT  /api/foglalo/beallitasok                  helyszínek, szolgáltatások, kollégák (szin: #rrggbb), szabályok
-//                                                      (+ ertesitKollega, emlekeztetoBe, emlekeztetoOra)
+//                                                      (+ ertesitKollega, emlekeztetoBe, emlekeztetoOra, kinalas)
+//   PATCH    /api/foglalo/beallitasok                  { kinalas: 'igazitott' | 15 | 30 | 60 }  a kínált kezdések lépése
+//   PATCH    /api/foglalo/szolgaltatasok/:id           { kinalas: null | 'igazitott' | 15-240 (15 többszöröse) }
 //   POST     /api/foglalo/kollegak                     új kolléga (201) {nev, szerep, helyszinek, szolgaltatasok, szin?,
 //                                                      email?, aktiv_tol?, aktiv_ig?, foto?, bemutatkozas?, id?}
 //   PATCH    /api/foglalo/kollegak/:id                 egy kolléga mezői (részleges); archivalt: true|false
@@ -31,7 +33,10 @@
 
 import { HttpError, errorResponse, json, readJson } from '../../_lib/http.js';
 import { adminLemond, adminModosit, dbVagy503, foglal, foglalasBemenet, foglalasLista, szabad } from '../../_lib/booking/foglalas.js';
-import { beallitasokMent, beosztasLekerd, beosztasMent, kivetelFelvesz, kivetelLista, kivetelTorol, kollegaArchival, kollegaLetrehoz, kollegaModosit, kollegaSzinMent } from '../../_lib/booking/admin.js';
+import {
+  beallitasokMent, beosztasLekerd, beosztasMent, kinalasMent, kivetelFelvesz, kivetelLista, kivetelTorol, kollegaArchival, kollegaLetrehoz, kollegaModosit, kollegaSzinMent,
+  szolgaltatasKinalasMent,
+} from '../../_lib/booking/admin.js';
 import { torzsBetolt } from '../../_lib/booking/schema.js';
 import { hatterKuldes, mailMod, outboxKuld, outboxLista } from '../../_lib/booking/mailer.js';
 import { emlekeztetoFuttat } from '../../_lib/booking/emlekezteto.js';
@@ -46,6 +51,7 @@ const UTAK = {
   beallitasok: {
     GET: async ({ db }) => json(await torzsBetolt(db)),
     PUT: async ({ db, request }) => json(await beallitasokMent(db, await readJson(request, 256 * 1024))),
+    PATCH: async ({ db, request }) => json(await kinalasMent(db, await readJson(request, 1024))),
   },
   kollegak: {
     POST: async ({ db, request }) => json(await kollegaLetrehoz(db, await readJson(request, 16 * 1024)), 201),
@@ -168,6 +174,11 @@ async function kezel(context, request, env, url, reszek) {
     if (request.method !== 'PATCH') return json({ error: 'Ez a művelet itt nem engedélyezett.' }, 405, { Allow: 'PATCH' });
     const db = dbVagy503(env);
     return json(await kollegaModosit(db, reszek[1], await readJson(request, 16 * 1024)));
+  }
+  // PATCH /api/foglalo/szolgaltatasok/:id   a kínált kezdések felülírása { kinalas }
+  if (reszek.length === 2 && reszek[0] === 'szolgaltatasok') {
+    if (request.method !== 'PATCH') return json({ error: 'Ez a művelet itt nem engedélyezett.' }, 405, { Allow: 'PATCH' });
+    return json(await szolgaltatasKinalasMent(dbVagy503(env), reszek[1], await readJson(request, 1024)));
   }
   // POST /api/foglalo/kollegak/:id/archivalas   (jövőbeli foglalás esetén 409)
   if (reszek.length === 3 && reszek[0] === 'kollegak' && reszek[2] === 'archivalas') {

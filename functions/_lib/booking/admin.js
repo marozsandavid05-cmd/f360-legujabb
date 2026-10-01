@@ -3,7 +3,7 @@ import { HttpError } from '../http.js';
 import { budapestMost, ervenyesDatum, hhmmToPerc, percToHHMM } from './ido.js';
 import { torzsBetolt } from './schema.js';
 import { szinKioszt, szinNormal } from './szin.js';
-import { KOLLEGA_UJ_MEZOK, SZABALY_UJ_ALAP, aktivSorrend, kollegaAlap, kollegaUjMezok, szabalyUjMezok, szukitoFeltetel, torzsAlap } from './torzs-alap.js';
+import { KOLLEGA_UJ_MEZOK, SZABALY_UJ_ALAP, aktivSorrend, kinalasGlobalis, kinalasSzolgaltatas, kollegaAlap, kollegaUjMezok, szabalyUjMezok, szukitoFeltetel, torzsAlap } from './torzs-alap.js';
 import { beosztasBetolt, kivetelekBetolt } from './foglalas.js';
 
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,59}$/;
@@ -64,6 +64,8 @@ function szolgaltatasExtra(s) {
     if (typeof s.idotartam_megerositendo !== 'boolean') throw hiba(`Hibás mező: idotartam_megerositendo (${s.id}).`);
     if (s.idotartam_megerositendo) ki.idotartam_megerositendo = true;
   }
+  // a kínált kezdések felülírása: csak ha megadták (null = a globálisat követi, a mentés törli)
+  if ('kinalas' in s) ki.kinalas = kinalasSzolgaltatas(s.kinalas, s.id);
   return ki;
 }
 
@@ -148,7 +150,14 @@ export async function beallitasokMent(db, d) {
     return egyesitett;
   }));
   const szabalyok = { ...SZABALY_UJ_ALAP, ...Object.fromEntries(Object.keys(SZABALY_UJ_ALAP).map((m) => [m, regi.szabalyok[m]])), ...be.szabalyok };
-  const torzs = { ...be, kollegak, szabalyok };
+  // a kínálás-felülírás nélkül küldött szolgáltatás megtartja a mentettet; a null törli
+  const regiS = new Map((regi.szolgaltatasok || []).map((s) => [s.id, s]));
+  const szolgaltatasok = be.szolgaltatasok.map((s) => {
+    const kinalas = 'kinalas' in s ? s.kinalas : (regiS.get(s.id) || {}).kinalas;
+    const { kinalas: _k, ...tobbi } = s;
+    return kinalas == null ? tobbi : { ...tobbi, kinalas };
+  });
+  const torzs = { ...be, szolgaltatasok, kollegak, szabalyok };
   // a teljes mentés se archiválhasson, törölhessen vagy tehesse a belépést, kilépést jövőbeli foglalás
   // mellé (ugyanaz az őrfeltétel, mint a kolléga-PATCH-nél)
   await torzsOrzottMent(db, ertek, torzs, szukitesek(regi.kollegak, kollegak));
@@ -321,6 +330,40 @@ export async function kollegaSzinMent(db, kollega, d) {
     .bind(JSON.stringify(uj), Date.now(), regi).run();
   if (!Number(r.meta && r.meta.changes)) throw new HttpError(409, 'A beállításokat közben módosították. Töltsd újra az oldalt.');
   return { id: kollega, szin };
+}
+
+// ---------------------------------------------------------------- kínált kezdések
+
+const csakKinalas = (d) => {
+  if (!d || typeof d !== 'object' || Array.isArray(d)) throw hiba('Hibás kérés.');
+  const kulcsok = Object.keys(d);
+  if (kulcsok.length !== 1 || kulcsok[0] !== 'kinalas') throw hiba('Itt csak a kinalas mező módosítható.');
+};
+
+/** PATCH /api/foglalo/beallitasok { kinalas }: a globális kínálás ('igazitott' | 15 | 30 | 60). */
+export async function kinalasMent(db, d) {
+  csakKinalas(d);
+  const kinalas = kinalasGlobalis(d.kinalas);
+  const { ertek, torzs } = await torzsNyersen(db);
+  const uj = { ...torzs, szabalyok: { ...torzs.szabalyok, kinalas } };
+  await torzsFeltetelesMent(db, ertek, uj);
+  return uj;
+}
+
+/** PATCH /api/foglalo/szolgaltatasok/:id { kinalas }: egy szolgáltatás felülírása (null = a globálisat követi). */
+export async function szolgaltatasKinalasMent(db, id, d) {
+  csakKinalas(d);
+  const kinalas = kinalasSzolgaltatas(d.kinalas, id);
+  const { ertek, torzs } = await torzsNyersen(db);
+  if (!torzs.szolgaltatasok.some((s) => s.id === id)) throw new HttpError(404, 'Ismeretlen szolgáltatás.');
+  const szolgaltatasok = torzs.szolgaltatasok.map((s) => {
+    if (s.id !== id) return s;
+    const { kinalas: _k, ...tobbi } = s;
+    return kinalas == null ? tobbi : { ...tobbi, kinalas };
+  });
+  await torzsFeltetelesMent(db, ertek, { ...torzs, szolgaltatasok });
+  const s = szolgaltatasok.find((x) => x.id === id);
+  return { ...s, kinalas: s.kinalas ?? null };
 }
 
 // ---------------------------------------------------------------- beosztás
