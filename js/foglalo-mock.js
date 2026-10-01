@@ -574,7 +574,7 @@
     if (!admin) { try { utk = sessionStorage.getItem(FLAG) === '1'; if (utk) sessionStorage.removeItem(FLAG); } catch (e) { /* nincs */ } }
     if (utk) {
       beoSz.kollegak.forEach(function (kid) {
-        db.bookings.push(sor({ kollega: kid, datum: be.datum, kezdPerc: be.kezdPerc, szolg: szolg, hely: hely, nev: 'Farkas Dóra', email: 'dora.farkas@gmail.com', telefon: '+36 30 412 7781', megjegyzes: '', source: 'web' }));
+        db.bookings.push(sor({ kollega: kid, datum: be.datum, kezdPerc: be.kezdPerc, szolg: szolg, hely: hely, nev: 'David teszt', email: 'info@clientflow.team', telefon: '+36 30 123 4567', megjegyzes: '', source: 'web' }));
       });
       save();
     }
@@ -678,7 +678,7 @@
     if (utk) {
       var r0 = hivatkozasok({ helyszin: row.location_id, szolgaltatas: row.service_id, kollega: 'barki' });
       beoSz.kollegak.forEach(function (kid) {
-        db.bookings.push(sor({ kollega: kid, datum: be.datum, kezdPerc: be.kezdPerc, szolg: r0.szolg, hely: r0.hely, nev: 'Farkas Dóra', email: 'dora.farkas@gmail.com', telefon: '+36 30 412 7781', megjegyzes: '', source: 'web' }));
+        db.bookings.push(sor({ kollega: kid, datum: be.datum, kezdPerc: be.kezdPerc, szolg: r0.szolg, hely: r0.hely, nev: 'David teszt', email: 'info@clientflow.team', telefon: '+36 30 123 4567', megjegyzes: '', source: 'web' }));
       });
       save();
     }
@@ -871,10 +871,8 @@
   }
 
   /* ---------------- minta-foglalások, hogy a naptár élő legyen ---------------- */
-  var VEZ = ['Nagy', 'Kovács', 'Tóth', 'Szabó', 'Horváth', 'Varga', 'Kiss', 'Molnár', 'Németh', 'Farkas', 'Balogh', 'Papp', 'Takács', 'Juhász', 'Mészáros', 'Simon', 'Rácz', 'Fekete'];
-  var KER = ['Eszter', 'Bence', 'Réka', 'Dániel', 'Zsófia', 'Gergely', 'Dóra', 'Márton', 'Kinga', 'Ádám', 'Petra', 'Levente', 'Nóra', 'Tamás', 'Judit', 'Balázs', 'Viktória', 'Anikó'];
+  // minden kitalált foglaló neve „David teszt” (David kérése, 2026-10-01); a minta így nem mutat valódinak látszó személyt
   function prng(s) { return function () { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
-  function asc(s) { return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
   function seed() {
     var ma = F.most().datum;
     db = { v: 2, seq: 0, torzs: torzsAlap(seedTorzs()), beosztas: seedBeosztas(), kivetelek: [], bookings: [], outbox: [] };
@@ -901,9 +899,9 @@
           var tel = i < 0 ? 0.7 : i < 3 ? 0.6 : i < 10 ? 0.4 : 0.18;
           var ok = r() < tel && !kivetelUtkozik(db.kivetelek, { kollega: k.id, helyszin: b.helyszin, datum: d, kezd: tt, veg: tt + s.perc });
           if (ok && (i !== 0 || helyiToUtc(d, tt) < Date.now() || helyiToUtc(d, tt) > Date.now() + 3 * 3600e3)) {
-            var vn = VEZ[Math.floor(r() * VEZ.length)], kn = KER[Math.floor(r() * KER.length)];
+            r(); r(); // a korábbi névválasztás két húzása: a minta-eloszlás (és a rá épülő tesztek) változatlan
             var rec = sor({ kollega: k.id, datum: d, kezdPerc: tt, szolg: s, hely: t.helyszinek.filter(function (h) { return h.id === b.helyszin; })[0],
-              nev: vn + ' ' + kn, email: asc(kn) + '.' + asc(vn) + '@gmail.com',
+              nev: 'David teszt', email: 'info@clientflow.team',
               telefon: '+36 ' + (r() < 0.5 ? '30' : '70') + ' ' + (100 + Math.floor(r() * 900)) + ' ' + (1000 + Math.floor(r() * 9000)),
               megjegyzes: r() < 0.12 ? 'Térdműtét után, második alkalom.' : '', source: r() < 0.25 ? 'admin' : 'web', created: created + Math.floor(r() * 4 * 864e5) });
             if (r() < 0.06) { rec.status = 'lemondva'; rec.cancelled_at = rec.created_at + 864e5; }

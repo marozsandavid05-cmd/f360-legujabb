@@ -41,7 +41,7 @@ function celHetfo() {
 const NAP = celHetfo();
 const foglalas = (o = {}) => ({
   helyszin: 'mexikoi', szolgaltatas: 'gyogymasszazs-50', kollega: 'szegedi-botond', datum: NAP, kezd: '10:00',
-  nev: 'Minta Vendég', email: 'vendeg@example.com', telefon: '+36 30 123 4567', megjegyzes: '', hozzajarul: true, ...o,
+  nev: 'David teszt', email: 'david.teszt@example.com', telefon: '+36 30 123 4567', megjegyzes: '', hozzajarul: true, ...o,
 });
 const kollegaMinta = (n) => Array.from({ length: n }, (_, i) => ({ id: `k${i}`, nev: `Kolléga ${i}` }));
 

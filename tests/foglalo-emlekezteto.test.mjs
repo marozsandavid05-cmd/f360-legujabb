@@ -67,6 +67,18 @@ test('nem küld: lemondott, elmúlt, és a 30 órán belül foglalt (közelebbi)
   assert.equal(outbox(e, 'emlekezteto').length, 0);
 });
 
+test('a gomb a 30 és 24 óra közötti ablakban végig ott van, 24 órán belül telefonszám', async () => {
+  const gombos = async (oraElotte) => {
+    const e = ujEnv();
+    await foglalj(e);
+    assert.equal((await futtat(e, S - oraElotte * ORA)).emlekeztetve, 1, `${oraElotte} óra`);
+    const [l] = outbox(e, 'emlekezteto');
+    return { gomb: l.html.includes('>Időpont lemondása / módosítása</a>'), tel: l.html.includes('hívj minket minél előbb') };
+  };
+  for (const o of [30, 28, 25, 24.01]) assert.deepEqual(await gombos(o), { gomb: true, tel: false }, `${o} óra`);
+  for (const o of [24, 23.9, 2]) assert.deepEqual(await gombos(o), { gomb: false, tel: true }, `${o} óra`);
+});
+
 test('a lemondási határidő után (késve futó ütemező): elmegy, de gomb helyett a telefonszám', async () => {
   const e = ujEnv();
   await foglalj(e);

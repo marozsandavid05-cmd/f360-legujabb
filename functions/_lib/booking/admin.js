@@ -9,14 +9,19 @@ import { beosztasBetolt, kivetelekBetolt } from './foglalas.js';
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,59}$/;
 const hiba = (m) => new HttpError(400, m);
 
+// egysoros szöveg (név, cím, szerep, telefon): a vezérlőkarakter és a sortörés kimarad, mert ezek a
+// levelek tárgyába és fejlécébe is bekerülnek (fejléc-injekció ellen)
 function str(v, mezo, max = 200, { kotelezo = true } = {}) {
   if (v == null || v === '') {
     if (kotelezo) throw hiba(`Hiányzó mező: ${mezo}.`);
     return '';
   }
   if (typeof v !== 'string' || v.length > max) throw hiba(`Hibás mező: ${mezo}.`);
-  return v.trim();
+  const s = v.replace(/[\u0000-\u001F\u007F\u2028\u2029]+/g, ' ').replace(/ {2,}/g, ' ').trim();
+  if (!s && kotelezo) throw hiba(`Hiányzó mező: ${mezo}.`);
+  return s;
 }
+const EMAIL_RE = /^[^\s@<>",;]{1,64}@[^\s@<>",;]+\.[^\s@<>",;]{2,}$/;
 function egesz(v, mezo, min, max) {
   if (!Number.isInteger(v) || v < min || v > max) throw hiba(`Hibás szám: ${mezo} (${min} és ${max} között).`);
   return v;
@@ -89,10 +94,16 @@ export function torzsEllenoriz(d) {
     maxEloreNap: egesz(sz.maxEloreNap, 'maxEloreNap', 1, 366),
     lemondasOra: egesz(sz.lemondasOra, 'lemondasOra', 0, 168),
     telefon: str(sz.telefon, 'telefon', 30),
-    studioEmail: str(sz.studioEmail, 'studioEmail', 254),
+    studioEmail: studioCim(sz.studioEmail),
     ...szabalyUjMezok(sz),
   };
   return { minta: d.minta === true, helyszinek, szolgaltatasok, kollegak, szabalyok };
+}
+
+function studioCim(v) {
+  const s = str(v, 'studioEmail', 254).toLowerCase();
+  if (!EMAIL_RE.test(s)) throw hiba('A stúdió értesítési címe egyetlen érvényes e-mail-cím legyen, például info@f360.hu.');
+  return s;
 }
 
 export async function beallitasokMent(db, d) {

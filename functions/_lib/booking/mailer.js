@@ -146,11 +146,15 @@ const PROVIDEREK = {
   },
 };
 
-/** A hibaüzenet a naplóba és az outboxba: rövid, és a kulcs biztosan nincs benne. */
+/**
+ * A hibaüzenet a naplóba és az outboxba: rövid, a kulcs és az e-mail-cím biztosan nincs benne (a
+ * szolgáltató hibaüzenete visszaírhatja a címzettet, ami páciensadat, a naplóba nem kerülhet).
+ */
 function tisztaHiba(s, env) {
-  let t = String(s).replace(/\s+/g, ' ').slice(0, 300);
+  let t = String(s).replace(/\s+/g, ' ');
   if (env.MAIL_API_KEY) t = t.split(String(env.MAIL_API_KEY)).join('[kulcs]');
-  return t;
+  t = t.replace(/[^\s@<>"'`,;:()]+@[^\s@<>"'`,;:()]+/g, '[e-mail]');
+  return t.slice(0, 300);
 }
 
 async function egyetKuld(env, sor, fetchFn) {

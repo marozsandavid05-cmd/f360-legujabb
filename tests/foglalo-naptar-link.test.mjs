@@ -18,7 +18,7 @@ const F = (datum, kezdPerc, perc = 50) => ({
   helyszin: { id: 'mexikoi', nev: 'Mexikói út', cim: 'Mexikói út 32/b, XIV. kerület' },
   szolgaltatas: { id: 'gy', nev: 'Gyógymasszázs', perc, ar: 13500 },
   kollega: { id: 'sb', nev: 'Szegedi Botond' },
-  nev: 'Kiss Éva', email: 'eva@example.com',
+  nev: 'David teszt', email: 'david.teszt@example.com',
 });
 const LINK = 'https://h.pages.dev/foglalas/lemondas?t=F0123456789.abc';
 
@@ -67,7 +67,7 @@ test('.ics végpont: Content-Disposition inline, a fájlnév marad', async () =>
   let nap = datumPlusz(budapestMost().datum, 3);
   while (hetNapja(nap) !== 1) nap = datumPlusz(nap, 1);
   const body = { helyszin: 'mexikoi', szolgaltatas: 'gyogymasszazs-50', kollega: 'szegedi-botond', datum: nap, kezd: '10:00',
-    nev: 'Minta Vendég', email: 'vendeg@example.com', telefon: '+36 30 123 4567', megjegyzes: '', hozzajarul: true };
+    nev: 'David teszt', email: 'david.teszt@example.com', telefon: '+36 30 123 4567', megjegyzes: '', hozzajarul: true };
   const req = (method, path, b) => new Request(ORIGIN + path, { method, headers: { Origin: ORIGIN, 'CF-Connecting-IP': '1.2.3.4', ...(b ? { 'Content-Type': 'application/json' } : {}) }, body: b ? JSON.stringify(b) : undefined });
   const r = await publikus({ request: req('POST', '/foglalas-api/foglalas', body), env, params: {}, data: {} });
   assert.equal(r.status, 201);

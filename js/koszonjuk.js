@@ -114,7 +114,10 @@
       mail.hidden = false;
       $('#mail-subj').textContent = done.level.targy || '';
       var fr = $('#mail-frame');
-      fr.setAttribute('sandbox', 'allow-popups allow-popups-to-escape-sandbox');
+      // allow-same-origin: a keret magasságát a levél tényleges magasságához mérjük, így a lemondó gomb
+      // és a lábléc is látszik (belső görgetés nélkül). Szkript továbbra sem fut benne (nincs allow-scripts).
+      fr.setAttribute('sandbox', 'allow-same-origin allow-popups allow-popups-to-escape-sandbox');
+      fr.onload = levelMagassag;
       fr.srcdoc = String(done.level.html).replace(/<head>/i, '<head><base target="_blank">');
     } else mail.hidden = true;
     $('.done').classList.toggle('is-solo', mail.hidden);
@@ -123,6 +126,18 @@
     setTimeout(function () { $('#h-done').focus({ preventScroll: true }); }, 60);
     $('#ty-live').textContent = $('#h-done').textContent + '. ' + $('#done-when').textContent;
   }
+  /* a levél-előnézet kerete akkora, mint a levél (szélesség-váltáskor újramérve) */
+  function levelMagassag() {
+    var fr = $('#mail-frame'), d = null;
+    try { d = fr.contentDocument; } catch (e) { d = null; }
+    if (!d || !d.documentElement) return;
+    fr.style.height = '';
+    var h = d.documentElement.scrollHeight;
+    if (h > 0) fr.style.height = Math.ceil(h) + 'px';
+  }
+  var meretIdo = null;
+  window.addEventListener('resize', function () { clearTimeout(meretIdo); meretIdo = setTimeout(levelMagassag, 150); });
+
   function ures() {
     $('#ty-empty').hidden = false;
     $('#empty-new').href = href('foglalas.html');

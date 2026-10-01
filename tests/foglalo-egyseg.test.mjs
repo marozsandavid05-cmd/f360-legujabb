@@ -60,7 +60,7 @@ const F = {
   helyszin: { id: 'mexikoi', nev: 'Mexikói út', cim: 'Mexikói út 32/b, XIV. kerület' },
   szolgaltatas: { id: 'gy', nev: 'Gyógymasszázs', perc: 50, ar: 13500 },
   kollega: { id: 'sb', nev: 'Szegedi Botond' },
-  nev: 'Kiss Éva', email: 'eva@example.com', telefon: '+36 30 123 4567', megjegyzes: 'Hát; fáj, a vállam',
+  nev: 'David teszt', email: 'david.teszt@example.com', telefon: '+36 30 123 4567', megjegyzes: 'Hát; fáj, a vállam',
 };
 const SZ = SEED_TORZS.szabalyok;
 
@@ -74,18 +74,18 @@ test('.ics: DST-váltás napján is helyes UTC, escape-elt szöveg, 75 bájtos s
 });
 
 test('levelek: három típus, magyar, gondolatjel nélkül, a felhasználói adat escape-elve', () => {
-  const x = { ...F, nev: 'Kiss <b>Éva</b>' };
+  const x = { ...F, nev: 'David <b>teszt</b>' };
   const lv = [
     visszaigazolas(x, { lemondasUrl: 'https://h/foglalas/lemondas?t=a&b', icsUrl: 'https://h/i', szabalyok: SZ, ics: 'ICS' }),
     studioErtesito(x, { szabalyok: SZ }),
     lemondasLevel(x, { szabalyok: SZ }),
   ];
   assert.deepEqual(lv.map((l) => l.tipus), ['visszaigazolas', 'studio-ertesito', 'lemondas']);
-  assert.deepEqual(lv.map((l) => l.cimzett), ['eva@example.com', 'info@f360.hu', 'eva@example.com']);
+  assert.deepEqual(lv.map((l) => l.cimzett), ['david.teszt@example.com', 'info@f360.hu', 'david.teszt@example.com']);
   for (const l of lv) {
     assert.ok(!/[\u2013\u2014]/.test(l.targy + l.html + l.szoveg), `gondolatjel: ${l.tipus}`);
-    assert.ok(!l.html.includes('<b>Éva</b>'));
-    assert.ok(l.html.includes('Kiss &lt;b&gt;Éva&lt;/b&gt;'));
+    assert.ok(!l.html.includes('<b>teszt</b>'));
+    assert.ok(l.html.includes('David &lt;b&gt;teszt&lt;/b&gt;'));
     assert.match(l.szoveg, /2026\. október 25\. \(vasárnap\)/);
     // csak az arculati színek
     const hexek = new Set((l.html.match(/#[0-9A-Fa-f]{6}/g) || []).map((h) => h.toUpperCase()));

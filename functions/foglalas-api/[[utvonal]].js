@@ -95,6 +95,8 @@ const UTAK = {
       const db = dbVagy503(env);
       sajatOrigin(request);
       const d = await jsonBody(request);
+      // ugyanaz a napi IP-korlát, mint a foglalásnál és a módosításnál: a token-találgatást is fékezi
+      await ipKorlat(env, db, request);
       const row = await tokenFoglalas(env, db, typeof d.t === 'string' ? d.t : '');
       return json(await lemond(env, db, row));
     },

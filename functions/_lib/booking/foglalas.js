@@ -131,18 +131,20 @@ function szamitasra(torzs, { admin = false, row = null } = {}) {
 const EMAIL_RE = /^[^\s@<>"]{1,64}@[^\s@<>"]+\.[^\s@<>"]{2,}$/;
 const TEL_RE = /^[+0-9 ()/.-]{6,24}$/;
 
-function szoveg(v, max) {
+function szoveg(v, max, { egysoros = false } = {}) {
   if (v == null) return '';
   if (typeof v !== 'string') throw new HttpError(400, 'Hibás kérés.');
-  const s = v.trim().replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
+  let s = v.trim().replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
+  // név, e-mail, telefon: egy sor (a sortörés a levél tárgyába és a fejlécekbe se kerülhessen)
+  if (egysoros) s = s.replace(/[\t\r\n\u2028\u2029]+/g, ' ').replace(/ {2,}/g, ' ').trim();
   if (s.length > max) throw new HttpError(400, `Túl hosszú szöveg (legfeljebb ${max} karakter).`);
   return s;
 }
 
 export function foglalasBemenet(d, { admin = false } = {}) {
-  const nev = szoveg(d.nev, 100);
-  const email = szoveg(d.email, 254).toLowerCase();
-  const telefon = szoveg(d.telefon, 24);
+  const nev = szoveg(d.nev, 100, { egysoros: true });
+  const email = szoveg(d.email, 254, { egysoros: true }).toLowerCase();
+  const telefon = szoveg(d.telefon, 24, { egysoros: true });
   const megjegyzes = szoveg(d.megjegyzes, 1000);
   if (nev.length < 2) throw new HttpError(400, 'Kérjük, add meg a neved.');
   if (!admin || email) {

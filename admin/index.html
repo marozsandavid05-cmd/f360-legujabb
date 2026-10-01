@@ -297,7 +297,10 @@
         <h1 id="le-h">Levelek</h1>
         <p class="fv-sub">A foglalásokhoz elkészült e-mailek: a vendégnek (visszaigazolás, módosítás, lemondás, emlékeztető), a kollégának és a stúdiónak.</p>
       </div>
-      <button type="button" class="btn btn--ghost" id="le-run">Emlékeztetők futtatása most</button>
+      <div class="le-run">
+        <button type="button" class="btn btn--ghost" id="le-run">Emlékeztetők futtatása most</button>
+        <p class="le-run__msg" id="le-run-allapot" role="status" aria-live="polite"></p>
+      </div>
     </div>
     <p class="note" id="le-note" hidden></p>
     <div class="le-filter" id="le-filter" role="group" aria-label="Szűrés címzett szerint"></div>

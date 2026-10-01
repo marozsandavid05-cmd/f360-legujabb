@@ -1098,16 +1098,19 @@
     }).join('');
   }
   function futtatEmlekezteto() {
-    var b = $('#le-run');
+    var b = $('#le-run'), allapot = $('#le-run-allapot');
+    // a visszajelzés a gomb alatt jelenik meg (nem lebegő üzenetként), így nem takarja a listát és az előnézetet
+    function jelez(szoveg, kind) { allapot.textContent = szoveg; allapot.dataset.kind = kind || 'info'; }
+    jelez('');
     b.disabled = true; b.textContent = 'Emlékeztetők keresése';
     api('/emlekezteto/futtat', { method: 'POST', json: {} }).then(function (r) {
       b.disabled = false; b.textContent = 'Emlékeztetők futtatása most';
       var n = (r && r.emlekeztetve) || 0;
-      if (r && r.kikapcsolva) toast('Az emlékeztető ki van kapcsolva a Beállításokban, ezért nem készült levél.');
-      else toast(n ? n + ' emlékeztető készült. ' + (r.mod === 'outbox' ? 'A listában látod őket.' : 'A levelek kimentek.') : 'Most nincs kinek emlékeztetőt küldeni: mindenki megkapta, vagy még nincs az időablakban.');
+      if (r && r.kikapcsolva) jelez('Az emlékeztető ki van kapcsolva a Beállításokban, ezért nem készült levél.');
+      else jelez(n ? n + ' emlékeztető készült. ' + (r.mod === 'outbox' ? 'A listában látod őket.' : 'A levelek kimentek.') : 'Most nincs kinek emlékeztetőt küldeni: mindenki megkapta, vagy még nincs az időablakban.');
       le.szuro = n ? 'emlekezteto' : le.szuro;
       openLevelek('');
-    }).catch(function (e) { b.disabled = false; b.textContent = 'Emlékeztetők futtatása most'; toast(e.message, 'error'); });
+    }).catch(function (e) { b.disabled = false; b.textContent = 'Emlékeztetők futtatása most'; jelez(e.message, 'error'); });
   }
 
   /* =====================================================================

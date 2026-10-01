@@ -1,0 +1,32 @@
+# Studio F360 · biztonsági fejlécek (Cloudflare Pages, statikus fájlokra).
+# A Pages Functions válaszaira (/api/*, /foglalas-api/*, /kedveles) ez NEM vonatkozik: azok a
+# functions/_lib/http.js-ben kapják a Cache-Control: no-store és a nosniff fejlécet.
+#
+# CSP: a szkript csak saját fájlból jöhet; az inline szkriptek hash-sel engedélyezve (a
+# tests/fejlecek.test.mjs ellenőrzi, hogy minden inline szkript hash-e itt van). A GA4 csak a
+# hozzájárulás után töltődik be (js/meres.js), ehhez kell a googletagmanager és a google-analytics.
+# A style-src 'unsafe-inline' a levél-előnézet (srcdoc iframe, a levél inline stílusai) miatt kell.
+# img-src https: a kollégák fotója külső https címről is jöhet (az admin ellenőrzi a sémát).
+
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-DamCoPgB/VkDCPsu0R6X4sJsz1c66vGlUGBXLu04Yxg=' 'sha256-PtjImk80sd14P6i12IBoXz8siPgpHR5odpN1xDTpZik=' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; media-src 'self'; connect-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com; frame-src 'self' https://www.google.com https://maps.google.com; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'
+  Strict-Transport-Security: max-age=31536000
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: SAMEORIGIN
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+
+# az admin (blog + foglaló) sosem kerül gyorsítótárba és keresőbe
+/admin/*
+  Cache-Control: no-store
+  X-Robots-Tag: noindex, nofollow
+
+# a lemondó link tokent hordoz az URL-ben: a hivatkozó fejlécben se menjen tovább
+/foglalas/lemondas*
+  Referrer-Policy: no-referrer
+  Cache-Control: no-store
+
+# a köszönő oldal URL-jében a foglalás azonosítója van
+/foglalas/koszonjuk*
+  Referrer-Policy: no-referrer
+  Cache-Control: no-store

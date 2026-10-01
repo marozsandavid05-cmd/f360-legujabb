@@ -49,7 +49,10 @@ export function tokenAzonosito(token) {
 export async function tokenEllenoriz(secret, token, so) {
   const id = tokenAzonosito(token);
   if (!id) return false;
-  const sig = b64uDecode(String(token).split('.')[1]);
-  if (!sig || sig.length !== 32) return false;
+  const resz = String(token).split('.')[1];
+  const sig = b64uDecode(resz);
+  // csak a kanonikus alak: a 43. karakter kitöltő bitjei nem lehetnek tetszőlegesek (különben egy
+  // tokennek több érvényes írásmódja lenne)
+  if (!sig || sig.length !== 32 || b64u(sig) !== resz) return false;
   return crypto.subtle.verify('HMAC', await kulcs(secret), sig, uzenet(id, so));
 }

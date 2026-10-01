@@ -45,7 +45,7 @@ const NAP = celHetfo();
 const HETFO2 = datumPlusz(NAP, 7);
 const alap = (o = {}) => ({
   helyszin: 'mexikoi', szolgaltatas: 'gyogymasszazs-50', kollega: 'szegedi-botond', datum: NAP, kezd: '10:00',
-  nev: 'Minta Vendég', email: 'vendeg@example.com', telefon: '+36 30 123 4567', megjegyzes: '', hozzajarul: true, ...o,
+  nev: 'David teszt', email: 'david.teszt@example.com', telefon: '+36 30 123 4567', megjegyzes: '', hozzajarul: true, ...o,
 });
 const tokenBol = (url) => new URL(url).searchParams.get('t');
 const sorok = (env, sql, ...a) => env.BOOKING_DB._raw.prepare(sql).all(...a);
@@ -87,11 +87,11 @@ test('módosítás: 200, ugyanaz az azonosító és token, a zárak cserélődne
   // levelek: páciens + stúdió, a páciensé .ics-szel; semmi nem ment ki
   const ob = sorok(e, "SELECT tipus, cimzett, ics, sent FROM outbox WHERE tipus IN ('modositas', 'studio-modositas') ORDER BY tipus");
   assert.deepEqual(ob.map((x) => [x.tipus, x.sent]), [['modositas', 0], ['studio-modositas', 0]]);
-  assert.equal(ob[0].cimzett, 'vendeg@example.com');
+  assert.equal(ob[0].cimzett, 'david.teszt@example.com');
   assert.ok(ob[0].ics.includes('BEGIN:VEVENT'));
   assert.ok(ob[1].cimzett);
   // a régi 10:00 újra szabad, a token továbbra is működik és az új időpontot mutatja
-  assert.equal((await post(e, '/foglalas-api/foglalas', alap({ nev: 'Más' }), { ip: '2.2.2.2' })).status, 201);
+  assert.equal((await post(e, '/foglalas-api/foglalas', alap({ nev: 'David teszt' }), { ip: '2.2.2.2' })).status, 201);
   const info = await (await get(e, `/foglalas-api/lemondas?t=${encodeURIComponent(f.t)}`)).json();
   assert.equal(info.foglalas.kezd, '12:00');
   assert.equal(info.modosithato, true);
@@ -122,7 +122,7 @@ test('módosítás a saját időpontjával átfedő időre (10:00 → 10:30) és
 test('foglalt új időpont: 409, a régi foglalás és a zárai érintetlenek, nincs új levél', async () => {
   const e = ujEnv();
   const a = await foglalj(e);
-  await foglalj(e, { kezd: '12:00', nev: 'Másik' }, '2.2.2.2');
+  await foglalj(e, { kezd: '12:00', nev: 'David teszt' }, '2.2.2.2');
   const elotte = sorok(e, 'SELECT COUNT(*) AS n FROM outbox')[0].n;
   const r = await modosit(e, { t: a.t, datum: NAP, kezd: '12:30', kollega: 'szegedi-botond' });
   assert.equal(r.status, 409);
@@ -204,7 +204,7 @@ test('párhuzamos módosítás és új foglalás ugyanarra a slotra: csak egy ny
     const a = await foglalj(e);
     const [m, b] = await Promise.all([
       modosit(e, { t: a.t, datum: NAP, kezd: '12:00', kollega: 'szegedi-botond' }),
-      post(e, '/foglalas-api/foglalas', alap({ kezd: '12:00', nev: 'Versenyző' }), { ip: '4.4.4.4' }),
+      post(e, '/foglalas-api/foglalas', alap({ kezd: '12:00', nev: 'David teszt' }), { ip: '4.4.4.4' }),
     ]);
     assert.ok([200, 409].includes(m.status) && [201, 409].includes(b.status), `${m.status} ${b.status}`);
     const nyertes = [m.status === 200, b.status === 201].filter(Boolean).length;
@@ -254,7 +254,7 @@ test('párhuzamos módosítás és lemondás: a foglalás vagy lemondva zár né
 test('szabad ?t=: a saját foglalás ideje szabadnak számít; helyszín és szolgáltatás a foglalásból jön', async () => {
   const e = ujEnv();
   const f = await foglalj(e);
-  await foglalj(e, { kezd: '12:00', nev: 'Másik' }, '2.2.2.2');
+  await foglalj(e, { kezd: '12:00', nev: 'David teszt' }, '2.2.2.2');
   const q = `kollega=szegedi-botond&tol=${NAP}&ig=${NAP}`;
   const nelkul = await (await get(e, `/foglalas-api/szabad?helyszin=mexikoi&szolgaltatas=gyogymasszazs-50&${q}`)).json();
   assert.ok(!nelkul.napok[NAP].some((s) => s.kezd === '10:00'));
@@ -276,7 +276,7 @@ test('szabad ?t=: a saját foglalás ideje szabadnak számít; helyszín és szo
 test('admin PATCH: a lemondási határon belül is áthelyez, ütközésre 409, lemondottra 410, ismeretlenre 404', async () => {
   const e = ujEnv();
   const f = await foglalj(e);
-  await foglalj(e, { kezd: '14:00', nev: 'Másik' }, '2.2.2.2');
+  await foglalj(e, { kezd: '14:00', nev: 'David teszt' }, '2.2.2.2');
   const m = budapestMost(Date.now() + 5 * 3600e3);
   e.BOOKING_DB._raw.prepare('UPDATE bookings SET date = ?, start_min = ? WHERE id = ?').run(m.datum, Math.floor(m.perc / 15) * 15, f.azonosito);
   e.BOOKING_DB._raw.prepare('UPDATE slot_locks SET date = ? WHERE booking_id = ?').run(m.datum, f.azonosito);
@@ -320,7 +320,7 @@ test('a visszaigazoló és a módosító levél gombja: „Időpont lemondása /
   assert.ok(d.level.html.includes(`href="${link}"`));
   assert.ok(d.level.szoveg.includes(f.lemondasUrl));
   const studio = sorok(e, "SELECT html FROM outbox WHERE tipus = 'studio-modositas'")[0].html;
-  assert.ok(studio.includes('Minta Vendég') && studio.includes('12:00') && studio.includes('10:00'));
+  assert.ok(studio.includes('David teszt') && studio.includes('12:00') && studio.includes('10:00'));
 });
 
 // ---------------------------------------------------------------- review-javítások

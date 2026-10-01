@@ -42,7 +42,7 @@ function celHetfo() {
 const NAP = celHetfo();
 const alap = (o = {}) => ({
   helyszin: 'mexikoi', szolgaltatas: 'gyogymasszazs-50', kollega: 'szegedi-botond', datum: NAP, kezd: '10:00',
-  nev: 'Minta Vendég', email: 'vendeg@example.com', telefon: '+36 30 123 4567', megjegyzes: '', hozzajarul: true, ...o,
+  nev: 'David teszt', email: 'david.teszt@example.com', telefon: '+36 30 123 4567', megjegyzes: '', hozzajarul: true, ...o,
 });
 const tokenBol = (url) => new URL(url).searchParams.get('t');
 const sorok = (env, sql, ...a) => env.BOOKING_DB._raw.prepare(sql).all(...a);
@@ -123,7 +123,7 @@ test('foglalás: 201, azonosító, lemondó link, .ics, levél-előnézet; a há
   assert.equal(d.foglalas.veg, '10:50');
   const ob = sorok(e, 'SELECT tipus, cimzett, sent FROM outbox ORDER BY tipus');
   assert.deepEqual(ob.map((x) => [x.tipus, x.sent]), [['studio-ertesito', 0], ['visszaigazolas', 0]]);
-  assert.equal(ob.find((x) => x.tipus === 'visszaigazolas').cimzett, 'vendeg@example.com');
+  assert.equal(ob.find((x) => x.tipus === 'visszaigazolas').cimzett, 'david.teszt@example.com');
   // 50 perc + 10 perc puffer = 4 rácspont
   assert.deepEqual(sorok(e, 'SELECT slot_min FROM slot_locks ORDER BY slot_min').map((x) => x.slot_min), [600, 615, 630, 645]);
   const sz = await (await get(e, `/foglalas-api/szabad?helyszin=mexikoi&szolgaltatas=gyogymasszazs-50&kollega=szegedi-botond&tol=${NAP}&ig=${NAP}`)).json();
@@ -135,8 +135,8 @@ test('foglalás: 201, azonosító, lemondó link, .ics, levél-előnézet; a há
 test('két párhuzamos foglalás ugyanarra: egy 201, egy 409, egy foglalás marad', async () => {
   const e = ujEnv();
   const [a, b] = await Promise.all([
-    post(e, '/foglalas-api/foglalas', alap({ nev: 'Első' })),
-    post(e, '/foglalas-api/foglalas', alap({ nev: 'Második' }), { ip: '5.6.7.8' }),
+    post(e, '/foglalas-api/foglalas', alap({ nev: 'David teszt' })),
+    post(e, '/foglalas-api/foglalas', alap({ nev: 'David teszt' }), { ip: '5.6.7.8' }),
   ]);
   assert.deepEqual([a.status, b.status].sort(), [201, 409]);
   const vesztes = a.status === 409 ? a : b;
@@ -233,7 +233,7 @@ test('lemondás tokennel: GET adatot ad (nem mond le), POST lemond, a hely újra
   assert.equal(p.status, 200);
   assert.equal((await p.json()).allapot, 'lemondva');
   assert.equal(sorok(e, 'SELECT COUNT(*) AS n FROM slot_locks')[0].n, 0);
-  assert.deepEqual(sorok(e, "SELECT cimzett FROM outbox WHERE tipus = 'lemondas'").map((x) => x.cimzett), ['vendeg@example.com']);
+  assert.deepEqual(sorok(e, "SELECT cimzett FROM outbox WHERE tipus = 'lemondas'").map((x) => x.cimzett), ['david.teszt@example.com']);
   // egyszer használható: másodszor 410, és nem megy ki második levél
   assert.equal((await post(e, '/foglalas-api/lemondas', { t })).status, 410);
   assert.equal(sorok(e, "SELECT COUNT(*) AS n FROM outbox WHERE tipus = 'lemondas'")[0].n, 1);
@@ -401,7 +401,7 @@ test('admin foglalások: lista, kézi felvétel (ütközés 409), lemondás azon
 
 test('admin outbox: az elkészült, el nem küldött levelek előnézettel', async () => {
   const e = ujEnv();
-  await post(e, '/foglalas-api/foglalas', alap({ nev: '<script>alert(1)</script>' }));
+  await post(e, '/foglalas-api/foglalas', alap({ nev: 'David teszt <script>alert(1)</script>' }));
   const o = await (await admin(e, 'GET', '/api/foglalo/outbox')).json();
   assert.equal(o.mod, 'outbox');
   assert.equal(o.levelek.length, 2);

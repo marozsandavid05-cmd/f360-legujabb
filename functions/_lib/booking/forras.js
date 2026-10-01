@@ -23,12 +23,30 @@ export function forrasBemenet(v) {
   for (const [k, max] of Object.entries(FORRAS_KULCSOK)) {
     if (v[k] == null) continue;
     if (typeof v[k] !== 'string') throw new HttpError(400, `Hibás kérés: forras.${k}.`);
-    const s = v[k].replace(/[\u0000-\u001F\u007F]/g, '').trim().slice(0, max);
+    let s = v[k].replace(/[\u0000-\u001F\u007F]/g, '').trim();
     if (!s) continue;
     if (k === 'referrer' && !/^https?:\/\//i.test(s)) continue;
-    ki[k] = s;
+    // a hivatkozó lekérdezése (pl. keresőkifejezés) és az érkezési oldal nem kampány-paramétere
+    // személyes adat is lehet: csak az út, illetve a kampány-paraméterek maradnak
+    if (k === 'referrer') s = csakUt(s.slice(0, 4 * max));
+    else if (k === 'landing') s = csakKampany(s.slice(0, 4 * max));
+    s = s.slice(0, max);
+    if (s) ki[k] = s;
   }
   return Object.keys(ki).length ? ki : null;
+}
+
+const KAMPANY_PARAM = new Set(['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'gclid', 'fbclid']);
+const ALAP = 'https://alap.invalid';
+function csakUt(s) {
+  try { const u = new URL(s); return u.origin + u.pathname; } catch { return ''; }
+}
+function csakKampany(s) {
+  let u;
+  try { u = new URL(s, ALAP); } catch { return ''; }
+  const q = [...u.searchParams].filter(([k]) => KAMPANY_PARAM.has(k));
+  const qs = q.length ? '?' + new URLSearchParams(q).toString() : '';
+  return (u.origin === ALAP ? '' : u.origin) + u.pathname + qs;
 }
 
 export function forrasOlvas(json) {

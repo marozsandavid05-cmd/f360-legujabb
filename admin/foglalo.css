@@ -30,6 +30,12 @@ body[data-view="view-edit"] .tabs{display:none}
 .fv-head h1{font-family:var(--font-display);font-weight:700;font-size:clamp(2.1rem,4.4vw,3.2rem);line-height:1.05;letter-spacing:.025em;text-transform:lowercase}
 .fv-head h1::first-letter{text-transform:uppercase}
 .fv-sub{margin-top:.45rem;font-size:.9375rem;max-width:62ch}
+/* Levelek: a „futtatás most” gomb és alatta a visszajelzés (nem lebegő üzenet, nem takar) */
+.le-run{display:flex;flex-direction:column;align-items:flex-end;gap:.45rem;max-width:min(100%,26rem)}
+.le-run__msg{font-size:.875rem;line-height:1.45;text-align:right;margin:0}
+.le-run__msg:empty{display:none}
+.le-run__msg[data-kind="error"]{font-weight:600}
+@media (max-width:640px){.le-run{align-items:stretch;max-width:none;width:100%}.le-run__msg{text-align:left}}
 .note{background:var(--sky);border-radius:var(--r);padding:.85rem 1.1rem;font-size:.9375rem;margin-bottom:1.25rem;max-width:72ch}
 .empty-state{padding:2.5rem 1.5rem;background:var(--paper);border-radius:var(--r);display:grid;gap:1rem;justify-items:center;text-align:center}
 .empty-inline{padding:1rem 0;font-size:.9375rem}

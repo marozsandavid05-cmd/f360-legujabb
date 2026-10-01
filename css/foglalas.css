@@ -286,6 +286,8 @@
 .rev--done{margin-bottom:1.5rem}
 .done__act,.cx__act{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center}
 .done__act .bk-next{margin-left:0}
+/* a lemondó / módosító gomb jól látható a kitöltött Google Naptár gomb mellett: 2 px antracit keret */
+.p-foglalas .done__act .btn:not(.bk-next),.p-foglalas .cx__act .btn:not(.bk-next){border-width:2px;font-weight:600}
 .done__new{margin-top:1.25rem}
 .done__mail[hidden]{display:none}
 .done__mail{display:grid;gap:1rem;position:sticky;top:calc(var(--navh) + 1.25rem)}

@@ -48,7 +48,8 @@
     // referrer: csak külső http(s) oldal (a saját oldalon belüli lapozás nem forrás)
     var ref = document.referrer || '';
     if (/^https?:\/\//i.test(ref)) {
-      try { if (new URL(ref).host !== location.host) uj.referrer = tisztit(ref, MAX.referrer); } catch (e) { /* hibás cím */ }
+      // csak az út: a hivatkozó lekérdezése (pl. keresőkifejezés) személyes adat is lehet
+      try { var ru = new URL(ref); if (ru.host !== location.host) uj.referrer = tisztit(ru.origin + ru.pathname, MAX.referrer); } catch (e) { /* hibás cím */ }
     }
     var regi = olvas();
     if (regi && !(kampanyos(uj) && !kampanyos(regi))) return; // az első érkezés marad
@@ -76,7 +77,13 @@
     g.dataLayer = g.dataLayer || [];
     g.gtag = g.gtag || function () { g.dataLayer.push(arguments); };
     g.gtag('js', new Date());
-    g.gtag('config', GA_MERES_ID, { anonymize_ip: true });
+    // a gtag alapból a TELJES címet küldené (benne a lemondó/módosító ?t= tokennel és a foglalás
+    // azonosítójával): helyette csak az út és a kampány-paraméterek, a hivatkozó lekérdezés nélkül
+    var lq = new URLSearchParams(), q = new URLSearchParams(location.search);
+    KAMPANY.forEach(function (k) { if (q.get(k)) lq.set(k, q.get(k)); });
+    var ls = lq.toString(), ref = '';
+    try { if (document.referrer) { var r = new URL(document.referrer); ref = r.origin + r.pathname; } } catch (e) { /* hibás cím */ }
+    g.gtag('config', GA_MERES_ID, { anonymize_ip: true, page_location: location.origin + location.pathname + (ls ? '?' + ls : ''), page_referrer: ref });
     var s = document.createElement('script');
     s.async = true;
     s.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(GA_MERES_ID);
