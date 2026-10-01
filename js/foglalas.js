@@ -1,7 +1,7 @@
 /* =====================================================================
    STUDIO F360 · IDŐPONTFOGLALÓ · foglalas.js (nyilvános foglaló)
    Lépések egy oldalon: helyszín → kezelés → szakember → nap + időpont → adatok
-   → összegzés → kész. A választások az URL-ben élnek (megosztható, frissítésre
+   → összegzés → a köszönő oldal (foglalas/koszonjuk.html). A választások az URL-ben élnek (megosztható, frissítésre
    megmarad, a böngésző vissza gombja lépésenként visz vissza); a személyes adatok
    csak a böngésző munkamenet-tárában (sessionStorage), sosem az URL-ben.
    Lemondás: ?t=TOKEN (a levélben lévő link) ugyanezen az oldalon.
@@ -615,6 +615,9 @@
       nev: String(d.nev || '').trim(), email: String(d.email || '').trim(), telefon: String(d.telefon || '').trim(),
       megjegyzes: String(d.megjegyzes || '').trim(), hozzajarul: !!d.hozzajarul, web: $('#f-web').value
     };
+    // honnan jött a látogató (js/meres.js, az első érkezéskor rögzítve); a riport és a mérés ebből dolgozik
+    var forras = window.F360Meres && window.F360Meres.forras();
+    if (forras) body.forras = forras;
     setSubmitting(true);
     $('#bk-next-t').textContent = 'Foglalás folyamatban';
     announce('Foglalás folyamatban');
@@ -626,18 +629,11 @@
         showAlert('A foglalás nem sikerült', 'Kérjük, töltsd újra az oldalt és próbáld újra, vagy hívj minket: ' + telefon() + '.');
         return;
       }
-      var done = { azonosito: res.azonosito, lemondasUrl: res.lemondasUrl || '', ics: res.ics || '', level: res.level || null, foglalas: res.foglalas, telefon: telefon() };
+      var done = { azonosito: res.azonosito, lemondasUrl: res.lemondasUrl || '', ics: res.ics || '', level: res.level || null, foglalas: res.foglalas, telefon: telefon(), forras: forras || null };
+      if (done.foglalas.szolgaltatas.ar == null && s) done.foglalas.szolgaltatas.ar = s.ar;
       try { sessionStorage.setItem(DONE_KEY, JSON.stringify(done)); sessionStorage.removeItem(DATA_KEY); } catch (e) { /* nincs tárhely */ }
-      if (typeof window.gtag === 'function') {
-        try {
-          window.gtag('event', 'foglalas_kesz', {
-            helyszin: res.foglalas.helyszin.id, szolgaltatas: res.foglalas.szolgaltatas.id,
-            kollega: res.foglalas.kollega.id, value: res.foglalas.szolgaltatas.ar || (s && s.ar) || 0, currency: 'HUF'
-          });
-        } catch (e) { /* a mérés nem akadályozhatja a foglalást */ }
-      }
-      history.pushState({ f: 1 }, '', location.pathname + '?' + (MOCK && location.protocol !== 'file:' ? 'mock=1&' : '') + 'kesz=' + encodeURIComponent(res.azonosito));
-      showDone(done, true);
+      // a köszönő oldal a konverziós pont (ott fut a mérés, egyszer)
+      goThanks(done);
     }).catch(function (err) {
       setSubmitting(false);
       renderBar();
@@ -675,14 +671,12 @@
         return;
       }
       var done = { azonosito: res.azonosito, lemondasUrl: res.lemondasUrl || '', ics: res.ics || '', level: res.level || null, foglalas: res.foglalas, telefon: telefon(), modositva: true };
+      if (done.foglalas.szolgaltatas.ar == null) done.foglalas.szolgaltatas.ar = mod.f.szolgaltatas.ar;
       try { sessionStorage.setItem(DONE_KEY, JSON.stringify(done)); } catch (e) { /* nincs tárhely */ }
       delete infoCache[mod.tok];
-      if (typeof window.gtag === 'function') {
-        try { window.gtag('event', 'foglalas_modositva', { helyszin: res.foglalas.helyszin.id, szolgaltatas: res.foglalas.szolgaltatas.id, kollega: res.foglalas.kollega.id }); } catch (e) { /* a mérés nem akadályozhat */ }
-      }
+      var tok = mod.tok;
       mod = null; STEPS = FULL_STEPS;
-      history.pushState({ f: 1 }, '', location.pathname + '?' + (MOCK && location.protocol !== 'file:' ? 'mock=1&' : '') + 'kesz=' + encodeURIComponent(res.azonosito));
-      showDone(done, true);
+      goThanks(done, manageHref(tok));
     }).catch(function (err) {
       setSubmitting(false);
       renderBar();
@@ -713,6 +707,20 @@
     });
   }
 
+  /* ---------------- KÖSZÖNŐ OLDAL ---------------- */
+  // /foglalas/koszonjuk?id=<azonosító>. Élesben a tiszta (.html nélküli) cím, helyben (file://, ?mock=1) a fájl.
+  function thanksHref(azonosito) {
+    var tiszta = location.protocol !== 'file:' && !MOCK;
+    var q = (MOCK && location.protocol !== 'file:' ? 'mock=1&' : '') + 'id=' + encodeURIComponent(azonosito);
+    return 'foglalas/koszonjuk' + (tiszta ? '' : '.html') + '?' + q;
+  }
+  // a vissza gomb ne a véglegesítő lépésre vigyen (onnan újra be lehetne küldeni): az előzmény helyére
+  // a foglaló eleje (vagy módosításnál a „Foglalásod kezelése”) kerül, utána jön a köszönő oldal
+  function goThanks(done, visszaHref) {
+    history.replaceState({ f: 1 }, '', visszaHref || newBookingHref(''));
+    location.assign(thanksHref(done.azonosito));
+  }
+
   /* ---------------- KÉSZ ---------------- */
   function revHtml(rows) {
     return rows.filter(function (r) { return r[1]; }).map(function (r) {
@@ -726,61 +734,6 @@
       ['Szakember', f.kollega.nev, ''],
       ['Helyszín', f.helyszin.nev, f.helyszin.cim]
     ].concat(extra || []);
-  }
-  function showDone(done, fresh) {
-    var f = done.foglalas;
-    document.body.classList.toggle('theme-rehab', f.helyszin.id === 'reitter');
-    document.body.setAttribute('data-view', 'kesz');
-    $('#bk-flow-wrap').hidden = true;
-    $('#bk-cancel').hidden = true;
-    $('.bk-head').hidden = true;
-    $('#bk-done').hidden = false;
-    $('#done-k').textContent = done.modositva ? 'Áthelyezés rögzítve' : 'Foglalás rögzítve';
-    $('#h-done').textContent = done.modositva ? 'Időpontod módosítva' : 'Várunk, ' + keresztnev(f.nev);
-    $('#done-when').textContent = (done.modositva ? 'Az új időpont: ' + F.datumNap(f.datum) : F.datumNap(f.datum).replace(/^./, function (c) { return c.toUpperCase(); })) + ', ' +
-      F.hm(F.perc(f.kezd)) + '-' + F.hm(F.perc(f.veg)) + ', ' + f.helyszin.nev;
-    $('#done-rev').innerHTML = revHtml(foglalasSorok(f, [
-      ['Foglalás száma', done.azonosito, done.modositva ? 'Nem változott, a levélben lévő link is marad' : 'Erre hivatkozz, ha telefonálsz'],
-      ['Díj', f.szolgaltatas.ar != null ? F.ft(f.szolgaltatas.ar) : '', 'a helyszínen fizetendő']
-    ]).filter(function (r, i) { return i !== 0; }));
-    var cx = $('#done-cancel');
-    if (done.lemondasUrl) { cx.href = lemondoLink(done.lemondasUrl); cx.hidden = false; } else cx.hidden = true;
-    $('#done-new').href = newBookingHref('');
-    // naptár: Google Naptár = kitöltött esemény új lapon (backend nem kell hozzá);
-    // Apple / Outlook = a backend .ics-URL-je (inline, a Safari egyből a Naptár appot nyitja), a mockban a fájl helyben készül
-    var gc = $('#done-gcal');
-    gc.href = F.googleNaptarUrl(f, done.lemondasUrl || '');
-    var ics = $('#done-ics');
-    ics.href = done.ics || '#';
-    ics.onclick = function (e) {
-      if (!MOCK || !window.F360FoglaloMock) return;
-      e.preventDefault();
-      var tok = (/[?&]t=([^&]+)/.exec(done.ics || '') || [])[1];
-      F.icsLetolt(window.F360FoglaloMock.ics(decodeURIComponent(tok || '')), 'studio-f360-' + done.azonosito + '.ics');
-    };
-    $('#cal-t').textContent = done.modositva
-      ? 'Az Apple / Outlook gomb egy naptárfájlt ad. Megnyitva frissíti az időpontot a naptáradban. Ha a régi időpont mégis ott maradna, töröld.'
-      : 'Az Apple / Outlook gomb egy naptárfájlt ad. Megnyitva hozzáadja az időpontot a naptáradhoz.';
-    $('#done-tel').textContent = done.telefon || telefon();
-    $('#done-tel').href = 'tel:' + String(done.telefon || telefon()).replace(/[^\d+]/g, '');
-    // a visszaigazoló levél előnézete: a backend által összerakott levél (bemutató, most nem megy ki);
-    // sandboxolt iframe srcdoc, sosem innerHTML
-    var fr = $('#mail-frame'), mail = $('.done__mail');
-    if (done.level && done.level.html) {
-      mail.hidden = false;
-      $('#mail-subj').textContent = done.level.targy || '';
-      fr.setAttribute('sandbox', 'allow-popups allow-popups-to-escape-sandbox');
-      fr.srcdoc = String(done.level.html).replace(/<head>/i, '<head><base target="_blank">');
-    } else mail.hidden = true;
-    document.title = (done.modositva ? 'Időpont módosítva' : 'Foglalás rögzítve') + ' · Studio F360';
-    window.scrollTo(0, 0); if (window.__lenis) window.__lenis.scrollTo(0, { immediate: true });
-    setTimeout(function () { $('#h-done').focus({ preventScroll: true }); }, 60);
-    if (fresh) announce((done.modositva ? 'Időpontod módosítva. ' : 'Foglalás rögzítve. ') + $('#done-when').textContent);
-  }
-  // a levélben lévő link (…/foglalas/lemondas?t=) → ugyanennek az oldalnak a „Foglalásod kezelése” nézete
-  function lemondoLink(u) {
-    var t = (/[?&]t=([^&#]+)/.exec(u || '') || [])[1];
-    return t ? newBookingHref('') + (newBookingHref('').indexOf('?') >= 0 ? '&' : '?') + 't=' + t : u;
   }
   function manageHref(tok, extra) {
     var h = newBookingHref('');
@@ -796,7 +749,7 @@
   /* ---------------- MÓDOSÍTÁS (?t=TOKEN&modositas=1) ---------------- */
   // a foglaló lépései a meglévő komponensekkel; a helyszín és a kezelés a foglalásból jön és nem változik
   function startMod(tok, u) {
-    $('#bk-cancel').hidden = true; $('#bk-done').hidden = true;
+    $('#bk-cancel').hidden = true;
     loadInfo(tok).then(function (r) {
       if (r.allapot !== 'megerositett' || !r.modosithato) {
         // lemondott vagy határidőn belüli: a kezelő nézet mondja meg, mi a teendő
@@ -842,7 +795,6 @@
     mod = null; STEPS = FULL_STEPS;
     document.body.setAttribute('data-view', 'lemondas');
     $('#bk-flow-wrap').hidden = true;
-    $('#bk-done').hidden = true;
     $('.bk-head').hidden = true;
     $('#bk-cancel').hidden = false;
     $('#cx-rev').hidden = false;
@@ -1010,15 +962,10 @@
     // kilépés a módosításból (vissza gomb): a foglaló eredeti fejléce és lépései
     if (mod || STEPS !== FULL_STEPS) { mod = null; STEPS = FULL_STEPS; Object.keys(cache).forEach(function (k) { delete cache[k]; }); prevCard = {}; }
     $('#bk-h1').textContent = HEAD_H1; $('#bk-lead').textContent = HEAD_LEAD; $('#ossz-fine').textContent = OSSZ_FINE; $('#bk-modback').hidden = true;
-    if (u.kesz) {
-      var saved = null;
-      try { saved = JSON.parse(sessionStorage.getItem(DONE_KEY) || 'null'); } catch (e) { saved = null; }
-      if (saved && saved.foglalas && saved.azonosito === u.kesz) return showDone(saved, false);
-      history.replaceState({ f: 1 }, '', newBookingHref(''));
-      return route();
-    }
+    // a régi ?kesz=<azonosító> link: átirányít a köszönő oldalra (mérés nélkül, ha ott már lefutott)
+    if (u.kesz) { location.replace(thanksHref(u.kesz)); return; }
     document.body.removeAttribute('data-view');
-    $('#bk-done').hidden = true; $('#bk-cancel').hidden = true; $('.bk-head').hidden = false;
+    $('#bk-cancel').hidden = true; $('.bk-head').hidden = false;
     $('#bk-flow-wrap').hidden = false;
     var prevWeekKey = [st.h, st.sz, st.k].join('|');
     st.h = u.h; st.sz = u.sz; st.k = u.k; st.d = u.d; st.t = u.t; st.step = u.step;

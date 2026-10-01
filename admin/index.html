@@ -32,9 +32,11 @@
 <nav class="tabs" id="tabs" aria-label="Admin részei">
   <div class="tabs__in">
     <a class="tabs__a" href="#/foglalasok" data-tab="foglalasok">Foglalások</a>
+    <a class="tabs__a" href="#/kollegak" data-tab="kollegak">Kollégák</a>
     <a class="tabs__a" href="#/beosztas" data-tab="beosztas">Beosztás</a>
-    <a class="tabs__a" href="#/beallitasok" data-tab="beallitasok">Beállítások</a>
     <a class="tabs__a" href="#/levelek" data-tab="levelek">Levelek</a>
+    <a class="tabs__a" href="#/kampanyok" data-tab="kampanyok">Kampányok</a>
+    <a class="tabs__a" href="#/beallitasok" data-tab="beallitasok">Beállítások</a>
     <span class="tabs__sep" aria-hidden="true"></span>
     <a class="tabs__a" href="#/" data-tab="blog">Blog</a>
   </div>
@@ -222,6 +224,50 @@
     <div class="fg-board" id="fg-board" aria-busy="true"></div>
   </section>
 
+  <section class="view fv" id="view-kollegak" hidden aria-labelledby="ko-h">
+    <div class="fv-head">
+      <div>
+        <h1 id="ko-h">Kollégák</h1>
+        <p class="fv-sub">Ki foglalható, hol és mire. A belépés előtt és a kilépés után a foglaló nem ad hozzá időpontot. A privát e-mail-cím csak az értesítésekhez kell, a weboldalon nem jelenik meg.</p>
+      </div>
+      <a class="btn btn--primary" href="#/kollegak/uj" id="ko-new">
+        <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        Új kolléga
+      </a>
+    </div>
+    <div class="ko">
+      <div class="ko-side">
+        <div class="seg seg--sm" role="group" aria-label="Melyik kollégák látszódjanak">
+          <button type="button" class="seg__b" data-kolista="aktiv" aria-pressed="true">Aktív</button>
+          <button type="button" class="seg__b" data-kolista="archiv" aria-pressed="false">Archivált</button>
+        </div>
+        <ul class="ko-list" id="ko-list" aria-label="Kollégák"></ul>
+      </div>
+      <div class="ko-main" id="ko-main"></div>
+    </div>
+  </section>
+
+  <section class="view fv" id="view-kampanyok" hidden aria-labelledby="ka-h">
+    <div class="fv-head">
+      <div>
+        <h1 id="ka-h">Kampányok</h1>
+        <p class="fv-sub">Honnan jöttek a foglalások: hirdetés, hírlevél, keresés vagy közvetlenül. A forrást a weboldal az érkezéskor jegyzi meg, és a foglalással együtt menti.</p>
+      </div>
+    </div>
+    <form class="ka-tools" id="ka-form" novalidate>
+      <div class="field"><label for="ka-tol">Első nap</label><input type="date" id="ka-tol" required></div>
+      <div class="field"><label for="ka-ig">Utolsó nap</label><input type="date" id="ka-ig" required></div>
+      <div class="seg seg--sm ka-pre" role="group" aria-label="Gyors időszak">
+        <button type="button" class="seg__b" data-kapre="m30">Elmúlt 30 nap</button>
+        <button type="button" class="seg__b" data-kapre="ho">Ez a hónap</button>
+        <button type="button" class="seg__b" data-kapre="j60">Következő 60 nap</button>
+      </div>
+      <button type="submit" class="btn btn--ghost">Mutasd</button>
+    </form>
+    <p class="hint ka-hint">Az időszak a foglalt időpont napjára szűr, nem arra, mikor foglaltak.</p>
+    <div class="ka-board" id="ka-board" aria-live="polite"></div>
+  </section>
+
   <section class="view fv" id="view-beosztas" hidden aria-labelledby="bo-h">
     <div class="fv-head">
       <div>
@@ -249,10 +295,12 @@
     <div class="fv-head">
       <div>
         <h1 id="le-h">Levelek</h1>
-        <p class="fv-sub">A foglalásokhoz elkészült e-mailek: visszaigazolás a vendégnek, értesítő a stúdiónak, lemondás.</p>
+        <p class="fv-sub">A foglalásokhoz elkészült e-mailek: a vendégnek (visszaigazolás, módosítás, lemondás, emlékeztető), a kollégának és a stúdiónak.</p>
       </div>
+      <button type="button" class="btn btn--ghost" id="le-run">Emlékeztetők futtatása most</button>
     </div>
-    <p class="note" id="le-note">Bemutató: a levelek most nem mennek ki, mert a levélküldés még nincs beállítva. Itt látod, pontosan mit kapna a vendég és a stúdió.</p>
+    <p class="note" id="le-note" hidden></p>
+    <div class="le-filter" id="le-filter" role="group" aria-label="Szűrés címzett szerint"></div>
     <div class="le">
       <ul class="le-list" id="le-list" aria-label="Levelek listája"></ul>
       <div class="le-prev" id="le-prev"></div>

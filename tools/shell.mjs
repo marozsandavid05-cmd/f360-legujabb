@@ -33,6 +33,13 @@ export const BOOK = {
   reit: bookHref('', 'reit'),
 };
 
+// Mérés-előkészítés (js/meres.js): minden oldalon fut, a lábléc végén töltődik be, így a gyökér-oldalak,
+// a blog és a 404 is egy helyről kapja. A forrást (utm_*, gclid, fbclid, landing, referrer) az érkezéskor
+// sessionStorage-be teszi; a GA4 csak mérési azonosító ÉS hozzájárulás mellett töltődik be.
+export function meresScript(prefix) {
+  return `<script src="${prefix}js/meres.js" defer></script>`;
+}
+
 export const SOCIAL = {
   instagram: 'https://www.instagram.com/studio_f360_egeszsegkozpont/',
   facebook: 'https://www.facebook.com/fitfoodfizio360',
@@ -226,5 +233,6 @@ export function footerBlock(prefix, cur, world) {
       <span>Adószám 27970054-1-42 · Cégjegyzékszám 01-09-359579</span>
     </div>
   </div>
+  ${meresScript(prefix)}
 </footer>`;
 }

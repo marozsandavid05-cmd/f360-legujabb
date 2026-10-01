@@ -47,7 +47,10 @@ function rewriteBody(html, key) {
   return { out, n };
 }
 
-const files = fs.readdirSync(ROOT).filter((f) => f.endsWith('.html'));
+// almappás oldalak, amelyek a közös héjat kapják (a prefix a gyökérhez vezető relatív út);
+// a törzsük foglalás-linkjei '../foglalas.html' alakúak, azokhoz a csere nem nyúl
+const SUB_PAGES = { 'foglalas/koszonjuk.html': '../' };
+const files = fs.readdirSync(ROOT).filter((f) => f.endsWith('.html')).concat(Object.keys(SUB_PAGES).filter((f) => fs.existsSync(path.join(ROOT, f))));
 const jobs = [];
 const errors = [];
 for (const f of files) {
@@ -63,21 +66,21 @@ for (const f of files) {
     if (n !== 1) errors.push(`${f}: ${k} blokk ${n} db (1 kell)`);
   }
   const world = cls.includes('theme-rehab') ? 'reit' : 'mex';
-  jobs.push({ f, src, key, world });
+  jobs.push({ f, src, key, world, prefix: SUB_PAGES[f] || '' });
 }
 if (errors.length) { console.error('PRE-FLIGHT HIBA, semmi nem íródott:\n' + errors.join('\n')); process.exit(1); }
 
-for (const { f, src, key, world } of jobs) {
+for (const { f, src, key, world, prefix } of jobs) {
   const eol = src.includes('\r\n') ? '\r\n' : '\n';
   const fix = (s) => s.replace(/\r?\n/g, eol);
   // a shell-blokkokat előbb kivesszük, hogy a törzs-csere ne nyúljon beléjük
   const mark = ['\u0000NAV\u0000', '\u0000MENU\u0000', '\u0000FOOT\u0000'];
   let tmp = src.replace(RE.nav, mark[0]).replace(RE.menu, mark[1]).replace(RE.footer, mark[2]);
-  const { out: bodyOut, n } = rewriteBody(tmp, key);
+  const { out: bodyOut, n } = prefix ? { out: tmp, n: 0 } : rewriteBody(tmp, key);
   const out = bodyOut
-    .replace(mark[0], () => fix(navBlock('', key, world)))
-    .replace(mark[1], () => fix(menuBlock('', key, world)))
-    .replace(mark[2], () => fix(footerBlock('', key, world)));
+    .replace(mark[0], () => fix(navBlock(prefix, key, world)))
+    .replace(mark[1], () => fix(menuBlock(prefix, key, world)))
+    .replace(mark[2], () => fix(footerBlock(prefix, key, world)));
   fs.writeFileSync(path.join(ROOT, f), out, 'utf8');
   console.log(`ok  ${f}  (${key}, ${world}, ${n} foglalás-link a törzsben)`);
 }

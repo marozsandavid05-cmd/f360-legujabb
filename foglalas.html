@@ -255,46 +255,7 @@
     </section>
   </div>
 
-  <!-- ================= KÉSZ ================= -->
-  <section class="bk-done wrap" id="bk-done" aria-labelledby="h-done" hidden>
-    <div class="done">
-      <div class="done__main">
-        <p class="done__k" id="done-k">Foglalás rögzítve</p>
-        <h1 id="h-done" tabindex="-1">Várunk</h1>
-        <p class="done__when" id="done-when"></p>
-        <dl class="rev rev--done" id="done-rev"></dl>
-        <div class="cal" role="group" aria-labelledby="cal-h">
-          <p class="cal__h" id="cal-h">Hozzáadás a naptárhoz</p>
-          <div class="cal__b">
-            <a class="btn bk-next" id="done-gcal" href="https://calendar.google.com/" target="_blank" rel="noopener">
-              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 9.5h17M8 3v4M16 3v4M12 12.5v5M9.5 15h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-              <span>Google Naptár</span><span class="sr-only"> (új lapon nyílik)</span>
-            </a>
-            <a class="btn" id="done-ics" href="foglalas.html" aria-describedby="cal-t">
-              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 9.5h17M8 3v4M16 3v4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-              <span>Apple / Outlook naptár</span>
-            </a>
-          </div>
-          <p class="cal__t" id="cal-t">Az Apple / Outlook gomb egy naptárfájlt ad. Megnyitva hozzáadja az időpontot a naptáradhoz.</p>
-        </div>
-        <div class="done__act">
-          <a class="btn" id="done-cancel" href="foglalas.html">Időpont lemondása / módosítása</a>
-        </div>
-        <p class="bk-fine" id="done-fine">Ez a link a visszaigazoló levélben is benne van. A kezdés előtt 24 óráig online lemondhatod vagy módosíthatod, utána hívj minket: <a class="lnk" id="done-tel" href="tel:+36305030578">+36 30 503 0578</a></p>
-        <p class="done__new"><a class="lnk" href="foglalas.html" id="done-new">Újabb időpontot foglalok</a></p>
-      </div>
-      <section class="done__mail" aria-labelledby="mail-h">
-        <div class="demo">
-          <p class="demo__h" id="mail-h">Bemutató</p>
-          <p>A visszaigazoló e-mail most nem megy ki, élesben ezt kapná meg a vendég a megadott címre.</p>
-        </div>
-        <div class="mailprev">
-          <p class="mailprev__meta"><span>Tárgy</span><b id="mail-subj"></b></p>
-          <iframe class="mailprev__frame" id="mail-frame" title="A visszaigazoló levél előnézete" loading="lazy"></iframe>
-        </div>
-      </section>
-    </div>
-  </section>
+  <!-- a sikeres foglalás és módosítás a külön köszönő oldalra visz: foglalas/koszonjuk.html (js/koszonjuk.js) -->
 
   <!-- ================= FOGLALÁSOD KEZELÉSE (a levélben lévő tokenes linkről: módosítás vagy lemondás) ================= -->
   <section class="bk-cancel wrap" id="bk-cancel" aria-labelledby="h-cancel" hidden>
@@ -362,6 +323,7 @@
       <span>Adószám 27970054-1-42 · Cégjegyzékszám 01-09-359579</span>
     </div>
   </div>
+  <script src="js/meres.js" defer></script>
 </footer>
 
 <script src="vendor/gsap.min.js" defer></script>

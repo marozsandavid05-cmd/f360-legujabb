@@ -418,3 +418,12 @@
     transition-property:background-color,color!important;transition-duration:.7s!important;
   }
 }
+
+/* ============ KÖSZÖNŐ OLDAL (foglalas/koszonjuk.html) ============ */
+.p-koszonjuk .bk{min-height:60vh}
+.ty__lead{font-size:1.0625rem;line-height:1.6;max-width:52ch;margin:-.9rem 0 1.6rem}
+.ty-empty__in{max-width:44rem}
+/* levél-előnézet nélkül egy oszlop (ne maradjon üres jobb oldali hasáb) */
+.p-koszonjuk .done.is-solo{grid-template-columns:minmax(0,46rem)}
+.ty-empty .done__act{margin-top:.5rem}
+.p-koszonjuk .bk[data-state="betolt"] .bk-done{opacity:.001}
