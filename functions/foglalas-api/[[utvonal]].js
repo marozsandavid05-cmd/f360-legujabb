@@ -82,7 +82,8 @@ const UTAK = {
       return new Response(ics, {
         headers: {
           'Content-Type': 'text/calendar; charset=utf-8',
-          'Content-Disposition': `attachment; filename="studio-f360-${azonosito}.ics"`,
+          // inline: iPhone-on és Macen a Safari egyből a Naptár appot nyitja, nem tölti le; a fájlnév marad
+          'Content-Disposition': `inline; filename="studio-f360-${azonosito}.ics"`,
           'Cache-Control': 'no-store',
           'X-Content-Type-Options': 'nosniff',
         },

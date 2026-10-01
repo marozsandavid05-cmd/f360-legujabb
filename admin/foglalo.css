@@ -201,6 +201,10 @@ body[data-view="view-edit"] .tabs{display:none}
 .pill:hover span{box-shadow:inset 0 0 0 1.5px var(--ink)}
 .pill input:checked + span{background:var(--ink);color:var(--paper)}
 .pill input:focus-visible + span{outline:2px solid var(--ink);outline-offset:2px}
+/* áthelyezés: a jelenlegi időpont jelölve, nem választható */
+.pill.is-now{cursor:default}
+.pill.is-now span{background:transparent;box-shadow:inset 0 0 0 1.5px var(--ink);background-image:repeating-linear-gradient(135deg,rgba(0,0,0,.06) 0 6px,transparent 6px 12px)}
+.pill.is-now small{font-weight:600;letter-spacing:.06em;text-transform:uppercase}
 
 /* ============ BEOSZTÁS ============ */
 .bo{display:grid;grid-template-columns:16.5rem minmax(0,1fr);gap:1.25rem;align-items:start}

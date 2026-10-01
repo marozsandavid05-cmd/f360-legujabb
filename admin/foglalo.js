@@ -299,10 +299,14 @@
       '<div><dt>Azonosító</dt><dd class="mono">' + esc(b.azonosito) + '</dd></div>' +
       '</dl>';
     var act = $('#dlg-fg-act');
+    // áthelyezés: megerősített és még el nem kezdődött foglalásnál (a backend a múltbelit 410-zel elutasítja)
+    var athelyezheto = !lem && F.percIg(b.datum, F.perc(b.kezd)) > 0;
     act.innerHTML = (lem ? '' : '<button type="button" class="linkbtn linkbtn--danger" id="fg-cx">Foglalás lemondása</button>') +
+      (athelyezheto ? '<button type="button" class="btn btn--ghost" id="fg-move">Áthelyezés</button>' : '') +
       '<button type="button" class="btn btn--primary" id="fg-close" autofocus>Bezárás</button>';
     var d = $('#dlg-fg');
     $('#fg-close').addEventListener('click', function () { d.close(); });
+    if (athelyezheto) $('#fg-move').addEventListener('click', function () { d.close(); openMove(b); });
     if (!lem) $('#fg-cx').addEventListener('click', function () {
       d.close();
       confirmDlg('Lemondod a foglalást?', b.nev + ', ' + F.datumNap(b.datum) + ' ' + b.kezd + '. Az időpont felszabadul, és ha van e-mail-cím, a vendég lemondó levelet kap.', 'Lemondás').then(function (ok) {
@@ -314,6 +318,65 @@
       });
     });
     d.showModal();
+  }
+
+  /* ---------- áthelyezés (PATCH /api/foglalo/foglalasok/:id) ---------- */
+  var mv = { b: null };
+  function openMove(b) {
+    mv.b = b;
+    loadTorzs().then(function () {
+      var kl = torzs.kollegak.filter(function (k) { return k.helyszinek.indexOf(b.helyszin.id) >= 0 && k.szolgaltatasok.indexOf(b.szolgaltatas.id) >= 0; });
+      if (!kl.some(function (k) { return k.id === b.kollega.id; }) && koll(b.kollega.id)) kl.unshift(koll(b.kollega.id));
+      $('#dlg-move-h').textContent = 'Áthelyezés: ' + b.nev;
+      $('#mv-now').textContent = 'Most: ' + F.datumNap(b.datum) + ', ' + b.kezd + '-' + b.veg + ', ' + b.kollega.nev + '. ' + b.szolgaltatas.nev + ', ' + b.helyszin.nev + '.';
+      $('#mv-koll').innerHTML = '<option value="barki">Bárki, aki szabad</option>' + optionList(kl, b.kollega.id);
+      $('#mv-datum').value = b.datum;
+      $('#mv-datum').min = F.most().datum;
+      $('#mv-err').hidden = true;
+      var ok = $('#mv-ok'); ok.disabled = false; ok.textContent = 'Áthelyezés';
+      moveSlots();
+      $('#dlg-move').showModal();
+    }).catch(function (e) { toast(e.message, 'error'); });
+  }
+  var mvReq = 0;
+  function moveSlots(keep) {
+    var box = $('#mv-slots'), d = $('#mv-datum').value, b = mv.b, req = ++mvReq, kid = $('#mv-koll').value;
+    if (!d) { box.innerHTML = '<p class="hint">Válassz napot.</p>'; return; }
+    box.setAttribute('aria-busy', 'true');
+    box.innerHTML = '<p class="hint">Szabad időpontok betöltése</p>';
+    api('/szabad?foglalas=' + encodeURIComponent(b.azonosito) + '&kollega=' + encodeURIComponent(kid) + '&tol=' + d + '&ig=' + d).then(function (r) {
+      if (req !== mvReq) return;
+      box.setAttribute('aria-busy', 'false');
+      var list = (r && r.napok && r.napok[d]) || [];
+      if (!list.length) { box.innerHTML = '<p class="hint">Ezen a napon nincs szabad időpont ' + (kid === 'barki' ? 'senkinél' : 'ennél a szakembernél') + '. Válassz másik napot vagy szakembert.</p>'; return; }
+      box.innerHTML = '<div class="pills">' + list.map(function (x) {
+        // a jelenlegi időpont: jelölve, nem választható (ugyanarra nem lehet áthelyezni)
+        var sajat = d === b.datum && x.kezd === b.kezd && (kid === 'barki' || kid === b.kollega.id);
+        var who = x.kollegak.length === 1 && koll(x.kollegak[0]) ? rovidNev(koll(x.kollegak[0]).nev) : x.kollegak.length + ' szabad';
+        return '<label class="pill' + (sajat ? ' is-now' : '') + '"><input type="radio" name="mv-slot" value="' + esc(x.kezd) + '"' + (sajat ? ' disabled' : '') + (keep === x.kezd && !sajat ? ' checked' : '') + '>' +
+          '<span>' + esc(x.kezd) + '<small>' + esc(sajat ? 'jelenlegi' : who) + '</small></span></label>';
+      }).join('') + '</div>';
+    }).catch(function (e) { if (req === mvReq) { box.setAttribute('aria-busy', 'false'); box.innerHTML = '<p class="form-err">' + esc(e.message) + '</p>'; } });
+  }
+  function submitMove(ev) {
+    ev.preventDefault();
+    var b = mv.b, err = $('#mv-err'), ok = $('#mv-ok'), sel = $('input[name="mv-slot"]:checked');
+    var body = { datum: $('#mv-datum').value, kezd: sel ? sel.value : '', kollega: $('#mv-koll').value };
+    if (!body.kezd) { err.textContent = 'Válassz új időpontot a szabad időpontok közül.'; err.hidden = false; return; }
+    err.hidden = true; ok.disabled = true; ok.textContent = 'Áthelyezés folyamatban';
+    api('/foglalasok/' + encodeURIComponent(b.azonosito), { method: 'PATCH', json: body }).then(function (r) {
+      ok.disabled = false; ok.textContent = 'Áthelyezés';
+      $('#dlg-move').close();
+      var f = (r && r.foglalas) || {};
+      toast('Áthelyezve: ' + b.nev + ', ' + F.datumNap(body.datum) + ' ' + body.kezd + (f.kollega ? ', ' + f.kollega.nev : ''));
+      fg.datum = body.datum;
+      if (location.hash !== fgHash()) location.hash = fgHash(); else renderFg();
+    }).catch(function (e) {
+      ok.disabled = false; ok.textContent = 'Áthelyezés';
+      err.textContent = e.message; err.hidden = false;
+      if (e.status === 409) moveSlots();
+      if (e.status === 410 || e.status === 404) renderFg();
+    });
   }
 
   /* ---------- kézi felvétel ---------- */
@@ -792,6 +855,7 @@
     if (t.closest('#fg-today')) { fg.datum = F.most().datum; location.hash = fgHash(); return; }
     if (t.closest('#fg-new')) return openNew();
     if (t.closest('#n-cancel')) return $('#dlg-new').close();
+    if (t.closest('#mv-cancel')) return $('#dlg-move').close();
     // beosztás
     var add = t.closest('[data-add]');
     if (add) {
@@ -881,6 +945,7 @@
     if (t.id === 'n-hely') return newFill('hely');
     if (t.id === 'n-szolg') return newFill('szolg');
     if (t.id === 'n-koll' || t.id === 'n-datum') return newSlots();
+    if (t.id === 'mv-koll' || t.id === 'mv-datum') { $('#mv-err').hidden = true; return moveSlots(); }
     if (t.matches('#bo-main select[data-f]')) {
       var s = bo.sorok[+t.getAttribute('data-i')]; s[t.getAttribute('data-f')] = t.value; boChanged();
       var msg = boValid(); if (msg) toast(msg, 'error');
@@ -894,6 +959,7 @@
   document.addEventListener('input', function (e) { if (e.target.closest('#be-form') && e.target.matches('input:not([type=checkbox])')) beInput(e); });
   document.addEventListener('submit', function (e) {
     if (e.target.id === 'new-form') return submitNew(e);
+    if (e.target.id === 'move-form') return submitMove(e);
     if (e.target.id === 'ex-form') return submitEx(e);
     if (e.target.id === 'be-form') return saveBe(e);
   });

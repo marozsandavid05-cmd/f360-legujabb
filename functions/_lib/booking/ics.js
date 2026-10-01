@@ -25,6 +25,30 @@ function hajtogat(sor) {
   return out.join('\r\n ');
 }
 
+/**
+ * Google Naptár „esemény hozzáadása” link (a .ics-t a Google webes felülete nem nyitja meg magától).
+ * A dátum UTC-ben (YYYYMMDDTHHMMSSZ), a helyiToUtc szerint, így a téli és a nyári idő is helyes.
+ * @param f  a foglalás nézete (datum, kezdPerc vagy kezd, szolgaltatas.perc, nev, kollega, helyszin)
+ */
+export function googleNaptarUrl(f, { lemondasUrl = '' } = {}) {
+  const kezdPerc = Number.isInteger(f.kezdPerc) ? f.kezdPerc : Number(String(f.kezd).slice(0, 2)) * 60 + Number(String(f.kezd).slice(3, 5));
+  const kezd = helyiToUtc(f.datum, kezdPerc);
+  const veg = kezd + f.szolgaltatas.perc * 60000;
+  const reszlet = [
+    `${f.szolgaltatas.nev}, ${f.kollega.nev}`,
+    `Azonosító: ${f.azonosito}`,
+    lemondasUrl ? `Időpont lemondása / módosítása: ${lemondasUrl}` : '',
+  ].filter(Boolean).join('\n');
+  const q = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: `${f.szolgaltatas.nev} · Studio F360`,
+    dates: `${utc(kezd)}/${utc(veg)}`,
+    details: reszlet,
+    location: `Studio F360, ${f.helyszin.cim}`,
+  });
+  return `https://calendar.google.com/calendar/render?${q.toString()}`;
+}
+
 /** @param f  a foglalás nézete (lásd foglalas.js nezet()) */
 export function icsKeszit(f, { host = 'f360', most = Date.now(), lemondasUrl = '' } = {}) {
   const kezd = helyiToUtc(f.datum, f.kezdPerc);

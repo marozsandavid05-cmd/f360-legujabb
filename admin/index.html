@@ -371,6 +371,28 @@
   </form>
 </dialog>
 
+<!-- áthelyezés (admin): ugyanaz a választó, határidő nélkül -->
+<dialog class="dlg dlg--wide" id="dlg-move" aria-labelledby="dlg-move-h">
+  <form class="dlg__in" id="move-form" novalidate>
+    <p class="dlg__h" id="dlg-move-h">Áthelyezés</p>
+    <p class="dlg__t dlg__t--sub" id="mv-now"></p>
+    <div class="grid2">
+      <div class="field"><label for="mv-koll">Szakember</label><select id="mv-koll" required></select></div>
+      <div class="field"><label for="mv-datum">Nap</label><input type="date" id="mv-datum" required></div>
+    </div>
+    <fieldset class="field slotpick">
+      <legend>Szabad időpontok</legend>
+      <div class="slotpick__list" id="mv-slots" aria-live="polite"></div>
+    </fieldset>
+    <p class="hint" id="mv-hint">Az áthelyezésnek nincs határideje, és a foglaló előre-szabályai sem kötik. A vendég e-mailt kap az új időpontról, ha van e-mail-címe.</p>
+    <p class="form-err" id="mv-err" role="alert" hidden></p>
+    <div class="dlg__act">
+      <button type="button" class="btn btn--ghost" id="mv-cancel">Mégse</button>
+      <button type="submit" class="btn btn--primary" id="mv-ok">Áthelyezés</button>
+    </div>
+  </form>
+</dialog>
+
 <!-- megerősítés (általános) -->
 <dialog class="dlg" id="dlg-ok" aria-labelledby="dlg-ok-h">
   <form method="dialog" class="dlg__in">

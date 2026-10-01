@@ -456,13 +456,19 @@ body.menu-open .menu{opacity:1;visibility:visible;transition-delay:0s}
 /* ============ FOOTER ============ */
 .footer{border-top:1px solid var(--line-strong);margin-top:clamp(4rem,10vh,8rem)}
 .footer__grid{
-  display:grid;grid-template-columns:1.6fr 1fr .8fr .9fr;gap:2.5rem;align-items:end;
-  padding-block:clamp(4rem,8vh,5rem);
+  display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr) minmax(0,.8fr) minmax(0,.9fr);gap:2.5rem;align-items:start;
+  padding-block:clamp(3.5rem,7vh,4.5rem);
 }
-.footer__mark{display:inline-block}
-/* Lilla 2026-09-21: nagyobb logó, a „Fitness · Food · Fizio” felirat is olvasható (a felirat a logó magasságának 3%-a: 380 px → ~11,5 px) */
-.footer__logo{height:clamp(240px,26vw,380px);width:auto;display:block;margin:0 0 1.4rem}
-.footer__brand p{color:var(--muted);font-size:.92rem;max-width:30ch}
+/* 2026-10-01 (David): a 380 px-es álló logó aránytalan volt, jobbra fent üres sarok maradt. Most a keretes
+   monogram bal oldalt, mellette a fekvő STUDIO F360 jel, a szlogen szövegként (olvasható), alatta a bekezdés;
+   a négy oszlop a tetejére igazítva egy kiegyensúlyozott sort ad. */
+.footer__brand{display:grid;grid-template-columns:auto minmax(0,1fr);gap:0 clamp(1.1rem,1.8vw,1.6rem);align-items:start}
+.footer__mark{display:block;line-height:0}
+.footer__mono{display:block;height:clamp(84px,7.2vw,104px);width:auto}
+.footer__id{display:grid;gap:.55rem;align-content:start;min-width:0}
+.footer__logo{display:block;width:clamp(150px,13vw,190px);height:auto;margin:0 0 .15rem}
+.footer__tag{font-family:var(--font-mono);font-stretch:125%;font-weight:500;font-size:.66rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
+.footer__brand p:not(.footer__tag){color:var(--muted);font-size:.92rem;max-width:30ch}
 .footer h4{font-family:var(--font-mono);font-stretch:125%;font-weight:500;font-size:.66rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:1rem}
 .footer ul{display:grid;gap:.45rem;font-size:.93rem}
 .footer a:hover{color:var(--accent-text)}
@@ -473,8 +479,9 @@ body.menu-open .menu{opacity:1;visibility:visible;transition-delay:0s}
   border-top:1px solid var(--line);padding-block:1.2rem;
   font-family:var(--font-mono);font-stretch:125%;font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
 }
-@media(max-width:900px){.footer__grid{grid-template-columns:1fr 1fr;align-items:start}.footer__brand{grid-column:1/-1}}
-@media(max-width:560px){.footer__grid{grid-template-columns:1fr}.footer__logo{height:auto;width:min(100%,300px)}}
+@media(max-width:1000px){.footer__grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:2.25rem 2rem}.footer__brand{grid-column:1/-1}.footer__brand p:not(.footer__tag){max-width:46ch}}
+@media(max-width:560px){.footer__grid{grid-template-columns:1fr}.footer__mono{height:72px}.footer__logo{width:150px}}
+.footer__logo,.footer__mono{filter:none}
 
 /* ============ SEGÉD ============ */
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}

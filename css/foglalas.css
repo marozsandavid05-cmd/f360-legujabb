@@ -34,7 +34,7 @@
 .bk-flow{min-width:0;position:relative}
 
 /* ============ LÉPÉSJELZŐ ============ */
-.bk-steps{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:.35rem;margin-bottom:clamp(1.25rem,3.2vh,2rem)}
+.bk-steps{display:grid;grid-template-columns:repeat(var(--steps,6),minmax(0,1fr));gap:.35rem;margin-bottom:clamp(1.25rem,3.2vh,2rem)}
 .bk-steps li{min-width:0}
 .bk-steps .st{
   display:flex;flex-direction:column;align-items:flex-start;gap:.5rem;width:100%;min-height:44px;
@@ -47,7 +47,8 @@
 .bk-steps .is-cur .st::before{background:var(--ink);height:5px;margin-top:-1px}
 .bk-steps .is-todo .st::before{background:rgba(0,0,0,.2)}
 .bk-steps .is-cur .st{font-weight:700}
-.bk-steps .is-todo .st{opacity:.62}
+/* a még nem elérhető lépés: halványabb sáv (fent), a felirat teljes kontraszttal, vékonyabb betűvel (WCAG 1.4.3) */
+.bk-steps .is-todo .st{font-weight:400}
 .bk-steps button.st{cursor:pointer}
 .bk-steps button.st:hover .st__l{text-decoration:underline;text-decoration-color:var(--accent);text-underline-offset:3px}
 .bk-steps .st:focus-visible{outline:2px solid var(--ink);outline-offset:4px;border-radius:2px}
@@ -216,6 +217,9 @@
 .rev dd small{display:block;font-size:.875rem}
 .rev .edit{font-size:.875rem;font-weight:500;min-height:44px;padding:0 .2rem;text-decoration:underline;text-decoration-color:var(--accent);text-underline-offset:3px}
 .rev .edit:hover{text-decoration-color:var(--ink)}
+.rev dd.rev__act,.bk-card__rows dd.rev__act{font-size:inherit;min-width:0}
+.bk-card__rows dd.rev__act{align-self:end}
+.bk-card__rows .is-empty dd.rev__act::before{content:none}
 .rev .rev__sum dd{font-size:1.25rem;font-weight:600}
 
 /* ---------- figyelmeztetés (409, hálózat) ---------- */
@@ -307,6 +311,31 @@
 .cx__confirm div{display:flex;flex-wrap:wrap;gap:.75rem}
 .cx__phone{font-size:clamp(1.4rem,3vw,2rem);font-weight:300;font-variant-numeric:tabular-nums}
 
+/* ============ MÓDOSÍTÁS (áthelyezés a tokenes linkről) ============ */
+/* a jelenlegi időpont: nem választható, de látszik, hol vagy most (szaggatott antracit keret, nem szín) */
+.slot.is-mine{cursor:default;background:transparent;box-shadow:inset 0 0 0 1.5px #303030;background-image:repeating-linear-gradient(135deg,rgba(0,0,0,.06) 0 6px,transparent 6px 12px)}
+.slot.is-mine:hover{box-shadow:inset 0 0 0 1.5px #303030}
+.slot.is-mine > span[aria-hidden]{display:grid;justify-items:center;line-height:1.1}
+.slot.is-mine small{font-size:.625rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase}
+.day.is-mine::after{content:'';position:absolute;left:50%;bottom:.4rem;width:16px;height:2px;margin-left:-8px;border-radius:1px;background:currentColor}
+.opt__now{grid-column:-2;justify-self:end;font-size:.6875rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;padding:.3rem .6rem;border-radius:100px;box-shadow:inset 0 0 0 1px var(--ink)}
+.opts--people .opt:has(.opt__now){grid-template-columns:auto auto minmax(0,1fr) auto}
+.bk-modback{justify-self:start;font-size:.9rem;font-weight:500;min-height:44px;display:inline-flex;align-items:center}
+.bk-card__rows .is-now{background:#EAEAEA;margin:0 -.75rem;padding-left:.75rem;padding-right:.75rem;border-radius:var(--r-md);border-bottom:0}
+.theme-rehab .bk-card__rows .is-now{background:#FFFFFF}
+.rev .rev__new dd{font-size:1.2rem;font-weight:600}
+.rev .rev__old dd{text-decoration:line-through;text-decoration-thickness:1px}
+.rev .rev__old dd small{text-decoration:none}
+.cx__note{flex:1 1 100%;padding:1rem 1.2rem;border-radius:var(--r-md);background:#FFFFFF;box-shadow:inset 0 0 0 1.5px #303030;font-weight:500;line-height:1.5}
+
+/* ---------- naptárhoz adás (Google + Apple/Outlook) ---------- */
+.cal{display:grid;gap:.65rem;margin:0 0 1.5rem;padding:1.15rem 1.25rem 1.2rem;border-radius:var(--r-lg);background:var(--card)}
+.cal__h{font-size:.75rem;font-weight:600;letter-spacing:.14em;text-transform:uppercase}
+.cal__b{display:flex;flex-wrap:wrap;gap:.6rem}
+.p-foglalas .cal .btn{min-height:52px;padding:.9rem 1.4rem;gap:.6rem}
+.cal .bk-next{margin-left:0}
+.cal__t{font-size:.875rem;line-height:1.5;max-width:52ch}
+
 /* ============ BETÖLTÉS ============ */
 .bk[data-state="betolt"] .bk-grid{opacity:.001}
 .bk-grid{transition:opacity .3s var(--ease)}
@@ -373,6 +402,9 @@
   .done__act .btn{flex:1 1 100%;justify-content:center}
   .mailprev__frame{height:560px}
   .cx__act .btn{flex:1 1 100%;justify-content:center}
+  .cal .btn{flex:1 1 100%;justify-content:center}
+  .opt__now{grid-column:3;grid-row:2;justify-self:start;margin-top:.1rem}
+  .opts--people .opt:has(.opt__now){grid-template-columns:auto auto minmax(0,1fr)}
 }
 
 /* ============ MOZGÁS ============ */

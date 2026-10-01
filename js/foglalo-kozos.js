@@ -112,6 +112,21 @@
     setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
   }
 
+  /* ---------- Google Naptár link (a backend ics.js googleNaptarUrl-jének másolata) ----------
+     A dátum UTC-ben (YYYYMMDDTHHMMSSZ), az utcDate szerint: a téli és a nyári idő is helyes. */
+  function utcStr(d) { return d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''); }
+  function googleNaptarUrl(f, lemondasUrl) {
+    var kezdPerc = typeof f.kezdPerc === 'number' ? f.kezdPerc : perc(f.kezd);
+    var kezd = utcDate(f.datum, kezdPerc), veg = new Date(kezd.getTime() + f.szolgaltatas.perc * 60000);
+    var reszlet = [f.szolgaltatas.nev + ', ' + f.kollega.nev, 'Azonosító: ' + f.azonosito,
+      lemondasUrl ? 'Időpont lemondása / módosítása: ' + lemondasUrl : ''].filter(Boolean).join('\n');
+    var q = new URLSearchParams({
+      action: 'TEMPLATE', text: f.szolgaltatas.nev + ' · Studio F360', dates: utcStr(kezd) + '/' + utcStr(veg),
+      details: reszlet, location: 'Studio F360, ' + f.helyszin.cim
+    });
+    return 'https://calendar.google.com/calendar/render?' + q.toString();
+  }
+
   g.F360Foglalo = {
     TZ: TZ, TELEFON: TELEFON, TELEFON_HREF: TELEFON_HREF,
     NAPOK: NAPOK, NAPOK_ROVID: NAPOK_ROVID, HONAPOK: HONAPOK,
@@ -120,6 +135,6 @@
     hm: hm, hm2: hm2, perc: perc, honapNap: honapNap, datumNap: datumNap, datumHosszu: datumHosszu,
     napon: napon, honapNapRagos: honapNapRagos, idoKor: idoKor,
     ft: ft, esc: esc, nev: nev, id: id,
-    icsLetolt: icsLetolt
+    icsLetolt: icsLetolt, googleNaptarUrl: googleNaptarUrl
   };
 })(window);

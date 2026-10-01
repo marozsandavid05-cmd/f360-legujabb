@@ -216,16 +216,49 @@
       f.szolgaltatas.ar != null ? 'Ár: ' + ft(f.szolgaltatas.ar) + ', a helyszínen fizetendő' : '', 'Azonosító: ' + f.azonosito].filter(Boolean).join('\n');
   }
   function gomb(url, felirat) { return '<p style="margin:24px 0"><a href="' + esc(url) + '" style="display:inline-block;padding:12px 22px;background:' + SZIN.accent + ';color:' + SZIN.ink + ';text-decoration:none">' + esc(felirat) + '</a></p>'; }
+  // a backend levelek.js-e (2026-10-01): közös kezelő-gomb (lemondás és módosítás), naptár-sor Google-linkkel
+  var KEZELO_GOMB = 'Időpont lemondása / módosítása';
+  function kezeloHtml(lemondasUrl, sz) {
+    return '<p>Ha mégsem tudsz jönni, vagy másik időpont kellene, a kezdés előtt ' + sz.lemondasOra + ' óráig itt lemondhatod vagy módosíthatod:</p>' +
+      gomb(lemondasUrl, KEZELO_GOMB) + '<p>' + sz.lemondasOra + ' órán belül telefonon tudunk segíteni: ' + esc(sz.telefon) + '.</p>';
+  }
+  function kezeloSzoveg(lemondasUrl, sz) {
+    return 'Ha mégsem tudsz jönni, vagy másik időpont kellene, a kezdés előtt ' + sz.lemondasOra + ' óráig itt lemondhatod vagy módosíthatod (' + KEZELO_GOMB + '):\n' + lemondasUrl + '\n\n' +
+      sz.lemondasOra + ' órán belül telefonon tudunk segíteni: ' + sz.telefon + '.';
+  }
+  function naptarHtml(icsUrl, googleUrl) {
+    return '<p>A naptáradhoz a csatolt fájllal vagy <a href="' + esc(icsUrl) + '" style="color:' + SZIN.ink + '">ezzel a linkkel</a> adhatod hozzá.' +
+      ' Ha Google Naptárat használsz: <a href="' + esc(googleUrl) + '" style="color:' + SZIN.ink + '">hozzáadás a Google Naptárhoz</a>.</p>';
+  }
+  function naptarSzoveg(icsUrl, googleUrl) { return 'Naptárhoz adás: ' + icsUrl + '\nGoogle Naptárhoz: ' + googleUrl; }
+  function regiIdopont(r) { return szepDatum(r.datum) + ', ' + r.kezd + ' és ' + r.veg + ' között, ' + r.kollega.nev; }
   function visszaigazolas(f, o) {
     var sz = o.szabalyok, targy = 'Időpontfoglalás visszaigazolása · ' + szepDatum(f.datum) + ' ' + f.kezd + ' · Studio F360';
+    var g = F.googleNaptarUrl(f, o.lemondasUrl);
     var html = keret(targy, '<p>Kedves ' + esc(f.nev) + '!</p><p>Köszönjük a foglalásodat, az időpontodat rögzítettük.</p>' + adatTabla(f) +
-      '<p>A naptáradhoz a csatolt fájllal vagy <a href="' + esc(o.icsUrl) + '" style="color:' + SZIN.ink + '">ezzel a linkkel</a> adhatod hozzá.</p>' +
-      '<p>Ha mégsem tudsz jönni, a kezdés előtt ' + sz.lemondasOra + ' óráig itt mondhatod le:</p>' + gomb(o.lemondasUrl, 'Időpont lemondása') +
-      '<p>' + sz.lemondasOra + ' órán belül telefonon tudunk segíteni: ' + esc(sz.telefon) + '.</p><p>Várunk szeretettel,<br>a Studio F360 csapata</p>');
-    var szoveg = 'Kedves ' + f.nev + '!\n\nKöszönjük a foglalásodat, az időpontodat rögzítettük.\n\n' + adatSzoveg(f) + '\n\nNaptárhoz adás: ' + o.icsUrl +
-      '\n\nHa mégsem tudsz jönni, a kezdés előtt ' + sz.lemondasOra + ' óráig itt mondhatod le:\n' + o.lemondasUrl + '\n\n' + sz.lemondasOra +
-      ' órán belül telefonon tudunk segíteni: ' + sz.telefon + '.\n\nVárunk szeretettel,\na Studio F360 csapata\n';
+      naptarHtml(o.icsUrl, g) + kezeloHtml(o.lemondasUrl, sz) + '<p>Várunk szeretettel,<br>a Studio F360 csapata</p>');
+    var szoveg = 'Kedves ' + f.nev + '!\n\nKöszönjük a foglalásodat, az időpontodat rögzítettük.\n\n' + adatSzoveg(f) + '\n\n' + naptarSzoveg(o.icsUrl, g) +
+      '\n\n' + kezeloSzoveg(o.lemondasUrl, sz) + '\n\nVárunk szeretettel,\na Studio F360 csapata\n';
     return { tipus: 'visszaigazolas', cimzett: f.email, targy: targy, html: html, szoveg: szoveg, ics: o.ics };
+  }
+  function modositasLevel(f, o) {
+    var sz = o.szabalyok, targy = 'Időpont módosítva · ' + szepDatum(f.datum) + ' ' + f.kezd + ' · Studio F360';
+    var g = F.googleNaptarUrl(f, o.lemondasUrl);
+    var html = keret(targy, '<p>Kedves ' + esc(f.nev) + '!</p><p>Az időpontodat módosítottuk. A korábbi időpont (' + esc(regiIdopont(o.regi)) + ') már nem érvényes, az új:</p>' +
+      adatTabla(f) + naptarHtml(o.icsUrl, g) + '<p>Ha a naptáradban a korábbi időpont is szerepel, azt töröld.</p>' + kezeloHtml(o.lemondasUrl, sz) +
+      '<p>Várunk szeretettel,<br>a Studio F360 csapata</p>');
+    var szoveg = 'Kedves ' + f.nev + '!\n\nAz időpontodat módosítottuk. A korábbi időpont (' + regiIdopont(o.regi) + ') már nem érvényes, az új:\n\n' + adatSzoveg(f) + '\n\n' +
+      naptarSzoveg(o.icsUrl, g) + '\nHa a naptáradban a korábbi időpont is szerepel, azt töröld.\n\n' + kezeloSzoveg(o.lemondasUrl, sz) + '\n\nVárunk szeretettel,\na Studio F360 csapata\n';
+    return { tipus: 'modositas', cimzett: f.email, targy: targy, html: html, szoveg: szoveg, ics: o.ics };
+  }
+  function studioModositas(f, o) {
+    var targy = 'Módosított foglalás · ' + f.helyszin.nev + ' · ' + szepDatum(f.datum) + ' ' + f.kezd + ' · ' + f.kollega.nev;
+    var kap = [f.email && 'E-mail: ' + f.email, f.telefon && 'Telefon: ' + f.telefon].filter(Boolean);
+    var html = keret(targy, '<p><strong>' + esc(f.nev) + '</strong> módosította a foglalását a weboldalon.</p><p>Korábbi időpont: ' + esc(regiIdopont(o.regi)) +
+      '. Ez az időpont felszabadult.</p><p>Új időpont:</p>' + adatTabla(f) + '<p>' + kap.map(esc).join('<br>') + '</p>');
+    var szoveg = f.nev + ' módosította a foglalását a weboldalon.\n\nKorábbi időpont: ' + regiIdopont(o.regi) + '. Ez az időpont felszabadult.\n\nÚj időpont:\n' +
+      adatSzoveg(f) + '\n\n' + kap.join('\n') + '\n';
+    return { tipus: 'studio-modositas', cimzett: o.szabalyok.studioEmail, targy: targy, html: html, szoveg: szoveg };
   }
   function studioErtesito(f, o) {
     var targy = 'Új foglalás · ' + f.helyszin.nev + ' · ' + szepDatum(f.datum) + ' ' + f.kezd + ' · ' + f.kollega.nev;
@@ -247,10 +280,10 @@
   function icsEsc(s) { return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n'); }
   function utc(ms) { return new Date(ms).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''); }
   function icsKeszit(f, lemondasUrl) {
-    var kezd = helyiToUtc(f.datum, f.kezdPerc), veg = kezd + f.szolgaltatas.perc * 60000;
+    var kezd = helyiToUtc(f.datum, f.kezdPerc), veg = kezd + f.szolgaltatas.perc * 60000, most = Date.now();
     var leiras = [f.szolgaltatas.nev + ', ' + f.kollega.nev, 'Azonosító: ' + f.azonosito, lemondasUrl ? 'Lemondás: ' + lemondasUrl : ''].filter(Boolean).join('\n');
     return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Studio F360//Idopontfoglalo//HU', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'BEGIN:VEVENT',
-      'UID:' + f.azonosito + '@' + location.host, 'DTSTAMP:' + utc(Date.now()), 'DTSTART:' + utc(kezd), 'DTEND:' + utc(veg),
+      'UID:' + f.azonosito + '@' + location.host, 'DTSTAMP:' + utc(most), 'SEQUENCE:' + Math.floor(most / 1000), 'DTSTART:' + utc(kezd), 'DTEND:' + utc(veg),
       'SUMMARY:' + icsEsc(f.szolgaltatas.nev + ' · Studio F360'), 'LOCATION:' + icsEsc('Studio F360, ' + f.helyszin.cim), 'DESCRIPTION:' + icsEsc(leiras),
       'STATUS:CONFIRMED', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n') + '\r\n';
   }
@@ -389,19 +422,99 @@
   function lemondasInfo(tok) {
     var row = tokenFoglalas(tok), a = lemondasAllapot(row);
     if (a.elmult) throw HttpErr(410, 'Ez az időpont már elmúlt, a link lejárt.');
-    return { azonosito: row.id, allapot: row.status, lemondhato: a.lemondhato, hatarido: new Date(a.hataridoMs).toISOString(), telefon: T().szabalyok.telefon, foglalas: publikusNezet(nezet(row)) };
+    return { azonosito: row.id, allapot: row.status, lemondhato: a.lemondhato, modosithato: a.lemondhato, hatarido: new Date(a.hataridoMs).toISOString(), telefon: T().szabalyok.telefon, foglalas: publikusNezet(nezet(row)) };
   }
-  function lemond(row, admin) {
+  // a backend lemond()-ja óta: csak akkor mond le, ha a foglalás még a beolvasott időpontban van
+  function lemond(row, admin, latott) {
     var a = lemondasAllapot(row), sz = T().szabalyok;
     if (row.status !== 'megerositett') throw HttpErr(410, 'Ezt a foglalást már lemondták.');
     if (!admin) {
       if (a.elmult) throw HttpErr(410, 'Ez az időpont már elmúlt, a link lejárt.');
       if (!a.lemondhato) throw HttpErr(409, 'A kezdés előtti ' + sz.lemondasOra + ' órán belül a link már nem mond le. Kérjük, hívj minket: ' + sz.telefon + '.', { telefon: sz.telefon });
     }
+    if (latott && (latott.staff_id !== row.staff_id || latott.date !== row.date || latott.start_min !== row.start_min)) {
+      throw HttpErr(409, 'A foglalást közben módosították. Kérjük, töltsd újra az oldalt.');
+    }
     row.status = 'lemondva'; row.cancelled_at = Date.now();
     var l = lemondasLevel(nezet(row), { szabalyok: sz });
     outboxIr(row.id, [l]); save();
     return { azonosito: row.id, allapot: 'lemondva' };
+  }
+
+  /* ---------------- módosítás (a backend modosit()-ja) ---------------- */
+  function modosithatoAllapot(row, admin) {
+    var sz = T().szabalyok, a = lemondasAllapot(row);
+    if (row.status !== 'megerositett') throw HttpErr(410, 'Ezt a foglalást már lemondták, nem módosítható.');
+    if (a.elmult) throw HttpErr(410, 'Ez az időpont már elmúlt, a link lejárt.');
+    if (!admin && !a.lemondhato) throw HttpErr(409, 'A kezdés előtti ' + sz.lemondasOra + ' órán belül a link már nem módosít. Kérjük, hívj minket: ' + sz.telefon + '.', { telefon: sz.telefon });
+  }
+  function modositasBemenet(d) {
+    d = d || {};
+    if (!ervenyesDatum(d.datum)) throw HttpErr(400, 'Hibás dátum.');
+    var kezdPerc = hhmmToPerc(d.kezd);
+    if (kezdPerc == null) throw HttpErr(400, 'Hibás időpont.');
+    var kollega = d.kollega == null || d.kollega === '' ? 'barki' : d.kollega;
+    if (typeof kollega !== 'string') throw HttpErr(400, 'Hibás kérés.');
+    return { datum: d.datum, kezdPerc: kezdPerc, kollega: kollega };
+  }
+  // a számítás törzse: adminnak nincs minEloreOra/maxEloreNap; a foglaláskor rögzített időtartam és puffer számít
+  function szamitasra(admin, row) {
+    var t = T();
+    if (admin) t = Object.assign({}, t, { szabalyok: Object.assign({}, t.szabalyok, { minEloreOra: 0, maxEloreNap: 3660 }) });
+    if (row) t = Object.assign({}, t, { szolgaltatasok: t.szolgaltatasok.map(function (s) { return s.id === row.service_id ? Object.assign({}, s, { perc: row.dur_min, puffer: row.buffer_min }) : s; }) });
+    return t;
+  }
+  function modosit(row, be, admin) {
+    modosithatoAllapot(row, admin);
+    hivatkozasok({ helyszin: row.location_id, szolgaltatas: row.service_id, kollega: be.kollega });
+    if (be.datum === row.date && be.kezdPerc === row.start_min && (be.kollega === 'barki' || be.kollega === row.staff_id)) throw HttpErr(400, 'Ez a jelenlegi időpontod. Válassz másikat.');
+    var t = T(), szT = szamitasra(admin, row), kezd = hm(be.kezdPerc);
+    var alap = { torzs: szT, helyszin: row.location_id, szolgaltatas: row.service_id, kollega: be.kollega, tol: be.datum, ig: be.datum };
+    var beoSz = (szabadIdopontok(Object.assign({}, alap, { foglalt: [] })).napok[be.datum] || []).filter(function (s) { return s.kezd === kezd; })[0];
+    if (!beoSz) throw HttpErr(409, 'Ez az időpont nem foglalható. Kérjük, válassz a szabad időpontok közül.');
+    // ütközés-próba: ?utkozes=1 mellett az új időpontot „közben” elviszi valaki (mindegyik jelöltnél)
+    var utk = false;
+    if (!admin) { try { utk = sessionStorage.getItem(FLAG) === '1'; if (utk) sessionStorage.removeItem(FLAG); } catch (e) { /* nincs */ } }
+    if (utk) {
+      var r0 = hivatkozasok({ helyszin: row.location_id, szolgaltatas: row.service_id, kollega: 'barki' });
+      beoSz.kollegak.forEach(function (kid) {
+        db.bookings.push(sor({ kollega: kid, datum: be.datum, kezdPerc: be.kezdPerc, szolg: r0.szolg, hely: r0.hely, nev: 'Farkas Dóra', email: 'dora.farkas@gmail.com', telefon: '+36 30 412 7781', megjegyzes: '', source: 'web' }));
+      });
+      save();
+    }
+    var foglalt = foglaltLista(row.id);
+    var szabadNow = ((szabadIdopontok(Object.assign({}, alap, { foglalt: foglalt })).napok[be.datum] || []).filter(function (s) { return s.kezd === kezd; })[0] || { kollegak: [] }).kollegak;
+    var jeloltek = beoSz.kollegak.slice().sort(function (a, b) { return (szabadNow.indexOf(b) >= 0) - (szabadNow.indexOf(a) >= 0); });
+    var fs = {}; foglalt.forEach(function (f) { fs[f.kollega + '|' + f.datum + '|' + f.slot] = 1; });
+    var l = linkek(row.token), regi = nezet(row);
+    for (var i = 0; i < jeloltek.length; i++) {
+      var kid = jeloltek[i];
+      var sl = foglalasSlotjai({ kollega: kid, datum: be.datum, kezd: be.kezdPerc, perc: row.dur_min, puffer: row.buffer_min });
+      if (sl.some(function (s) { return fs[kid + '|' + s.datum + '|' + s.slot]; })) continue;
+      row.staff_id = kid; row.date = be.datum; row.start_min = be.kezdPerc;
+      var f = nezet(row);
+      var levelek = [modositasLevel(f, { regi: regi, lemondasUrl: l.lemondasUrl, icsUrl: l.icsUrl, szabalyok: t.szabalyok, ics: icsKeszit(f, l.lemondasUrl) })];
+      if (!admin) levelek.push(studioModositas(f, { regi: regi, szabalyok: t.szabalyok }));
+      outboxIr(row.id, levelek); save();
+      return { azonosito: row.id, lemondasUrl: l.lemondasUrl, ics: l.icsUrl, modositva: true, level: { targy: levelek[0].targy, html: levelek[0].html, szoveg: levelek[0].szoveg }, foglalas: publikusNezet(f) };
+    }
+    throw HttpErr(409, 'Ezt az időpontot közben lefoglalták. Kérjük, válassz másikat.');
+  }
+  // szabad időpontok módosításhoz: a foglalásból jön a helyszín és a szolgáltatás, a saját ideje szabad
+  function szabadModositashoz(row, q, admin) {
+    var tol = q.get('tol'), ig = q.get('ig');
+    if (!ervenyesDatum(tol) || !ervenyesDatum(ig) || ig < tol) throw HttpErr(400, 'Hibás dátum-tartomány.');
+    if (napok(tol, ig, 15).length > 14) throw HttpErr(400, 'Egyszerre legfeljebb 14 nap kérhető le.');
+    modosithatoAllapot(row, admin);
+    if ((q.get('helyszin') && q.get('helyszin') !== row.location_id) || (q.get('szolgaltatas') && q.get('szolgaltatas') !== row.service_id)) throw HttpErr(400, 'Módosításkor a helyszín és a szolgáltatás nem változhat.');
+    var kollega = q.get('kollega') || 'barki';
+    hivatkozasok({ helyszin: row.location_id, szolgaltatas: row.service_id, kollega: kollega });
+    return szabadIdopontok({ torzs: szamitasra(admin, row), foglalt: foglaltLista(row.id), helyszin: row.location_id, szolgaltatas: row.service_id, kollega: kollega, tol: tol, ig: ig });
+  }
+  function foglalasId(id) {
+    var r = /^F[0-9A-Z]{10}$/.test(String(id || '')) ? db.bookings.filter(function (b) { return b.id === id; })[0] : null;
+    if (!r) throw HttpErr(404, 'Nincs ilyen foglalás.');
+    return r;
   }
 
   /* ---------------- admin.js ---------------- */
@@ -573,6 +686,8 @@
       var nev = p.replace(/^.*\/foglalas-api\/?/, '').replace(/\/+$/, '');
       if (nev === 'katalogus' && method === 'GET') return json(200, katalogus());
       if (nev === 'szabad' && method === 'GET') {
+        // módosításhoz: ?t=<token> (a saját foglalás ideje szabad, helyszín és szolgáltatás a foglalásból)
+        if (q.has('t')) return json(200, szabadModositashoz(tokenFoglalas(q.get('t')), q, false));
         var tol = q.get('tol'), ig = q.get('ig');
         if (!ervenyesDatum(tol) || !ervenyesDatum(ig) || ig < tol) throw HttpErr(400, 'Hibás dátum-tartomány.');
         if (napok(tol, ig, 15).length > 14) throw HttpErr(400, 'Egyszerre legfeljebb 14 nap kérhető le.');
@@ -587,6 +702,10 @@
       }
       if (nev === 'lemondas' && method === 'GET') return json(200, lemondasInfo(q.get('t')));
       if (nev === 'lemondas' && method === 'POST') return json(200, lemond(tokenFoglalas(body && typeof body.t === 'string' ? body.t : ''), false));
+      if (nev === 'modositas' && method === 'POST') {
+        if (!body || typeof body !== 'object') throw HttpErr(400, 'Hibás kérés.');
+        return json(200, modosit(tokenFoglalas(typeof body.t === 'string' ? body.t : ''), modositasBemenet(body), false));
+      }
       if (nev === 'foglalas.ics' && method === 'GET') {
         var row = tokenFoglalas(q.get('t'));
         if (row.status !== 'megerositett') throw HttpErr(410, 'Ezt a foglalást lemondták.');
@@ -597,12 +716,16 @@
     /* ---- admin ---- */
     var reszek = p.replace(/^.*\/api\/foglalo\/?/, '').split('/').filter(Boolean);
     if (reszek.length === 3 && reszek[0] === 'foglalasok' && reszek[2] === 'lemondas' && method === 'POST') {
-      var id = decodeURIComponent(reszek[1]);
-      var r = /^F[0-9A-Z]{10}$/.test(id) ? db.bookings.filter(function (b) { return b.id === id; })[0] : null;
-      if (!r) throw HttpErr(404, 'Nincs ilyen foglalás.');
-      return json(200, lemond(r, true));
+      return json(200, lemond(foglalasId(decodeURIComponent(reszek[1])), true));
+    }
+    // PATCH /api/foglalo/foglalasok/:id  áthelyezés { datum, kezd, kollega } (határidő nélkül)
+    if (reszek.length === 2 && reszek[0] === 'foglalasok') {
+      if (method !== 'PATCH') return json(405, { error: 'Ez a művelet itt nem engedélyezett.' });
+      return json(200, modosit(foglalasId(decodeURIComponent(reszek[1])), modositasBemenet(body), true));
     }
     var ut = reszek[0];
+    // GET /api/foglalo/szabad?foglalas=&kollega=&tol=&ig=  az áthelyezés szabad időpontjai
+    if (ut === 'szabad' && method === 'GET') return json(200, szabadModositashoz(foglalasId(q.get('foglalas')), q, true));
     if (ut === 'beallitasok') {
       if (method === 'GET') return json(200, T());
       if (method === 'PUT') {
