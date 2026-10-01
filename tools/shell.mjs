@@ -22,6 +22,11 @@ export function bookHref(prefix, place) {
   if (/^https?:/.test(BOOK_PAGE)) return BOOK_PAGE;
   return prefix + BOOK_PAGE + (BOOK_PLACE[place] ? `?helyszin=${BOOK_PLACE[place]}` : '');
 }
+// csoportos óra (jóga, pilates, aerial, core, gerinctorna): a saját foglaló heti órarend-nézete,
+// a helyszín előválasztva (a csoportos órák a Mexikói úton vannak). A weboldalon a data-csoportos jelű gombok.
+export function bookCsoportosHref(prefix, place = 'mex') {
+  return prefix + BOOK_PAGE + '?tipus=csoportos' + (BOOK_PLACE[place] ? `&amp;helyszin=${BOOK_PLACE[place]}` : '');
+}
 // a teljes href (+ új lap, ha külső cím) egy foglalás-linkhez
 export function bookAttrs(prefix, place) {
   const u = bookHref(prefix, place);

@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { navBlock, menuBlock, footerBlock, bookAttrs, BOOK_LEGACY } from './shell.mjs';
+import { navBlock, menuBlock, footerBlock, bookAttrs, bookCsoportosHref, BOOK_LEGACY } from './shell.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -27,7 +27,7 @@ const RE = {
 
 // törzsbeli foglalás-linkek: a régi WordPress-cím (új lappal) VAGY a saját foglaló (foglalas.html[?helyszin=…])
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const LEGACY_HREF = `(?:${esc(BOOK_LEGACY.mex)}|${esc(BOOK_LEGACY.reit)}|foglalas\\.html(?:\\?helyszin=(?:mexikoi|reitter))?)`;
+const LEGACY_HREF = `(?:${esc(BOOK_LEGACY.mex)}|${esc(BOOK_LEGACY.reit)}|foglalas\\.html(?:\\?(?:tipus=csoportos(?:&amp;|&))?helyszin=(?:mexikoi|reitter))?)`;
 const BODY_LINK = new RegExp(`href="(${LEGACY_HREF})"(?: target="_blank" rel="noopener")?([^>]*)>([\\s\\S]*?)<\\/a>`, 'g');
 
 function placeFor(href, text, key) {
@@ -40,8 +40,8 @@ function rewriteBody(html, key) {
   let n = 0;
   const out = html.replace(BODY_LINK, (all, href, rest, text) => {
     n++;
-    // csoportos óra (jóga, pilates): a saját foglaló egyéni kezelésekre szól, ezek a régi rendszerben maradnak
-    if (/data-csoportos/.test(rest)) return `href="${BOOK_LEGACY.mex}" target="_blank" rel="noopener"${rest}>${text}</a>`;
+    // csoportos óra (jóga, pilates, aerial): a saját foglaló csoportos (heti órarend) nézete, Mexikói út előválasztva
+    if (/data-csoportos/.test(rest)) return `href="${bookCsoportosHref('', 'mex')}"${rest}>${text}</a>`;
     return `${bookAttrs('', placeFor(href, text, key))}${rest}>${text}</a>`;
   });
   return { out, n };

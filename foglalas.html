@@ -6,7 +6,7 @@
 <meta name="referrer" content="same-origin">
 <script>document.documentElement.className += ' js';</script>
 <title>Időpontfoglalás · Studio F360</title>
-<meta name="description" content="Foglalj időpontot a Studio F360-ba: gyógytorna, masszázs, sportrehabilitáció a Mexikói úton (XIV. kerület) és a Reitter Ferenc utcában (XIII. kerület). A foglalás azonnal érvényes.">
+<meta name="description" content="Foglalj időpontot a Studio F360-ba: gyógytorna, masszázs, táplálkozási tanácsadás, sportrehabilitáció, vagy jelentkezz csoportos jóga- és pilatesórára a Mexikói úton (XIV. kerület) és a Reitter Ferenc utcában (XIII. kerület).">
 <link rel="icon" href="media/logo/favicon-64.png" type="image/png">
 <link rel="stylesheet" href="fonts-brand/fonts-brand.css">
 <link rel="stylesheet" href="css/main.css">
@@ -115,6 +115,21 @@
   <div class="bk-grid wrap" id="bk-flow-wrap">
     <div class="bk-flow">
 
+      <!-- két út: egyéni időpont vagy csoportos óra (csak az első lépésnél látszik) -->
+      <fieldset class="bk-mode" id="bk-mode" hidden>
+        <legend class="sr-only">Mit foglalsz?</legend>
+        <label class="bk-mode__o">
+          <input type="radio" name="tipus" value="egyeni">
+          <span class="bk-mode__n">Egyéni időpont</span>
+          <span class="bk-mode__d">Gyógytorna, masszázs, táplálkozás, rehab</span>
+        </label>
+        <label class="bk-mode__o">
+          <input type="radio" name="tipus" value="csoportos">
+          <span class="bk-mode__n">Csoportos óra</span>
+          <span class="bk-mode__d">Jóga, pilates, aerial, core, gerinctorna</span>
+        </label>
+      </fieldset>
+
       <ol class="bk-steps" id="bk-steps" aria-label="A foglalás lépései"></ol>
       <p class="bk-trail" id="bk-trail" aria-hidden="true"></p>
       <p class="sr-only" id="bk-live" aria-live="polite"></p>
@@ -178,6 +193,28 @@
         <div class="slots" id="slots" aria-busy="false"></div>
       </section>
 
+      <!-- csoportos: heti órarend -->
+      <section class="bk-step" data-step="ora" aria-labelledby="h-ora" hidden>
+        <h2 id="h-ora" tabindex="-1">Melyik órára jössz?</h2>
+        <p class="bk-sub" id="sub-ora"></p>
+        <div class="tt" id="tt">
+          <div class="wk__head tt__head">
+            <button type="button" class="wk__nav" id="tt-prev" aria-label="Előző hét">
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <p class="wk__label" id="tt-label" aria-live="polite"></p>
+            <button type="button" class="wk__nav" id="tt-next" aria-label="Következő hét">
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9.5 5.5 16 12l-6.5 6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+          <fieldset class="bk-fs">
+            <legend class="sr-only">Órák ezen a héten</legend>
+            <div class="tt__body" id="tt-body" aria-busy="false"></div>
+          </fieldset>
+          <p class="tt__key" aria-hidden="true"><span class="tt-dots"><i class="is-f"></i><i class="is-f"></i><i></i></span> egy pötty egy hely, a teli pötty foglalt</p>
+        </div>
+      </section>
+
       <!-- 5. adatok -->
       <section class="bk-step" data-step="adatok" aria-labelledby="h-adatok" hidden>
         <h2 id="h-adatok" tabindex="-1">Hogyan érünk el?</h2>
@@ -227,6 +264,7 @@
       <section class="bk-step" data-step="osszegzes" aria-labelledby="h-osszegzes" hidden>
         <h2 id="h-osszegzes" tabindex="-1">Ellenőrizd a foglalást</h2>
         <dl class="rev" id="rev"></dl>
+        <div id="ossz-prep"></div>
         <p class="bk-fine" id="ossz-fine">A díjat a helyszínen fizeted: bankkártyával, SZÉP-kártyával vagy egészségpénztári kártyával. Lemondani vagy módosítani a kezdés előtt 24 óráig tudsz online.</p>
       </section>
 

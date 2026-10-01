@@ -431,3 +431,116 @@
 .p-koszonjuk .done.is-solo{grid-template-columns:minmax(0,46rem)}
 .ty-empty .done__act{margin-top:.5rem}
 .p-koszonjuk .bk[data-state="betolt"] .bk-done{opacity:.001}
+
+/* ============ KÉT ÚT: EGYÉNI IDŐPONT / CSOPORTOS ÓRA ============ */
+/* két egyforma súlyú választó a lépésjelző fölött; a kiválasztott antracit kerettel (mint a többi választó) */
+.bk-mode{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;border:0;padding:0;margin:0 0 clamp(1.25rem,3vh,1.85rem);min-width:0}
+.bk-mode__o{position:relative;display:grid;gap:.2rem;min-height:72px;padding:.9rem 1.15rem .95rem 3.1rem;border-radius:var(--r-md);background:var(--card);cursor:pointer;
+  box-shadow:0 0 0 1.5px transparent;transition:box-shadow .2s var(--ease),background-color .7s var(--ease)}
+.bk-mode__o input{position:absolute;opacity:0;width:1px;height:1px;margin:0;pointer-events:none}
+.bk-mode__o::before{content:'';position:absolute;left:1.1rem;top:1.05rem;width:20px;height:20px;border-radius:50%;box-shadow:inset 0 0 0 1.5px #303030;background:#FFFFFF}
+.bk-mode__o:has(input:checked){box-shadow:0 0 0 2px var(--ink)}
+.bk-mode__o:has(input:checked)::before{box-shadow:inset 0 0 0 6px #303030}
+.bk-mode__o:has(input:focus-visible){outline:2px solid var(--ink);outline-offset:3px}
+.bk-mode__o:hover{box-shadow:0 0 0 1.5px var(--line-strong)}
+.bk-mode__o:has(input:checked):hover{box-shadow:0 0 0 2px var(--ink)}
+.bk-mode__n{font-size:1.0625rem;font-weight:600;line-height:1.25}
+.bk-mode__d{font-size:.875rem;line-height:1.4}
+
+/* ============ KEZELÉSEK CSOPORTOSÍTVA (Táplálkozás & InBody) ============ */
+.opts__h{font-size:.75rem;font-weight:600;letter-spacing:.14em;text-transform:uppercase;margin:1.4rem 0 .6rem}
+.opts__h:first-child{margin-top:0}
+#opt-szolgaltatas > .opts + .opts__h{margin-top:1.6rem}
+/* nincs beosztás: látszik, de nem választható; a telefonszám a sorban */
+.opt--tel{cursor:default;background:transparent;box-shadow:inset 0 0 0 1px var(--hair)}
+.opt--tel:hover{box-shadow:inset 0 0 0 1px var(--hair)}
+.mk--off{background:transparent;box-shadow:inset 0 0 0 1.5px var(--hair)}
+.opt__tel{font-size:.875rem;font-weight:500;margin-top:.3rem}
+.opt__tel .lnk{white-space:nowrap}
+
+/* ============ MÉRÉS ELŐTT (InBody) ============ */
+.prep{margin-top:1rem;padding:1.05rem 1.3rem 1.1rem;border-radius:var(--r-lg);background:var(--card);box-shadow:inset 3px 0 0 #303030}
+.prep__h{font-family:var(--font-body);text-transform:none;font-size:.75rem;font-weight:600;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.5rem}
+.prep ul{display:grid;gap:.3rem;padding-left:1.1rem;list-style:disc}
+.prep li{font-size:.95rem;line-height:1.5}
+
+/* ============ CSOPORTOS ÓRA: HETI ÓRAREND ============ */
+/* a mexikoi.html órarend-táblájának rendje: sor = napszak, oszlop = nap, kártyán az óra;
+   a jel: helyek pöttysora (egy pötty = egy hely, teli = foglalt). Az órarend lépésben
+   a foglalási lap nem látszik, az órarend kapja a teljes szélességet. */
+.is-tt .bk-grid{grid-template-columns:minmax(0,1fr)}
+.is-tt .bk-card{display:none}
+.tt__head{margin-bottom:.9rem}
+.tt__body{position:relative;min-height:12rem}
+.tt__body.is-load .tt-grid,.tt__body.is-load .tt-list{opacity:.45;pointer-events:none;transition:opacity .15s}
+.tt__body.is-slide{animation:wkSlide .38s var(--ease) both}
+.tt__body.is-slide-back{animation:wkSlideBack .38s var(--ease) both}
+.tt-skel{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:.5rem}
+.tt-skel .skel{height:7.5rem;border-radius:var(--r-md)}
+.tt-grid{display:grid;grid-template-columns:5.25rem repeat(var(--cols,6),minmax(0,1fr));border:1px solid var(--line-strong);border-radius:var(--r-lg);background:var(--card);overflow:hidden}
+.tt-h{padding:.85rem .6rem .7rem;display:grid;gap:.1rem;border-bottom:1px solid var(--line-strong)}
+.tt-h + .tt-h{border-left:1px solid var(--hair)}
+.tt-h b{font-size:.75rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase}
+.tt-h span{font-size:.8125rem;font-variant-numeric:tabular-nums}
+.tt-h.is-today b::after{content:'';display:inline-block;width:6px;height:6px;margin:0 0 .12em .4rem;border-radius:50%;background:#303030;vertical-align:middle}
+.tt-p{padding:.85rem .6rem;border-top:1px solid var(--hair)}
+.tt-p span{font-size:.75rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase}
+.tt-cell{display:grid;align-content:start;gap:.4rem;padding:.45rem;border-top:1px solid var(--hair);border-left:1px solid var(--hair);min-width:0}
+/* egy óra */
+.tt-c{position:relative;display:grid;gap:.15rem;padding:.7rem .75rem .75rem;border-radius:var(--r-md);background:var(--base);cursor:pointer;min-width:0;
+  box-shadow:0 0 0 1.5px transparent;transition:box-shadow .2s var(--ease),background-color .2s,color .2s}
+.tt-c input{position:absolute;opacity:0;width:1px;height:1px;margin:0;pointer-events:none}
+.tt-c:hover{box-shadow:0 0 0 1.5px var(--ink)}
+.tt-c:has(input:focus-visible){outline:2px solid var(--ink);outline-offset:3px}
+.tt-c:has(input:checked){background:#303030;color:#FFFFFF}
+.tt-c__t{font-size:.8125rem;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.tt-c__n{font-size:.95rem;font-weight:500;line-height:1.25;overflow-wrap:anywhere}
+.tt-c__m{font-size:.75rem;line-height:1.35}
+.tt-c__s{display:flex;flex-wrap:wrap;align-items:center;gap:.25rem .5rem;margin-top:.35rem}
+.tt-c__s b{font-size:.75rem;font-weight:600}
+.tt-c__x{font-size:.75rem;line-height:1.35;margin-top:.15rem}
+/* a helyek pöttysora: teli = foglalt, üres = szabad (a kiválasztott kártyán fehérrel) */
+.tt-dots{display:inline-flex;flex-wrap:wrap;gap:3px;max-width:100%}
+.tt-dots i{width:7px;height:7px;border-radius:50%;box-shadow:inset 0 0 0 1.2px currentColor}
+.tt-dots i.is-f{background:currentColor}
+/* kevés hely: a felirat erősebb (nem szín: a paletta kötött) */
+.tt-c.is-low .tt-c__s b{text-decoration:underline;text-decoration-thickness:1.5px;text-underline-offset:3px}
+/* nem választható: betelt, lezárult, elmarad, lezajlott */
+.tt-c.is-betelt,.tt-c.is-hatarido,.tt-c.is-elmarad,.tt-c.is-mult{cursor:default;background:transparent;box-shadow:inset 0 0 0 1px var(--hair)}
+.tt-c.is-betelt:hover,.tt-c.is-hatarido:hover,.tt-c.is-elmarad:hover,.tt-c.is-mult:hover{box-shadow:inset 0 0 0 1px var(--hair)}
+.tt-c.is-betelt .tt-c__s b{letter-spacing:.08em;text-transform:uppercase}
+.tt-c.is-elmarad .tt-c__n,.tt-c.is-elmarad .tt-c__t{text-decoration:line-through;text-decoration-thickness:1px}
+.tt-c.is-elmarad .tt-c__s b{letter-spacing:.08em;text-transform:uppercase}
+.tt-c.is-mult{opacity:1}
+.tt-c.is-mult .tt-c__n{font-weight:400}
+/* módosításnál a jelenlegi óra: szaggatott keret, vonalkázott (mint az egyéni időpontnál) */
+.tt-c.is-mine{cursor:default;background:transparent;box-shadow:inset 0 0 0 1.5px #303030;background-image:repeating-linear-gradient(135deg,rgba(0,0,0,.06) 0 6px,transparent 6px 12px)}
+.tt__key{display:flex;align-items:center;gap:.5rem;margin-top:.8rem;font-size:.8125rem}
+.tt-empty{margin-top:.25rem}
+/* telefon: napi lista */
+.tt-list{display:grid;gap:1.1rem}
+.tt-day__h{display:flex;align-items:baseline;justify-content:space-between;gap:1rem;font-family:var(--font-body);text-transform:none;font-size:.9375rem;font-weight:600;
+  padding-bottom:.45rem;margin-bottom:.5rem;border-bottom:1px solid var(--line-strong)}
+.tt-day__h span{font-size:.8125rem;font-weight:500;font-variant-numeric:tabular-nums}
+.tt-day__l{display:grid;gap:.45rem}
+.tt-list .tt-c{grid-template-columns:3.6rem minmax(0,1fr);column-gap:.75rem;background:var(--card);padding:.8rem .95rem}
+.tt-list .tt-c__t{grid-row:1 / span 4;font-size:1rem;font-weight:600;padding-top:.05rem}
+.tt-list .tt-c.is-betelt,.tt-list .tt-c.is-hatarido,.tt-list .tt-c.is-elmarad,.tt-list .tt-c.is-mult{background:transparent}
+.tt-list .tt-c__n{font-size:1rem}
+.tt-list .tt-c__m{font-size:.8125rem}
+@media (max-width:1100px){
+  .tt-grid{grid-template-columns:4.25rem repeat(var(--cols,6),minmax(0,1fr))}
+  .tt-c{padding:.6rem .6rem .65rem}
+  .tt-c__n{font-size:.875rem}
+}
+@media (max-width:640px){
+  .bk-mode{grid-template-columns:1fr 1fr;gap:.4rem}
+  .bk-mode__o{min-height:0;padding:.75rem .8rem .8rem 2.55rem}
+  .bk-mode__o::before{left:.8rem;top:.9rem;width:18px;height:18px}
+  .bk-mode__n{font-size:.95rem}
+  .bk-mode__d{font-size:.8125rem}
+  .opt__tel .lnk{white-space:normal}
+}
+@media (prefers-reduced-motion:reduce){
+  .tt__body.is-slide,.tt__body.is-slide-back{animation:none}
+}

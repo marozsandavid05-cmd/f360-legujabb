@@ -33,6 +33,7 @@
   <div class="tabs__in">
     <a class="tabs__a" href="#/foglalasok" data-tab="foglalasok">Foglalások</a>
     <a class="tabs__a" href="#/kollegak" data-tab="kollegak">Kollégák</a>
+    <a class="tabs__a" href="#/orarend" data-tab="orarend">Órarend</a>
     <a class="tabs__a" href="#/beosztas" data-tab="beosztas">Beosztás</a>
     <a class="tabs__a" href="#/levelek" data-tab="levelek">Levelek</a>
     <a class="tabs__a" href="#/kampanyok" data-tab="kampanyok">Kampányok</a>
@@ -228,7 +229,7 @@
     <div class="fv-head">
       <div>
         <h1 id="ko-h">Kollégák</h1>
-        <p class="fv-sub">Ki foglalható, hol és mire. A belépés előtt és a kilépés után a foglaló nem ad hozzá időpontot. A privát e-mail-cím csak az értesítésekhez kell, a weboldalon nem jelenik meg.</p>
+        <p class="fv-sub">Ki foglalható, hol, mire és mettől meddig. A foglalható időszakon kívül a foglaló nem ad hozzá időpontot. A privát e-mail-cím csak az értesítésekhez kell, a weboldalon nem jelenik meg.</p>
       </div>
       <a class="btn btn--primary" href="#/kollegak/uj" id="ko-new">
         <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
@@ -245,6 +246,16 @@
       </div>
       <div class="ko-main" id="ko-main"></div>
     </div>
+  </section>
+
+  <section class="view fv" id="view-orarend" hidden aria-labelledby="or-h">
+    <div class="fv-head">
+      <div>
+        <h1 id="or-h">Órarend</h1>
+        <p class="fv-sub">A csoportos órák (jóga, pilates, aerial, core, gerinctorna) heti rendje és típusai. A jelentkezőket a Foglalások fülön, az órára kattintva látod.</p>
+      </div>
+    </div>
+    <div class="or" id="or-main" aria-busy="true"></div>
   </section>
 
   <section class="view fv" id="view-kampanyok" hidden aria-labelledby="ka-h">
@@ -440,6 +451,59 @@
     <div class="dlg__act">
       <button type="button" class="btn btn--ghost" id="mv-cancel">Mégse</button>
       <button type="submit" class="btn btn--primary" id="mv-ok">Áthelyezés</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- csoportos óra: résztvevők, felvétel, elmarad -->
+<dialog class="dlg dlg--wide" id="dlg-ora" aria-labelledby="dlg-ora-h">
+  <div class="dlg__in">
+    <p class="dlg__h" id="dlg-ora-h">Csoportos óra</p>
+    <div id="ora-body"></div>
+    <div class="dlg__act" id="ora-act"></div>
+  </div>
+</dialog>
+
+<!-- óratípus -->
+<dialog class="dlg dlg--wide" id="dlg-ot" aria-labelledby="dlg-ot-h">
+  <form class="dlg__in" id="ot-form" novalidate>
+    <p class="dlg__h" id="dlg-ot-h">Óratípus</p>
+    <div class="grid2">
+      <div class="field"><label for="ot-nev">Az óra neve</label><input type="text" id="ot-nev" maxlength="120" required autocomplete="off"></div>
+      <div class="field"><label for="ot-kat">Fajta</label><select id="ot-kat"></select></div>
+      <div class="field"><label for="ot-hely">Helyszín</label><select id="ot-hely"></select></div>
+      <div class="field"><label for="ot-perc">Hossz</label><div class="unit"><input type="number" id="ot-perc" inputmode="numeric" min="10" max="480" step="5" required><span>perc</span></div></div>
+      <div class="field"><label for="ot-ar">Ár alkalmanként</label><div class="unit"><input type="number" id="ot-ar" inputmode="numeric" min="0" step="100"><span>Ft</span></div></div>
+      <div class="field"><label for="ot-kap">Létszám</label><div class="unit"><input type="number" id="ot-kap" inputmode="numeric" min="1" max="100" required aria-describedby="ot-kap-h"><span>fő</span></div><p class="hint" id="ot-kap-h">Ennyi hely van egy órán. Aerialnél a kendők száma.</p></div>
+    </div>
+    <div class="field"><label for="ot-leiras">Rövid leírás <span class="opt">(nem kötelező)</span></label><textarea id="ot-leiras" rows="2" maxlength="1000"></textarea></div>
+    <label class="tick-l"><input type="checkbox" id="ot-aktiv"> Foglalható (ha kiveszed, az óra szünetel, új alkalom nem íródik ki)</label>
+    <p class="form-err" id="ot-err" role="alert" hidden></p>
+    <div class="dlg__act">
+      <button type="button" class="btn btn--ghost" id="ot-cancel">Mégse</button>
+      <button type="submit" class="btn btn--primary" id="ot-ok">Mentés</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- heti sablon -->
+<dialog class="dlg dlg--wide" id="dlg-os" aria-labelledby="dlg-os-h">
+  <form class="dlg__in" id="os-form" novalidate>
+    <p class="dlg__h" id="dlg-os-h">Óra a heti rendben</p>
+    <div class="grid2">
+      <div class="field"><label for="os-ora">Óra</label><select id="os-ora" required></select></div>
+      <div class="field"><label for="os-koll">Ki tartja</label><select id="os-koll"></select></div>
+      <div class="field"><label for="os-nap">Melyik napon</label><select id="os-nap" required></select></div>
+      <div class="field"><label for="os-kezd">Kezdés</label><select id="os-kezd" required></select></div>
+      <div class="field"><label for="os-tol">Első nap <span class="opt">(nem kötelező)</span></label><input type="date" id="os-tol"></div>
+      <div class="field"><label for="os-ig">Utolsó nap <span class="opt">(nem kötelező)</span></label><input type="date" id="os-ig"></div>
+    </div>
+    <p class="hint">Üresen hagyva folyamatosan fut. A 10:00 előtt kezdődő órára az előző este 22:00-ig lehet jelentkezni.</p>
+    <p class="form-err" id="os-err" role="alert" hidden></p>
+    <div class="dlg__act">
+      <button type="button" class="linkbtn linkbtn--danger" id="os-del" hidden>Kivétel a heti rendből</button>
+      <button type="button" class="btn btn--ghost" id="os-cancel">Mégse</button>
+      <button type="submit" class="btn btn--primary" id="os-ok">Mentés</button>
     </div>
   </form>
 </dialog>

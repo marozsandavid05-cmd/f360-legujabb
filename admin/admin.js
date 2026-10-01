@@ -414,7 +414,7 @@
     $$('.view').forEach(function (v) { v.hidden = v.id !== id; });
     document.body.dataset.view = id;
     // fülsor: a blog nézetei a „Blog” fül alá tartoznak
-    var tab = /^view-(foglalasok|kollegak|beosztas|beallitasok|levelek|kampanyok)$/.exec(id);
+    var tab = /^view-(foglalasok|kollegak|orarend|beosztas|beallitasok|levelek|kampanyok)$/.exec(id);
     $$('.tabs__a').forEach(function (a) {
       var on = a.getAttribute('data-tab') === (tab ? tab[1] : 'blog');
       if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
@@ -425,7 +425,7 @@
     var h = location.hash.replace(/^#\/?/, '');
     clearTimeout(deployTimer);
     // az időpontfoglaló fülei (admin/foglalo.js)
-    var fg = /^(foglalasok|kollegak|beosztas|beallitasok|levelek|kampanyok)(\/.*)?$/.exec(h);
+    var fg = /^(foglalasok|kollegak|orarend|beosztas|beallitasok|levelek|kampanyok)(\/.*)?$/.exec(h);
     if (fg && window.F360AdminFoglalo) { show('view-' + fg[1]); return window.F360AdminFoglalo.open(fg[1], fg[2] ? fg[2].slice(1) : ''); }
     if (h === 'uj') return openEditor(null);
     var m = /^szerk\/(.+)$/.exec(h);

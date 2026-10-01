@@ -4,6 +4,8 @@
    → összegzés → a köszönő oldal (foglalas/koszonjuk.html). A választások az URL-ben élnek (megosztható, frissítésre
    megmarad, a böngésző vissza gombja lépésenként visz vissza); a személyes adatok
    csak a böngésző munkamenet-tárában (sessionStorage), sosem az URL-ben.
+   Csoportos óra (?tipus=csoportos): heti órarend → adatok → összegzés → köszönő oldal
+   (/foglalas-api/orak, /foglalas-api/ora-foglalas; a token „C” előtagú).
    Lemondás: ?t=TOKEN (a levélben lévő link) ugyanezen az oldalon.
    API: /foglalas-api/* (Caesar). Helyi teszt: ?mock=1, vagy file://-ról magától
    a js/foglalo-mock.js fut. Ütközés-próba: ?mock=1&utkozes=1.
@@ -32,6 +34,19 @@
     { id: 'idopont', label: 'Időpont' },
     { id: 'osszegzes', label: 'Megerősítés' }
   ];
+  // csoportos óra: a heti órarendből egy óra, adatok, összegzés
+  var CS_STEPS = [
+    { id: 'ora', label: 'Óra' },
+    { id: 'adatok', label: 'Adatok' },
+    { id: 'osszegzes', label: 'Összegzés' }
+  ];
+  // csoportos jelentkezés áthelyezése másik órára (?t=C…&modositas=1)
+  var CSMOD_STEPS = [
+    { id: 'ora', label: 'Másik óra' },
+    { id: 'osszegzes', label: 'Megerősítés' }
+  ];
+  // a táplálkozási szolgáltatások külön csoportban (Mexikói út, Kovács Anna)
+  var TAPL = { 'taplalkozas-alapcsomag': 1, 'taplalkozas-kiegeszito': 1, 'inbody-770': 1 };
   var STEPS = FULL_STEPS;
   var mod = null;               // { tok, info, f } módosítás közben (f = a jelenlegi foglalás)
   var infoCache = {};           // token → a /lemondas?t= válasza (a vissza gomb ne kérje újra)
@@ -54,8 +69,10 @@
 
   /* ---------------- állapot ---------------- */
   var kat = null;               // katalógus
-  var st = { h: '', sz: '', k: '', d: '', t: '', step: 'helyszin', het: '' };
+  var st = { h: '', sz: '', k: '', d: '', t: '', step: 'helyszin', het: '', tipus: '', ora: '', oraNap: '' };
+  function cs() { return st.tipus === 'csoportos'; }
   var cache = {};               // szabad-időpont cache: kulcs → Promise<napok>
+  var oraIdx = {};              // csoportos órák: id → óra (a betöltött hetekből)
   var busy = false;
   var lastRenderedStep = null;
 
@@ -110,20 +127,29 @@
     return {
       h: q.get('helyszin') || '', sz: q.get('kezeles') || '', k: q.get('szakember') || '',
       d: q.get('nap') || '', t: q.get('ido') || '', step: q.get('lepes') || '',
-      tok: q.get('t') || '', kesz: q.get('kesz') || '', mod: q.get('modositas') === '1'
+      tok: q.get('t') || '', kesz: q.get('kesz') || '', mod: q.get('modositas') === '1',
+      tipus: q.get('tipus') === 'csoportos' ? 'csoportos' : '', ora: q.get('ora') || '', het: q.get('het') || ''
     };
   }
   function buildUrl(extra) {
     var q = new URLSearchParams();
     if (MOCK && location.protocol !== 'file:') q.set('mock', '1');
     if (mod) { q.set('t', mod.tok); q.set('modositas', '1'); }
-    else {
+    else if (cs()) {
+      q.set('tipus', 'csoportos');
+      if (st.h) q.set('helyszin', st.h);
+    } else {
       if (st.h) q.set('helyszin', st.h);
       if (st.sz) q.set('kezeles', st.sz);
     }
-    if (st.k) q.set('szakember', st.k);
-    if (st.d) q.set('nap', st.d);
-    if (st.t) q.set('ido', st.t);
+    if (cs()) {
+      if (st.het && st.het !== F.hetfo(F.most().datum)) q.set('het', st.het);
+      if (st.ora) q.set('ora', st.ora);
+    } else {
+      if (st.k) q.set('szakember', st.k);
+      if (st.d) q.set('nap', st.d);
+      if (st.t) q.set('ido', st.t);
+    }
     if (st.step && st.step !== firstOpenStep()) q.set('lepes', st.step);
     if (extra) Object.keys(extra).forEach(function (k) { q.set(k, extra[k]); });
     var s = q.toString();
@@ -165,6 +191,7 @@
     if (id === 'kollega') return !!st.k;
     if (id === 'idopont') return !!(st.d && st.t) && !isMine(st.d, st.t);
     if (id === 'adatok') { var e = dataErrors(loadData()); return !Object.keys(e).length; }
+    if (id === 'ora') { var o = oraIdx[st.ora]; return !!o && o.foglalhato && !isMineOra(o.id); }
     return false;
   }
   function maxReachable() {
@@ -173,6 +200,13 @@
   }
   function firstOpenStep() { return STEPS[maxReachable()].id; }
   function sanitize() {
+    if (cs()) {
+      if (st.h && !hely(st.h)) st.h = '';
+      if (st.ora && !oraIdx[st.ora]) st.ora = '';
+      var mc = maxReachable();
+      if (!st.step || stepIndex(st.step) < 0 || stepIndex(st.step) > mc) st.step = STEPS[mc].id;
+      return;
+    }
     if (st.h && !hely(st.h)) st.h = '';
     if (!st.h) { st.sz = st.k = st.d = st.t = ''; }
     var s = szolg(st.sz);
@@ -217,9 +251,9 @@
         return;
       }
     }
-    if (st.step === 'osszegzes') return mod ? submitMod() : submit();
+    if (st.step === 'osszegzes') return mod ? (mod.cs ? submitCsMod() : submitMod()) : cs() ? submitCs() : submit();
     if (!stepDone(st.step)) {
-      var why = { helyszin: 'Válassz helyszínt.', szolgaltatas: 'Válassz kezelést.', kollega: 'Válassz szakembert, vagy azt, hogy bárki jó.', idopont: 'Válassz napot és időpontot.' }[st.step];
+      var why = { helyszin: 'Válassz helyszínt.', szolgaltatas: 'Válassz kezelést.', kollega: 'Válassz szakembert, vagy azt, hogy bárki jó.', idopont: 'Válassz napot és időpontot.', ora: 'Válassz egy órát, ahol van szabad hely.' }[st.step];
       announce(why || '');
       flashHint(why);
       return;
@@ -261,7 +295,10 @@
   /* ---------------- RENDER ---------------- */
   function render(opts) {
     opts = opts || {};
-    document.body.classList.toggle('theme-rehab', st.h === 'reitter');
+    document.body.classList.toggle('theme-rehab', !cs() && st.h === 'reitter');
+    document.body.setAttribute('data-tipus', cs() ? 'csoportos' : 'egyeni');
+    document.body.classList.toggle('is-tt', cs() && st.step === 'ora');
+    renderMode();
     renderSteps();
     renderCard();
     $$('.bk-step').forEach(function (sec) {
@@ -275,13 +312,14 @@
     if (st.step === 'szolgaltatas') renderSzolg();
     if (st.step === 'kollega') renderKollega();
     if (st.step === 'idopont') renderIdopont();
+    if (st.step === 'ora') renderOrak();
     if (st.step === 'adatok') fillData();
     if (st.step === 'osszegzes') renderOsszegzes();
     renderBar();
     var changed = lastRenderedStep !== st.step;
     lastRenderedStep = st.step;
     var i = stepIndex(st.step);
-    document.title = STEPS[i].label + (mod ? ' · Időpont módosítása' : ' · Időpontfoglalás') + ' · Studio F360';
+    document.title = STEPS[i].label + (mod ? (mod.cs ? ' · Áthelyezés másik órára' : ' · Időpont módosítása') : cs() ? ' · Csoportos óra' : ' · Időpontfoglalás') + ' · Studio F360';
     if (changed && opts.focus) {
       var h = $('.bk-step:not([hidden]) h2');
       scrollToFlow();
@@ -314,6 +352,12 @@
     }).join('');
     // telefon: egy sor a választásokból
     var parts = [];
+    if (cs()) {
+      var oc = oraIdx[st.ora];
+      if (oc && stepIndex(st.step) > 0) parts.push(oc.ora.nev, F.datumNap(oc.datum) + ' ' + F.hm(F.perc(oc.kezd)));
+      $('#bk-trail').innerHTML = parts.map(esc).join(' · ');
+      return;
+    }
     var h = hely(st.h), s = szolg(st.sz), k = koll(st.k);
     if (h) parts.push(h.nev);
     if (s) parts.push(s.nev + ', ' + s.perc + ' perc');
@@ -331,6 +375,7 @@
   }
   var prevCard = {};
   function renderCard() {
+    if (cs()) return renderCardCs();
     var h = hely(st.h), s = szolg(st.sz), k = koll(st.k), dur = durPerc();
     var rows = [];
     if (mod) {
@@ -363,7 +408,7 @@
     back.hidden = i === 0;
     var ok = st.step === 'adatok' || st.step === 'osszegzes' || stepDone(st.step);
     nx.setAttribute('aria-disabled', ok ? 'false' : 'true');
-    $('#bk-next-t').textContent = st.step === 'osszegzes' ? (mod ? 'Áthelyezés véglegesítése' : 'Foglalás véglegesítése') : st.step === 'adatok' ? 'Tovább az összegzéshez' : 'Tovább';
+    $('#bk-next-t').textContent = st.step === 'osszegzes' ? (mod ? 'Áthelyezés véglegesítése' : cs() ? 'Jelentkezés véglegesítése' : 'Foglalás véglegesítése') : st.step === 'adatok' ? 'Tovább az összegzéshez' : 'Tovább';
   }
 
   /* ---------- 1. helyszín ---------- */
@@ -398,14 +443,34 @@
     var h = hely(st.h);
     $('#sub-szolgaltatas').textContent = h ? h.nev + (meta(st.h).kerulet ? ', ' + meta(st.h).kerulet : '') + '. Az ár egy alkalomra szól.' : '';
     var list = szolgHelyen(st.h);
-    $('#opt-szolgaltatas').innerHTML = list.length ? list.map(function (s) {
-      return '<label class="opt">' +
-        '<input type="radio" name="szolgaltatas" value="' + esc(s.id) + '"' + (st.sz === s.id ? ' checked' : '') + '>' +
-        '<span class="mk" aria-hidden="true">' + CHECK + '</span>' +
-        '<span class="opt__t"><span class="opt__n">' + esc(szolgReszek(s)[0]) + '</span>' + (szolgReszek(s)[1] ? '<span class="opt__d">' + esc(szolgReszek(s)[1]) + '</span>' : '') + '</span>' +
+    if (!list.length) { $('#opt-szolgaltatas').innerHTML = '<p class="opts__empty">Ezen a helyszínen most nincs online foglalható kezelés. Hívj minket: <a class="lnk" href="' + telHref() + '">' + esc(telefon()) + '</a></p>'; return; }
+    var tapl = list.filter(function (s) { return TAPL[s.id]; }), tobbi = list.filter(function (s) { return !TAPL[s.id]; });
+    var csoport = function (cim, l, id) {
+      return (cim ? '<p class="opts__h" id="' + id + '">' + esc(cim) + '</p>' : '') + '<div class="opts" role="group"' + (cim ? ' aria-labelledby="' + id + '"' : '') + '>' + l.map(szolgSor).join('') + '</div>';
+    };
+    $('#opt-szolgaltatas').innerHTML = tapl.length && tobbi.length
+      ? csoport('Gyógytorna és masszázs', tobbi, 'oh-kez') + csoport('Táplálkozás & InBody', tapl, 'oh-tapl')
+      : csoport('', list);
+  }
+
+  function szolgSor(s) {
+    var r = szolgReszek(s), leir = s.leiras && s.leiras !== r[1] ? s.leiras : '';
+    // nincs beosztás (például a táplálkozási tanácsadásnál az elején): látszik, de telefonon foglalható
+    if (s.vanBeosztas === false) {
+      return '<div class="opt opt--tel" aria-disabled="true">' +
+        '<span class="mk mk--off" aria-hidden="true"></span>' +
+        '<span class="opt__t"><span class="opt__n">' + esc(r[0]) + '</span>' + (r[1] ? '<span class="opt__d">' + esc(r[1]) + '</span>' : '') +
+          '<span class="opt__tel">Jelenleg nincs szabad időpont, hívj minket: <a class="lnk" href="' + telHref() + '">' + esc(telefon()) + '</a></span></span>' +
         '<span class="opt__m"><b>' + esc(F.ft(s.ar)) + '</b><span>' + esc(s.perc) + ' perc</span></span>' +
-      '</label>';
-    }).join('') : '<p class="opts__empty">Ezen a helyszínen most nincs online foglalható kezelés. Hívj minket: <a class="lnk" href="' + telHref() + '">' + esc(telefon()) + '</a></p>';
+      '</div>';
+    }
+    return '<label class="opt">' +
+      '<input type="radio" name="szolgaltatas" value="' + esc(s.id) + '"' + (st.sz === s.id ? ' checked' : '') + '>' +
+      '<span class="mk" aria-hidden="true">' + CHECK + '</span>' +
+      '<span class="opt__t"><span class="opt__n">' + esc(r[0]) + '</span>' + (r[1] ? '<span class="opt__d">' + esc(r[1]) + '</span>' : '') +
+        (leir ? '<span class="opt__d">' + esc(leir) + '</span>' : '') + '</span>' +
+      '<span class="opt__m"><b>' + esc(F.ft(s.ar)) + '</b><span>' + esc(s.perc) + ' perc</span></span>' +
+    '</label>';
   }
 
   /* ---------- 3. szakember ---------- */
@@ -618,7 +683,14 @@
     }).join('');
   }
   function renderOsszegzes() {
-    if (!mod) { $('#rev').innerHTML = revRows(true); $('#h-osszegzes').textContent = 'Ellenőrizd a foglalást'; return; }
+    $('#ossz-prep').innerHTML = '';
+    if (cs()) return renderOsszegzesCs();
+    if (!mod) {
+      $('#rev').innerHTML = revRows(true); $('#h-osszegzes').textContent = 'Ellenőrizd a foglalást';
+      var sp = szolg(st.sz);
+      if (sp && sp.elokeszites && sp.elokeszites.length) $('#ossz-prep').innerHTML = prepHtml(sp.elokeszites);
+      return;
+    }
     // áthelyezés: régi és új időpont egymás alatt, a többi marad
     var mf = mod.f, k = koll(st.k), t = F.perc(st.t), dur = durPerc();
     var rows = [
@@ -634,6 +706,313 @@
       return '<div' + (r[4] ? ' class="' + r[4] + '"' : '') + '><dt>' + esc(r[0]) + '</dt><dd>' + esc(r[1]) + (r[2] ? '<small>' + esc(r[2]) + '</small>' : '') + '</dd>' +
         (r[3] ? '<dd class="rev__act"><button type="button" class="edit" data-go="' + r[3] + '" aria-label="' + esc(r[0]) + ' módosítása">Módosítás</button></dd>' : '<dd class="rev__act"></dd>') + '</div>';
     }).join('');
+  }
+
+  // InBody „Mérés előtt”: a backend szolgáltatás-mezőjéből (a taplalkozas.html listája)
+  function prepHtml(l) {
+    return '<section class="prep" aria-labelledby="prep-h"><h3 class="prep__h" id="prep-h">Mérés előtt</h3><ul>' +
+      l.map(function (x) { return '<li>' + esc(String(x).charAt(0).toUpperCase() + String(x).slice(1)) + '</li>'; }).join('') + '</ul></section>';
+  }
+
+
+  /* =====================================================================
+     CSOPORTOS ÓRA  (?tipus=csoportos): heti órarend → adatok → összegzés
+     Az órák a /foglalas-api/orak-ból (max 14 nap, itt hetente 7), a jelentkezés a
+     /foglalas-api/ora-foglalas-ra. A szabad helyek száma minden hétváltáskor friss.
+     Asztalin a mexikoi.html órarend-táblájának rendje (sor = napszak, oszlop = nap),
+     telefonon napi lista. Egy óra jele: a helyek pöttysora (tele pötty = foglalt hely).
+     ===================================================================== */
+  var ttUgrott = false;
+  var oraCache = {}, oraKesz = {}, oraReq = 0, ttNarrow = matchMedia('(max-width: 760px)');
+  function oraKey(tol) { return [st.h || '*', tol].join('|'); }
+  function fetchOrak(tol) {
+    var key = oraKey(tol);
+    if (!oraCache[key]) {
+      var path = '/orak?' + (st.h ? 'helyszin=' + encodeURIComponent(st.h) + '&' : '') + 'tol=' + tol + '&ig=' + F.addDays(tol, 6);
+      oraCache[key] = api(path).then(function (r) {
+        var l = (r && r.orak) || [];
+        l.forEach(function (o) { oraIdx[o.id] = o; });
+        oraKesz[key] = l; return l;
+      }).catch(function (e) { delete oraCache[key]; throw e; });
+    }
+    return oraCache[key];
+  }
+  function oraCacheUrit() { oraCache = {}; oraKesz = {}; }
+  function isMineOra(id) { return !!mod && !!mod.cs && id === mod.f.session; }
+  function oktatoRovid(k) { return k && k.nev ? keresztnev(k.nev) : ''; }
+  function hetCimke(tol) {
+    var ig = F.addDays(tol, 6);
+    return tol.slice(5, 7) === ig.slice(5, 7) ? F.HONAPOK[Number(tol.slice(5, 7)) - 1] + ' ' + Number(tol.slice(8)) + '-' + Number(ig.slice(8)) + '.'
+      : F.honapNap(tol) + ' - ' + F.honapNap(ig);
+  }
+  // miért nem választható (az API ok mezője), a cellában rövid, felolvasva teljes
+  var OK_SZ = { betelt: 'Betelt', hatarido: 'Jelentkezés lezárult', elmarad: 'Elmarad', mult: 'Lezajlott' };
+  function helyTxt(o) { return o.szabad + ' hely szabad'; }
+  function pottyok(o) {
+    if (!o.kapacitas || o.kapacitas > 14) return '';
+    var foglalt = o.kapacitas - o.szabad, out = '';
+    for (var i = 0; i < o.kapacitas; i++) out += '<i' + (i < foglalt ? ' class="is-f"' : '') + '></i>';
+    return '<span class="tt-dots" aria-hidden="true">' + out + '</span>';
+  }
+  function oraSr(o, extra) {
+    return [F.datumNap(o.datum) + ', ' + F.hm(F.perc(o.kezd)) + '-' + F.hm(F.perc(o.veg)), o.ora.nev, o.kollega ? o.kollega.nev : '', o.ora.perc + ' perc',
+      o.ora.ar != null ? F.ft(o.ora.ar).replace(/\u00a0/g, ' ') : '', extra].filter(Boolean).join(', ');
+  }
+  function oraCella(o) {
+    var mine = isMineOra(o.id), ok = mine ? null : o.ok, valaszthato = !mine && o.foglalhato;
+    var allapot = mine ? 'jelenlegi órád' : ok ? OK_SZ[ok] || 'nem választható' : helyTxt(o);
+    var cls = 'tt-c' + (ok ? ' is-' + ok : '') + (mine ? ' is-mine' : '') + (o.szabad > 0 && o.szabad <= 2 && valaszthato ? ' is-low' : '');
+    var meta = [oktatoRovid(o.kollega), o.ora.perc + '′', o.ora.ar != null ? F.ft(o.ora.ar) : ''].filter(Boolean).map(esc).join(' · ');
+    var belso = '<span class="tt-c__t" aria-hidden="true">' + esc(F.hm(F.perc(o.kezd))) + '</span>' +
+      '<span class="tt-c__n" aria-hidden="true">' + esc(o.ora.nev) + '</span>' +
+      '<span class="tt-c__m" aria-hidden="true">' + meta + '</span>' +
+      '<span class="tt-c__s" aria-hidden="true">' + (valaszthato || mine ? pottyok(o) : '') + '<b>' + esc(mine ? 'Jelenlegi órád' : ok ? OK_SZ[ok] : helyTxt(o)) + '</b></span>' +
+      (ok === 'elmarad' && o.megjegyzes ? '<span class="tt-c__x" aria-hidden="true">' + esc(o.megjegyzes) + '</span>' : '') +
+      '<span class="sr-only">' + esc(oraSr(o, allapot)) + '</span>';
+    if (!valaszthato) return '<label class="' + cls + '"><input type="radio" name="ora" value="' + esc(o.id) + '" disabled>' + belso + '</label>';
+    return '<label class="' + cls + '"><input type="radio" name="ora" value="' + esc(o.id) + '"' + (st.ora === o.id ? ' checked' : '') + '>' + belso + '</label>';
+  }
+  var NAPSZAK = [['Reggel', 0, 720], ['Délután', 720, 1080], ['Este', 1080, 1440]];
+  function renderTt(lista) {
+    var tol = st.het, napok = [], ma = F.most().datum;
+    // a folyó héten a már elmúlt napok nem kellenek (ott nincs foglalható óra), az oszlopok a mai nappal indulnak
+    for (var i = 0; i < 7; i++) {
+      var d = F.addDays(tol, i), l = lista.filter(function (o) { return o.datum === d; });
+      if (d < ma && !l.length) continue;
+      if (i < 6 || l.length) napok.push({ d: d, l: l });
+    }
+    var ures = !lista.length;
+    if (ures) {
+      var L = weekLimits();
+      return '<div class="slots__empty tt-empty"><p>Ezen a héten nincs meghirdetett csoportos óra' + (st.h && hely(st.h) ? ' a(z) ' + esc(hely(st.h).nev) + ' helyszínen' : '') + '.</p>' +
+        (st.het < L.max ? '<div class="done__act"><button type="button" class="btn" data-ttweek="1">Következő hét</button></div>' : '') + '</div>';
+    }
+    if (ttNarrow.matches) {
+      // telefon: napi lista (csak az órás napok), napszak nélkül, idő szerint
+      return '<div class="tt-list">' + napok.filter(function (n) { return n.l.length; }).map(function (n) {
+        return '<section class="tt-day' + (n.d === ma ? ' is-today' : '') + '" aria-labelledby="ttd-' + n.d + '"><h3 class="tt-day__h" id="ttd-' + n.d + '">' +
+          esc(F.NAPOK[F.hetNapja(n.d)].replace(/^./, function (c) { return c.toUpperCase(); })) + '<span>' + esc(F.honapNap(n.d)) + (n.d === ma ? ' · ma' : '') + '</span></h3>' +
+          '<div class="tt-day__l">' + n.l.map(oraCella).join('') + '</div></section>';
+      }).join('') + '</div>';
+    }
+    var cols = napok.length, html = '<div class="tt-grid" style="--cols:' + cols + '">';
+    html += '<div class="tt-h tt-h--corner" aria-hidden="true"></div>';
+    napok.forEach(function (n) {
+      html += '<div class="tt-h' + (n.d === ma ? ' is-today' : '') + '" aria-hidden="true"><b>' + esc(F.NAPOK[F.hetNapja(n.d)].replace(/^./, function (c) { return c.toUpperCase(); })) + '</b><span>' + esc(F.honapNap(n.d)) + (n.d === ma ? ' · ma' : '') + '</span></div>';
+    });
+    NAPSZAK.forEach(function (sz) {
+      var van = lista.some(function (o) { var p = F.perc(o.kezd); return p >= sz[1] && p < sz[2]; });
+      if (!van) return;
+      html += '<div class="tt-p" aria-hidden="true"><span>' + sz[0] + '</span></div>';
+      napok.forEach(function (n) {
+        var l = n.l.filter(function (o) { var p = F.perc(o.kezd); return p >= sz[1] && p < sz[2]; });
+        html += '<div class="tt-cell">' + l.map(oraCella).join('') + '</div>';
+      });
+    });
+    return html + '</div>';
+  }
+  function setTtLoading(on) {
+    var b = $('#tt-body');
+    b.setAttribute('aria-busy', on ? 'true' : 'false');
+    if (on) { b.style.minHeight = b.getBoundingClientRect().height + 'px'; b.classList.add('is-load'); }
+    else { b.classList.remove('is-load'); b.style.minHeight = ''; }
+  }
+  function renderOrak(dir) {
+    var L = weekLimits();
+    if (!st.het) st.het = F.hetfo(mod && mod.cs ? mod.f.datum : L.ma);
+    if (st.het < L.min) st.het = L.min;
+    if (st.het > L.max) st.het = L.max;
+    var h = hely(st.h);
+    $('#sub-ora').textContent = mod && mod.cs
+      ? 'Jelenleg: ' + mod.f.ora.nev + ', ' + F.datumNap(mod.f.datum) + ' ' + F.hm(F.perc(mod.f.kezd)) + '. Válassz másik órát, ahol van szabad hely.'
+      : (h ? h.nev + '. ' : '') + 'Az óra díját a helyszínen fizeted. A 10:00 előtti órákra előző este ' + String(szab().reggeliHatarOra == null ? 22 : szab().reggeliHatarOra) + ':00-ig lehet jelentkezni.';
+    $('#tt-label').textContent = hetCimke(st.het);
+    $('#tt-prev').disabled = st.het <= L.min;
+    $('#tt-next').disabled = st.het >= L.max;
+    var body = $('#tt-body'), req = ++oraReq, megvan = oraKesz[oraKey(st.het)];
+    if (megvan) { body.innerHTML = renderTt(megvan); slideTt(dir); return; }
+    if (!body.children.length) body.innerHTML = '<div class="tt-skel">' + new Array(7).join('<span class="skel"></span>') + '</div>';
+    setTtLoading(true);
+    fetchOrak(st.het).then(function (l) {
+      if (req !== oraReq) return;
+      // a folyó héten már nincs foglalható óra (például vasárnap este): egyszer magától a következő hétre lép
+      if (!dir && !ttUgrott && !(mod && mod.cs) && !st.ora && st.het < L.max && !l.some(function (o) { return o.foglalhato; })) {
+        ttUgrott = true; st.het = F.addDays(st.het, 7); setTtLoading(false); syncUrl(false); return renderOrak(1);
+      }
+      setTtLoading(false);
+      body.innerHTML = renderTt(l);
+      slideTt(dir);
+      renderBar(); renderSteps();
+    }).catch(function (e) {
+      if (req !== oraReq) return;
+      setTtLoading(false);
+      body.innerHTML = '<div class="slots__empty"><p>' + esc(e.message) + '</p><button type="button" class="btn" id="tt-retry">Újrapróbálom</button></div>';
+      $('#tt-retry').addEventListener('click', function () { renderOrak(); });
+    });
+  }
+  function slideTt(dir) {
+    if (!dir || reduce) return;
+    var b = $('#tt-body'); b.classList.remove('is-slide', 'is-slide-back'); void b.offsetWidth; b.classList.add(dir > 0 ? 'is-slide' : 'is-slide-back');
+  }
+  function renderCardCs() {
+    var o = oraIdx[st.ora], rows = [];
+    if (mod && mod.cs) rows.push(['m', 'Jelenlegi óra', mod.f.ora.nev, F.datumNap(mod.f.datum) + ', ' + F.hm(F.perc(mod.f.kezd)) + '-' + F.hm(F.perc(mod.f.veg)), null, 'is-now']);
+    rows = rows.concat([
+      ['o', mod ? 'Új óra' : 'Óra', o ? o.ora.nev : '', o ? o.ora.perc + ' perc' : '', 'ora'],
+      ['i', 'Időpont', o ? F.datumNap(o.datum) : '', o ? F.hm(F.perc(o.kezd)) + '-' + F.hm(F.perc(o.veg)) : '', 'ora'],
+      ['k', 'Oktató', o && o.kollega ? o.kollega.nev : '', '', null],
+      ['h', 'Helyszín', o ? o.helyszin.nev : '', o ? (meta(o.helyszin.id).utca || o.helyszin.cim || '') : '', null],
+      ['a', 'Díj', o && o.ora.ar != null ? F.ft(o.ora.ar).replace(/\u00a0/g, ' ') : '', o ? 'a helyszínen fizetendő' : '', null, 'rev__sum']
+    ]);
+    $('#bk-card-rows').innerHTML = rows.map(function (r) { return cardRow(r[0], r[1], r[2], r[3], r[4], r[5]); }).join('');
+    $('#bk-card-hint').hidden = !!o;
+    $('#bk-card-h').textContent = mod ? 'Áthelyezés' : 'A jelentkezésed';
+  }
+  function renderOsszegzesCs() {
+    var o = oraIdx[st.ora], d = loadData();
+    if (!o) return;
+    var reggeli = F.perc(o.kezd) < (szab().reggeliKezdesElott == null ? 10 : szab().reggeliKezdesElott) * 60;
+    var rows = mod && mod.cs ? [
+      ['Új óra', o.ora.nev, F.datumHosszu(o.datum) + ', ' + F.hm(F.perc(o.kezd)) + '-' + F.hm(F.perc(o.veg)), 'ora', 'rev__new'],
+      ['Eddig', mod.f.ora.nev, F.datumHosszu(mod.f.datum) + ', ' + F.hm(F.perc(mod.f.kezd)), null, 'rev__old'],
+      ['Oktató', o.kollega ? o.kollega.nev : '', ''],
+      ['Helyszín', o.helyszin.nev, meta(o.helyszin.id).utca || o.helyszin.cim],
+      ['Foglalás száma', mod.info.azonosito, 'marad, és a levélben lévő link is']
+    ] : [
+      ['Óra', o.ora.nev, o.ora.perc + ' perc', 'ora'],
+      ['Időpont', F.datumHosszu(o.datum), F.hm(F.perc(o.kezd)) + '-' + F.hm(F.perc(o.veg)) + ', ' + helyTxt(o), 'ora'],
+      ['Oktató', o.kollega ? o.kollega.nev : '', o.kollega ? o.kollega.szerep : ''],
+      ['Helyszín', o.helyszin.nev, meta(o.helyszin.id).utca || o.helyszin.cim],
+      ['Adataid', d.nev, [d.email, d.telefon].join(' · ') + (d.megjegyzes ? '\n' + d.megjegyzes : ''), 'adatok'],
+      ['Díj', o.ora.ar != null ? F.ft(o.ora.ar) : '', 'a helyszínen fizetendő', null, 'rev__sum']
+    ];
+    $('#h-osszegzes').textContent = mod ? 'Ellenőrizd az új órát' : 'Ellenőrizd a jelentkezést';
+    $('#rev').innerHTML = rows.filter(function (r) { return r[1]; }).map(function (r) {
+      return '<div' + (r[4] ? ' class="' + r[4] + '"' : '') + '><dt>' + esc(r[0]) + '</dt><dd>' + esc(r[1]) + (r[2] ? '<small>' + esc(r[2]).replace(/\n/g, '<br>') + '</small>' : '') + '</dd>' +
+        (r[3] ? '<dd class="rev__act"><button type="button" class="edit" data-go="' + r[3] + '" aria-label="' + esc(r[0]) + ' módosítása">Módosítás</button></dd>' : '<dd class="rev__act"></dd>') + '</div>';
+    }).join('');
+    $('#ossz-fine').textContent = (mod ? 'A régi helyed az áthelyezés pillanatában felszabadul. ' : 'A díjat a helyszínen fizeted. ') +
+      'Lemondani vagy másik órára tenni a kezdés előtt ' + (szab().lemondasOra || 24) + ' óráig tudod online.' +
+      (reggeli && !mod ? ' Ez reggeli óra: előző este ' + String(szab().reggeliHatarOra == null ? 22 : szab().reggeliHatarOra) + ':00-ig lehet rá jelentkezni.' : '');
+  }
+  function oraHiba(err, kuldo) {
+    var kod = err.data && err.data.kod;
+    if (err.status === 409 && (kod === 'betelt' || kod === 'elmarad' || kod === 'hatarido' || kod === 'mult')) {
+      var o = oraIdx[st.ora], mi = o ? o.ora.nev + ', ' + F.datumNap(o.datum) + ' ' + F.hm(F.perc(o.kezd)) : 'ez az óra';
+      oraCacheUrit(); st.ora = '';
+      go('ora', { noAlertClear: true });
+      var cim = { betelt: 'Ez az óra közben betelt', elmarad: 'Ez az óra elmarad', hatarido: 'Erre az órára már lezárult a jelentkezés', mult: 'Ez az óra már elkezdődött' }[kod];
+      showAlert(cim, (kod === 'betelt' ? 'Amíg kitöltötted az adatokat, elfogyott az utolsó hely: ' + mi + '. ' : err.message + ' ') + 'Frissítettük az órarendet, válassz másikat.' + (mod ? ' A régi helyed addig megmarad.' : ' Az adataidat megjegyeztük.'));
+      setTimeout(function () { $('#bk-alert-h').setAttribute('tabindex', '-1'); $('#bk-alert-h').focus(); }, reduce ? 0 : 120);
+      return true;
+    }
+    if (err.status === 409 && kod === 'mar_jelentkezett') {
+      showAlert('Erre az órára már jelentkeztél', 'Ezzel az e-mail-címmel már van helyed ezen az órán. A visszaigazoló levélben lévő linkkel tudod kezelni. Ha valaki mást jelentkeztetnél, az ő e-mail-címét add meg.');
+      $('#bk-alert-h').setAttribute('tabindex', '-1'); $('#bk-alert-h').focus();
+      return true;
+    }
+    var halozat = err.status === 0 || err.status >= 500;
+    showAlert(mod ? 'Az áthelyezés nem sikerült' : 'A jelentkezés nem sikerült', err.message + (halozat && err.message.indexOf(telefon()) < 0 ? ' Telefonon is segítünk: ' + telefon() + '.' : '') + (mod ? ' A régi helyed érvényes maradt.' : ''),
+      halozat ? { label: 'Újrapróbálom', fn: function () { hideAlert(); kuldo(); } } : null);
+    $('#bk-alert-h').setAttribute('tabindex', '-1'); $('#bk-alert-h').focus();
+    return false;
+  }
+  function submitCs() {
+    if (busy) return;
+    var d = loadData();
+    var body = { ora: st.ora, nev: String(d.nev || '').trim(), email: String(d.email || '').trim(), telefon: String(d.telefon || '').trim(),
+      megjegyzes: String(d.megjegyzes || '').trim(), hozzajarul: !!d.hozzajarul, web: $('#f-web').value };
+    var forras = window.F360Meres && window.F360Meres.forras();
+    if (forras) body.forras = forras;
+    setSubmitting(true);
+    $('#bk-next-t').textContent = 'Jelentkezés folyamatban';
+    announce('Jelentkezés folyamatban');
+    api('/ora-foglalas', { method: 'POST', json: body }).then(function (res) {
+      setSubmitting(false);
+      if (!res || !res.azonosito || !res.foglalas) { renderBar(); showAlert('A jelentkezés nem sikerült', 'Kérjük, töltsd újra az oldalt és próbáld újra, vagy hívj minket: ' + telefon() + '.'); return; }
+      var done = { azonosito: res.azonosito, lemondasUrl: res.lemondasUrl || '', ics: res.ics || '', level: res.level || null, foglalas: res.foglalas, telefon: telefon(), forras: forras || null };
+      try { sessionStorage.setItem(DONE_KEY, JSON.stringify(done)); sessionStorage.removeItem(DATA_KEY); } catch (e) { /* nincs tárhely */ }
+      goThanks(done);
+    }).catch(function (err) {
+      setSubmitting(false); renderBar();
+      if (err.status === 400 && /nev|név|mail|telefon|adatkezel/i.test(err.message)) go('adatok', { noAlertClear: true });
+      oraHiba(err, submitCs);
+    });
+  }
+  function submitCsMod() {
+    if (busy) return;
+    setSubmitting(true);
+    $('#bk-next-t').textContent = 'Áthelyezés folyamatban';
+    announce('Áthelyezés folyamatban');
+    api('/modositas', { method: 'POST', json: { t: mod.tok, ora: st.ora } }).then(function (res) {
+      setSubmitting(false);
+      if (!res || !res.azonosito || !res.foglalas) { renderBar(); showAlert('Az áthelyezés nem sikerült', 'Kérjük, töltsd újra az oldalt és próbáld újra, vagy hívj minket: ' + telefon() + '.'); return; }
+      var done = { azonosito: res.azonosito, lemondasUrl: res.lemondasUrl || '', ics: res.ics || '', level: res.level || null, foglalas: res.foglalas, telefon: telefon(), modositva: true };
+      try { sessionStorage.setItem(DONE_KEY, JSON.stringify(done)); } catch (e) { /* nincs tárhely */ }
+      delete infoCache[mod.tok];
+      var tok = mod.tok;
+      mod = null; st.tipus = ''; STEPS = FULL_STEPS;
+      goThanks(done, manageHref(tok));
+    }).catch(function (err) {
+      setSubmitting(false); renderBar();
+      if ((err.status === 409 && err.data && err.data.telefon && !err.data.kod) || err.status === 410 || err.status === 404 || (err.status === 409 && /módosították/.test(err.message))) {
+        var tok = mod.tok; delete infoCache[tok];
+        history.replaceState({ f: 1 }, '', manageHref(tok));
+        return showCancel(tok, { uzenet: err.message });
+      }
+      oraHiba(err, submitCsMod);
+    });
+  }
+  function startCsMod(tok, u, r) {
+    var f = r.foglalas, uj = !mod || mod.tok !== tok;
+    mod = { tok: tok, info: r, f: f, cs: true };
+    st.tipus = 'csoportos'; STEPS = CSMOD_STEPS;
+    if (uj) { oraCacheUrit(); prevCard = {}; lastRenderedStep = null; }
+    document.body.setAttribute('data-view', 'modositas');
+    $('.bk-head').hidden = false;
+    $('#bk-h1').textContent = 'Áthelyezés másik órára';
+    $('#bk-lead').textContent = f.ora.nev + ', ' + F.datumNap(f.datum) + ' ' + F.hm(F.perc(f.kezd)) + '. Válassz másik órát, a foglalás száma és a levélben lévő link marad.';
+    var back = $('#bk-modback'); back.hidden = false; back.href = manageHref(tok);
+    $('#bk-flow-wrap').hidden = false;
+    st.h = ''; st.ora = u.ora || ''; st.het = u.het || F.hetfo(f.oraAllapot === 'elmarad' || f.datum < F.most().datum ? F.most().datum : f.datum); st.step = u.step || 'ora';
+    render({ focus: false });
+    fetchOrak(st.het).then(function () {
+      sanitize(); render({ focus: !uj }); syncUrl(false);
+      if (uj) setTimeout(function () { var h = $('#bk-h1'); if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); } }, 60);
+    }, function () { render({ focus: false }); });
+  }
+  function routeCs(u) {
+    STEPS = CS_STEPS;
+    var prevH = st.h;
+    st.tipus = 'csoportos'; st.h = u.h; st.ora = u.ora; st.het = u.het || (st.het && prevH === u.h ? st.het : ''); st.step = u.step || 'ora';
+    if (!st.het) st.het = F.hetfo(F.most().datum);
+    var L = weekLimits(); if (st.het < L.min) st.het = L.min; if (st.het > L.max) st.het = L.max;
+    var elso = lastRenderedStep === null;
+    render({ focus: false });
+    fetchOrak(st.het).then(function () {
+      sanitize(); render({ focus: !elso }); syncUrl(false);
+    }, function () { render({ focus: false }); });
+  }
+  // két út az első lépésben: egyéni időpont vagy csoportos óra
+  function renderMode() {
+    var box = $('#bk-mode');
+    if (!box) return;
+    var lathato = !mod && stepIndex(st.step) === 0;
+    box.hidden = !lathato;
+    $$('input[name="tipus"]', box).forEach(function (r) { r.checked = r.value === (cs() ? 'csoportos' : 'egyeni'); });
+    if (!mod) $('#bk-lead').textContent = cs()
+      ? 'Válassz órát a heti órarendből. A jelentkezés azonnal érvényes, a kezdés előtt ' + (szab().lemondasOra || 24) + ' óráig online lemondhatod vagy másik órára teheted.'
+      : HEAD_LEAD;
+  }
+  function valtTipus(v) {
+    if ((v === 'csoportos') === cs()) return;
+    hideAlert();
+    var h = st.h;
+    if (v === 'csoportos') { history.pushState({ f: 1 }, '', newBookingHref(h === 'reitter' ? '' : h, 'csoportos')); }
+    else { history.pushState({ f: 1 }, '', newBookingHref(h, '')); }
+    lastRenderedStep = 'x';
+    route();
+    setTimeout(function () { var r = $('#bk-mode input:checked'); if (r) r.focus({ preventScroll: true }); }, 30);
   }
 
   /* ---------------- BEKÜLDÉS ---------------- */
@@ -669,6 +1048,7 @@
       }
       var done = { azonosito: res.azonosito, lemondasUrl: res.lemondasUrl || '', ics: res.ics || '', level: res.level || null, foglalas: res.foglalas, telefon: telefon(), forras: forras || null };
       if (done.foglalas.szolgaltatas.ar == null && s) done.foglalas.szolgaltatas.ar = s.ar;
+      if (s && s.elokeszites && s.elokeszites.length) done.elokeszites = s.elokeszites;
       try { sessionStorage.setItem(DONE_KEY, JSON.stringify(done)); sessionStorage.removeItem(DATA_KEY); } catch (e) { /* nincs tárhely */ }
       // a köszönő oldal a konverziós pont (ott fut a mérés, egyszer)
       goThanks(done);
@@ -789,6 +1169,10 @@
   function startMod(tok, u) {
     $('#bk-cancel').hidden = true;
     loadInfo(tok).then(function (r) {
+      if (r.tipus === 'csoportos') {
+        if (r.allapot !== 'megerositett' || !r.modosithato) { history.replaceState({ f: 1 }, '', manageHref(tok)); return showCancel(tok); }
+        return startCsMod(tok, u, r);
+      }
       if (r.allapot !== 'megerositett' || !r.modosithato) {
         // lemondott vagy határidőn belüli: a kezelő nézet mondja meg, mi a teendő
         history.replaceState({ f: 1 }, '', manageHref(tok));
@@ -802,7 +1186,7 @@
       }
       var uj = !mod || mod.tok !== tok;
       mod = { tok: tok, info: r, f: f };
-      STEPS = MOD_STEPS;
+      STEPS = MOD_STEPS; st.tipus = '';
       if (uj) { Object.keys(cache).forEach(function (k) { delete cache[k]; }); prevCard = {}; lastRenderedStep = null; }
       document.body.setAttribute('data-view', 'modositas');
       $('.bk-head').hidden = false;
@@ -830,7 +1214,7 @@
   /* ---------------- FOGLALÁSOD KEZELÉSE (?t=TOKEN): módosítás vagy lemondás ---------------- */
   function showCancel(tok, opts) {
     opts = opts || {};
-    mod = null; STEPS = FULL_STEPS;
+    mod = null; STEPS = FULL_STEPS; st.tipus = '';
     document.body.setAttribute('data-view', 'lemondas');
     $('#bk-flow-wrap').hidden = true;
     $('.bk-head').hidden = true;
@@ -841,9 +1225,17 @@
     $('#cx-lead').textContent = 'Betöltjük a foglalásod adatait.';
     $('#cx-act').innerHTML = '';
     loadInfo(tok, true).then(function (r) {
-      var f = r.foglalas, tel = r.telefon || telefon(), th = 'tel:' + String(tel).replace(/[^\d+]/g, '');
+      var f = r.foglalas, tel = r.telefon || telefon(), th = 'tel:' + String(tel).replace(/[^\d+]/g, ''), csop = r.tipus === 'csoportos' || f.tipus === 'csoportos';
+      var elmarad = csop && f.oraAllapot === 'elmarad';
       document.body.classList.toggle('theme-rehab', f.helyszin.id === 'reitter');
-      $('#cx-rev').innerHTML = revHtml(foglalasSorok(f, [
+      $('#cx-rev').innerHTML = revHtml(csop ? [
+        ['Óra', f.ora.nev, f.ora.perc + ' perc' + (elmarad ? ', ELMARAD' : '')],
+        ['Időpont', F.datumHosszu(f.datum), F.hm(F.perc(f.kezd)) + '-' + F.hm(F.perc(f.veg))],
+        ['Oktató', f.kollega ? f.kollega.nev : '', ''],
+        ['Helyszín', f.helyszin.nev, f.helyszin.cim],
+        ['Díj', f.ora.ar != null ? F.ft(f.ora.ar) : '', 'a helyszínen fizetendő'],
+        ['Foglalás száma', r.azonosito, '']
+      ] : foglalasSorok(f, [
         ['Díj', f.szolgaltatas.ar != null ? F.ft(f.szolgaltatas.ar) : '', 'a helyszínen fizetendő'],
         ['Foglalás száma', r.azonosito, '']
       ]));
@@ -851,10 +1243,10 @@
       var act = $('#cx-act');
       var elo = opts.uzenet ? '<p class="cx__note" role="alert">' + esc(opts.uzenet) + '</p>' : '';
       if (r.allapot === 'lemondva') {
-        $('#h-cancel').textContent = 'Ezt a foglalást már lemondtad';
-        $('#cx-lead').textContent = 'Az időpont felszabadult, ezért módosítani sem lehet. Ha mégis jönnél, foglalj újat.';
-        act.innerHTML = elo + '<a class="btn bk-next" href="' + newBookingHref(f.helyszin.id) + '">Új időpontot foglalok</a>';
-      } else if (!r.lemondhato) {
+        $('#h-cancel').textContent = csop ? 'Ezt a jelentkezést már lemondtad' : 'Ezt a foglalást már lemondtad';
+        $('#cx-lead').textContent = csop ? 'A helyed felszabadult, ezért áthelyezni sem lehet. Ha mégis jönnél, jelentkezz újra.' : 'Az időpont felszabadult, ezért módosítani sem lehet. Ha mégis jönnél, foglalj újat.';
+        act.innerHTML = elo + '<a class="btn bk-next" href="' + newBookingHref(f.helyszin.id, csop ? 'csoportos' : '') + '">' + (csop ? 'Órarend megnyitása' : 'Új időpontot foglalok') + '</a>';
+      } else if (!r.lemondhato && !(elmarad && r.modosithato)) {
         $('#h-cancel').textContent = 'Online már nem módosítható';
         $('#cx-lead').textContent = 'A kezdésig kevesebb mint ' + (szab().lemondasOra || 24) + ' óra van, ezért online már nem tudod áthelyezni vagy lemondani. Hívj minket, és megbeszéljük.';
         act.innerHTML = elo + '<a class="cx__phone lnk" href="' + esc(th) + '">' + esc(tel) + '</a>' +
@@ -862,10 +1254,13 @@
       } else {
         var hat = r.hatarido ? new Date(r.hatarido) : null;
         var hatSz = hat ? hat.toLocaleString('hu-HU', { timeZone: 'Europe/Budapest', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + '-ig' : '';
-        $('#cx-lead').textContent = 'Kedves ' + keresztnev(f.nev) + ', ha másik időpont kellene, itt áthelyezheted, ha nem tudsz jönni, lemondhatod' + (hatSz ? ' ' + hatSz : '') + '.';
+        if (elmarad) {
+          $('#h-cancel').textContent = 'Ez az óra elmarad';
+          $('#cx-lead').textContent = 'Kedves ' + keresztnev(f.nev) + ', sajnos ez az óra elmarad. Tegyük át a helyed egy másik órára, vagy mondd le, és nem számolunk vele.';
+        } else $('#cx-lead').textContent = 'Kedves ' + keresztnev(f.nev) + ', ' + (csop ? 'ha másik órára mennél, itt áthelyezheted a helyed, ha nem tudsz jönni, lemondhatod' : 'ha másik időpont kellene, itt áthelyezheted, ha nem tudsz jönni, lemondhatod') + (hatSz ? ' ' + hatSz : '') + '.';
         act.innerHTML = elo + (r.modosithato !== false ? '<a class="btn bk-next" id="cx-mod" href="' + esc(manageHref(tok, '&modositas=1')) + '">' +
             '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 9.5h17M8 3v4M16 3v4M9 15h6m-2.5-2.5L15 15l-2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
-            '<span>Időpont módosítása</span></a>' : '') +
+            '<span>' + (csop ? 'Áthelyezés másik órára' : 'Időpont módosítása') + '</span></a>' : '') +
           '<button type="button" class="btn" id="cx-go">Lemondás</button>';
         var mb = $('#cx-mod');
         if (mb) mb.addEventListener('click', function (e) {
@@ -886,25 +1281,27 @@
       $('#h-cancel').focus({ preventScroll: true });
     });
   }
-  function newBookingHref(h) {
+  function newBookingHref(h, tipus) {
     var q = [];
     if (MOCK && location.protocol !== 'file:') q.push('mock=1');
+    if (tipus === 'csoportos') q.push('tipus=csoportos');
     if (h) q.push('helyszin=' + encodeURIComponent(h));
     return 'foglalas.html' + (q.length ? '?' + q.join('&') : '');
   }
   function confirmCancel(tok, r) {
     var act = $('#cx-act'), f = r.foglalas;
-    act.innerHTML = '<div class="cx__confirm" role="group" aria-labelledby="cx-q"><p id="cx-q" tabindex="-1">Biztosan lemondod? Az időpont felszabadul, és más is lefoglalhatja.</p>' +
+    var csop = r.tipus === 'csoportos';
+    act.innerHTML = '<div class="cx__confirm" role="group" aria-labelledby="cx-q"><p id="cx-q" tabindex="-1">' + (csop ? 'Biztosan lemondod? A helyed felszabadul, és más jelentkezhet az órára.' : 'Biztosan lemondod? Az időpont felszabadul, és más is lefoglalhatja.') + '</p>' +
       '<div><button type="button" class="btn btn--dark" id="cx-yes">Igen, lemondom</button><button type="button" class="btn" id="cx-no">Mégsem</button></div></div>';
     $('#cx-q').focus();
     $('#cx-no').addEventListener('click', function () { showCancel(tok); });
     $('#cx-yes').addEventListener('click', function () {
       var y = $('#cx-yes'); y.disabled = true; $('#cx-no').disabled = true; y.textContent = 'Lemondás folyamatban';
       api('/lemondas', { method: 'POST', json: { t: tok } }).then(function () {
-        $('#h-cancel').textContent = 'A foglalást lemondtuk';
+        $('#h-cancel').textContent = csop ? 'A jelentkezést lemondtuk' : 'A foglalást lemondtuk';
         $('#cx-lead').textContent = 'Köszönjük, hogy időben szóltál, így más is jöhet a helyedre. A lemondásról e-mailt is küldünk.';
-        act.innerHTML = '<a class="btn bk-next" href="' + newBookingHref(f.helyszin.id) + '">Új időpontot foglalok</a>';
-        $('#cx-live').textContent = 'A foglalást lemondtuk.';
+        act.innerHTML = '<a class="btn bk-next" href="' + newBookingHref(f.helyszin.id, csop ? 'csoportos' : '') + '">' + (csop ? 'Órarend megnyitása' : 'Új időpontot foglalok') + '</a>';
+        $('#cx-live').textContent = csop ? 'A jelentkezést lemondtuk.' : 'A foglalást lemondtuk.';
         $('#h-cancel').focus();
       }).catch(function (e) {
         var tel = (e.data && e.data.telefon) || r.telefon || telefon();
@@ -916,7 +1313,7 @@
 
   /* ---------------- ESEMÉNYEK ---------------- */
   var pointerPick = false;
-  document.addEventListener('pointerdown', function (e) { pointerPick = !!e.target.closest('.loc,.opt,.slot'); }, true);
+  document.addEventListener('pointerdown', function (e) { pointerPick = !!e.target.closest('.loc,.opt,.slot,.tt-c'); }, true);
   document.addEventListener('keydown', function () { pointerPick = false; }, true);
 
   function autoAdvance() {
@@ -946,6 +1343,12 @@
       st.d = t.value; st.t = '';
       fetchWeek(st.het).then(function (napok) { renderSlots(napok[st.d] || [], napok); });
       renderCard(); renderSteps(); renderBar(); syncUrl(false);
+    } else if (t.name === 'ora') {
+      st.ora = t.value;
+      hideAlert();
+      renderCard(); renderSteps(); renderBar(); syncUrl(false); autoAdvance();
+    } else if (t.name === 'tipus') {
+      valtTipus(t.value);
     } else if (t.name === 'ido') {
       st.t = t.value;
       hideAlert();
@@ -959,11 +1362,15 @@
   document.addEventListener('click', function (e) {
     var g = e.target.closest('[data-go]');
     if (g) { e.preventDefault(); go(g.getAttribute('data-go')); return; }
+    if (e.target.closest('[data-ttweek]')) { st.het = F.addDays(st.het, 7); renderOrak(1); syncUrl(false); return; }
     if (e.target.closest('[data-week]')) { st.het = F.addDays(st.het, 7); st.d = ''; st.t = ''; renderIdopont(1); return; }
     if (e.target.closest('[data-anyone]')) { st.k = 'barki'; st.d = ''; st.t = ''; syncUrl(false); render(); return; }
   });
   $('#wk-prev').addEventListener('click', function () { st.het = F.addDays(st.het, -7); st.d = ''; st.t = ''; autoJumped = true; renderIdopont(-1); syncUrl(false); });
   $('#wk-next').addEventListener('click', function () { st.het = F.addDays(st.het, 7); st.d = ''; st.t = ''; autoJumped = true; renderIdopont(1); syncUrl(false); });
+  $('#tt-prev').addEventListener('click', function () { st.het = F.addDays(st.het, -7); renderOrak(-1); syncUrl(false); });
+  $('#tt-next').addEventListener('click', function () { st.het = F.addDays(st.het, 7); renderOrak(1); syncUrl(false); });
+  ttNarrow.addEventListener('change', function () { if (cs() && st.step === 'ora' && oraKesz[oraKey(st.het)]) $('#tt-body').innerHTML = renderTt(oraKesz[oraKey(st.het)]); });
   $('#bk-next').addEventListener('click', next);
   $('#bk-back').addEventListener('click', back);
   $('#bk-form').addEventListener('submit', function (e) { e.preventDefault(); next(); });
@@ -998,13 +1405,15 @@
     if (u.tok && u.mod) { $('#bk-flow-wrap').hidden = true; return startMod(u.tok, u); }
     if (u.tok) { $('#bk-flow-wrap').hidden = true; return showCancel(u.tok); }
     // kilépés a módosításból (vissza gomb): a foglaló eredeti fejléce és lépései
-    if (mod || STEPS !== FULL_STEPS) { mod = null; STEPS = FULL_STEPS; Object.keys(cache).forEach(function (k) { delete cache[k]; }); prevCard = {}; }
+    if (mod) { mod = null; Object.keys(cache).forEach(function (k) { delete cache[k]; }); oraCacheUrit(); prevCard = {}; }
     $('#bk-h1').textContent = HEAD_H1; $('#bk-lead').textContent = HEAD_LEAD; $('#ossz-fine').textContent = OSSZ_FINE; $('#bk-modback').hidden = true;
     // a régi ?kesz=<azonosító> link: átirányít a köszönő oldalra (mérés nélkül, ha ott már lefutott)
     if (u.kesz) { location.replace(thanksHref(u.kesz)); return; }
     document.body.removeAttribute('data-view');
     $('#bk-cancel').hidden = true; $('.bk-head').hidden = false;
     $('#bk-flow-wrap').hidden = false;
+    if (u.tipus === 'csoportos') { if (!cs()) prevCard = {}; return routeCs(u); }
+    if (cs() || STEPS !== FULL_STEPS) { st.tipus = ''; STEPS = FULL_STEPS; prevCard = {}; st.het = ''; }
     var prevWeekKey = [st.h, st.sz, st.k].join('|');
     st.h = u.h; st.sz = u.sz; st.k = u.k; st.d = u.d; st.t = u.t; st.step = u.step;
     if ([st.h, st.sz, st.k].join('|') !== prevWeekKey || (st.d && (st.d < st.het || st.d > F.addDays(st.het || st.d, 6)))) st.het = '';
