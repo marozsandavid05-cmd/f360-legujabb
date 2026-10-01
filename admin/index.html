@@ -49,7 +49,7 @@
         <h1 id="list-h">Bejegyzések</h1>
         <p class="list-head__sub" id="list-count"></p>
       </div>
-      <a class="btn btn--primary" href="#/uj">
+      <a class="btn btn--primary" href="#/uj" id="list-new">
         <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         Új bejegyzés
       </a>
@@ -218,6 +218,7 @@
         <label class="sel"><span>Szakember</span><select id="fg-koll"></select></label>
       </div>
     </div>
+    <div class="pl" id="fg-people"></div>
     <div class="fg-board" id="fg-board" aria-busy="true"></div>
   </section>
 
@@ -268,7 +269,7 @@
 <dialog class="dlg" id="dlg-delete" aria-labelledby="dlg-delete-h">
   <form method="dialog" class="dlg__in">
     <p class="dlg__h" id="dlg-delete-h">Biztosan törlöd?</p>
-    <p class="dlg__t">A(z) <b id="dlg-delete-title"></b> című bejegyzés lekerül az oldalról. Ha tévedésből törlöd, szólj Davidnek, vissza tudja állítani.</p>
+    <p class="dlg__t">A(z) <b id="dlg-delete-title"></b> című bejegyzés lekerül az oldalról. Ha tévedésből törlöd, a weboldal karbantartója vissza tudja állítani.</p>
     <div class="dlg__act">
       <button class="btn btn--ghost" value="cancel" autofocus>Mégse</button>
       <button class="btn btn--danger" value="ok">Törlés</button>

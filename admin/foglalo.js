@@ -69,6 +69,25 @@
   function hely(id) { return torzs.helyszinek.filter(function (x) { return x.id === id; })[0]; }
   function szolg(id) { return torzs.szolgaltatasok.filter(function (x) { return x.id === id; })[0]; }
   function koll(id) { return torzs.kollegak.filter(function (x) { return x.id === id; })[0]; }
+  // kollégánkénti szín (Caesar szin.js PALETTA): a naptár-blokk, a jelmagyarázat és a színválasztó használja
+  var PALETTA = [
+    { hex: '#4f6d8a', nev: 'acélkék' }, { hex: '#a0553c', nev: 'terrakotta' }, { hex: '#5b7d55', nev: 'zsályazöld' },
+    { hex: '#7d5a8e', nev: 'szilva' }, { hex: '#8c6b2a', nev: 'okker' }, { hex: '#2f6e6e', nev: 'petrol' },
+    { hex: '#94485e', nev: 'bordó-rózsa' }, { hex: '#5a5f30', nev: 'olíva' }, { hex: '#3b4580', nev: 'indigó' },
+    { hex: '#5e4b44', nev: 'mokka' }
+  ];
+  var HEX_RE = /^#[0-9a-f]{6}$/i;
+  function szinOf(k) {
+    var s = k && k.szin;
+    if (!HEX_RE.test(s || '') && k && k.id && torzs) s = (koll(k.id) || {}).szin;
+    return HEX_RE.test(s || '') ? String(s).toLowerCase() : '#303030';
+  }
+  // halvány tónus a blokk kitöltéséhez: a szín p arányban fehérrel keverve (color-mix nélkül, minden böngészőben)
+  function tonus(hex, p) {
+    return '#' + [1, 3, 5].map(function (i) { var v = parseInt(hex.slice(i, i + 2), 16); return ('0' + Math.round(255 + (v - 255) * p).toString(16)).slice(-2); }).join('');
+  }
+  function kcVars(k) { var c = szinOf(k); return '--kc:' + c + ';--kct:' + tonus(c, 0.16) + ';--kcl:' + tonus(c, 0.4); }
+  function kcStyle(k) { return ' style="' + kcVars(k) + '"'; }
   function monogram(n) { return String(n || '').split(/\s+/).filter(Boolean).slice(-2).map(function (w) { return w.charAt(0); }).join('').toUpperCase(); }
   function rovidNev(n) { var p = String(n || '').split(/\s+/); return p.length > 1 ? p[p.length - 1] + ' ' + p[0].charAt(0) + '.' : n; }
   function optionList(list, sel, extra) {
@@ -107,6 +126,20 @@
     var kl = torzs.kollegak.filter(function (k) { return !fg.hely || k.helyszinek.indexOf(fg.hely) >= 0; });
     if (fg.koll && !kl.some(function (k) { return k.id === fg.koll; })) fg.koll = '';
     ks.innerHTML = optionList(kl, fg.koll, '<option value="">Mindenki</option>');
+    renderPeopleLegend(kl);
+  }
+  // jelmagyarázat: szakember + színpötty, kattintásra a meglévő szakember-szűrőt állítja
+  function renderPeopleLegend(kl) {
+    var box = $('#fg-people');
+    if (!box) return;
+    box.innerHTML = '<span class="pl__h" id="fg-people-h">Kié az időpont</span>' +
+      '<ul class="pl__list" aria-labelledby="fg-people-h">' + kl.map(function (k) {
+        var on = fg.koll === k.id;
+        return '<li><button type="button" class="pl__b" data-pkoll="' + esc(k.id) + '" aria-pressed="' + on + '"' + kcStyle(k) +
+          ' title="' + esc(on ? 'Újra mindenki foglalása' : 'Csak ' + k.nev + ' foglalásai') + '">' +
+          '<span class="pl__dot" aria-hidden="true"></span>' + esc(k.nev) + '</button></li>';
+      }).join('') + '</ul>';
+    box.classList.toggle('is-filtered', !!fg.koll);
   }
   function renderFg() {
     var r = fgRange(), req = ++fgReq, board = $('#fg-board');
@@ -155,8 +188,8 @@
   }
   function foglBlokk(b, extraCls) {
     var lem = b.allapot === 'lemondva';
-    return '<button type="button" title="' + esc(b.kezd + '-' + b.veg + ' · ' + b.nev + ' · ' + b.szolgaltatas.nev) + '" class="bk-item' + (lem ? ' is-cx' : '') + (b.helyszin.id === 'reitter' ? ' is-reit' : '') + (extraCls ? ' ' + extraCls : '') + '" data-az="' + esc(b.azonosito) + '" ' +
-      'aria-label="' + esc(b.kezd + '-' + b.veg + ', ' + b.nev + ', ' + b.szolgaltatas.nev + ', ' + b.kollega.nev + (lem ? ', lemondva' : '')) + '">' +
+    return '<button type="button" title="' + esc(b.kezd + '-' + b.veg + ' · ' + b.nev + ' · ' + b.szolgaltatas.nev + ' · ' + b.kollega.nev + ', ' + b.helyszin.nev) + '" class="bk-item' + (lem ? ' is-cx' : '') + (extraCls ? ' ' + extraCls : '') + '" data-az="' + esc(b.azonosito) + '"' + kcStyle(b.kollega) + ' ' +
+      'aria-label="' + esc(b.kezd + '-' + b.veg + ', ' + b.nev + ', ' + b.szolgaltatas.nev + ', ' + b.kollega.nev + ', ' + b.helyszin.nev + (lem ? ', lemondva' : '')) + '">' +
       '<span class="bk-item__t">' + esc(b.kezd) + '<span>-' + esc(b.veg) + '</span></span>' +
       '<span class="bk-item__n">' + esc(b.nev) + '</span>' +
       '<span class="bk-item__s">' + esc(b.szolgaltatas.nev) + (lem ? ' · lemondva' : '') + '</span>' +
@@ -211,9 +244,8 @@
   }
   function legend() {
     return '<ul class="legend" aria-label="Jelmagyarázat"><li class="legend__h" aria-hidden="true">Jelek:</li>' +
-      '<li><span class="lg lg--mex" aria-hidden="true"></span>Mexikói út</li>' +
-      '<li><span class="lg lg--reit" aria-hidden="true"></span>Reitter Ferenc utca</li>' +
-      '<li><span class="lg lg--work" aria-hidden="true"></span>Beosztás szerint dolgozik</li>' +
+      '<li><span class="lg lg--work" aria-hidden="true"></span>Munkaidő, Mexikói út</li>' +
+      '<li><span class="lg lg--work is-reit" aria-hidden="true"></span>Munkaidő, Reitter Ferenc utca</li>' +
       '<li><span class="lg lg--off" aria-hidden="true"></span>Szabadság, zárva</li>' +
       '<li><span class="lg lg--cx" aria-hidden="true"></span>Lemondott foglalás</li></ul>';
   }
@@ -238,7 +270,8 @@
         '<a class="week__h" href="#/foglalasok/nap/' + d + '"><span>' + NAP_HOSSZU[(F.hetNapja(d) + 6) % 7] + '</span><b>' + Number(d.slice(8)) + '</b><small>' + (aktiv ? aktiv + ' foglalás' : 'nincs foglalás') + '</small></a>' +
         zar.map(function (k) { return '<p class="week__off">' + esc((hely(k.helyszin) || {}).nev || '') + ': ' + esc(k.megjegyzes || 'zárva') + '</p>'; }).join('') +
         '<div class="week__list">' + list.map(function (b) {
-          return '<button type="button" class="wk-item' + (b.allapot === 'lemondva' ? ' is-cx' : '') + (b.helyszin.id === 'reitter' ? ' is-reit' : '') + '" data-az="' + esc(b.azonosito) + '">' +
+          return '<button type="button" class="wk-item' + (b.allapot === 'lemondva' ? ' is-cx' : '') + '" data-az="' + esc(b.azonosito) + '"' + kcStyle(b.kollega) +
+            ' title="' + esc(b.kezd + ' · ' + b.nev + ' · ' + b.szolgaltatas.nev + ' · ' + b.kollega.nev + ', ' + b.helyszin.nev) + '">' +
             '<b>' + esc(b.kezd) + '</b><span>' + esc(b.nev) + '</span><small>' + esc(rovidNev(b.kollega.nev)) + ' · ' + esc(b.szolgaltatas.nev) + (b.allapot === 'lemondva' ? ' · lemondva' : '') + '</small></button>';
         }).join('') + '</div></section>';
     }
@@ -359,8 +392,11 @@
   function openBeosztas(sub) {
     document.title = 'Beosztás · Admin · Studio F360';
     loadTorzs().then(function () {
+      var elozo = bo.kid;
       if (sub && koll(sub)) bo.kid = sub;
       if (!bo.kid || !koll(bo.kid)) bo.kid = torzs.kollegak[0] && torzs.kollegak[0].id;
+      // másik kolléga: az előző kártyája (és színválasztója) ne maradjon kattintható a betöltésig
+      if (elozo !== bo.kid) $('#bo-main').innerHTML = '<div class="skel-board"></div>';
       renderPeople();
       loadBo();
     }).catch(function (e) { hibaDoboz($('#bo-main'), e, function () { openBeosztas(sub); }); });
@@ -389,7 +425,8 @@
     var k = koll(bo.kid), main = $('#bo-main');
     var ora = hetOra(bo.sorok);
     var html = '<div class="bo-card"><div class="bo-card__head"><div><h2>' + esc(k.nev) + '</h2><p>' + esc(k.szerep || '') + ' · heti ' + String(Math.round(ora * 10) / 10).replace('.', ',') + ' óra</p></div>' +
-      '<div class="bo-card__act"><button type="button" class="btn btn--ghost" id="bo-copy">Hétfő másolása keddtől péntekig</button></div></div>';
+      '<div class="bo-card__act"><button type="button" class="btn btn--ghost" id="bo-copy">Hétfő másolása keddtől péntekig</button></div></div>' +
+      szinValaszto(k);
     html += '<ol class="wkgrid" aria-label="Heti beosztás">';
     for (var n = 1; n <= 7; n++) {
       var list = bo.sorok.map(function (s, i) { return { s: s, i: i }; }).filter(function (x) { return x.s.nap === n; })
@@ -425,6 +462,59 @@
     function sel(f, v) { return '<select data-f="' + f + '" data-i="' + i + '" aria-label="' + (f === 'kezd' ? 'Kezdés' : 'Vége') + '">' + IDO.map(function (t) { return '<option' + (t === v ? ' selected' : '') + '>' + t + '</option>'; }).join('') + '</select>'; }
     return '<div class="bandrow' + (s.helyszin === 'reitter' ? ' is-reit' : '') + '">' + hs + '<span class="bandrow__t">' + sel('kezd', s.kezd) + '<span aria-hidden="true">-</span>' + sel('veg', s.veg) + '</span>' +
       '<button type="button" class="iconbtn bandrow__x" data-del="' + i + '" aria-label="Sáv törlése: ' + esc(NAP_HOSSZU[s.nap - 1] + ' ' + s.kezd + '-' + s.veg) + '"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div>';
+  }
+  /* ---------- kolléga színe (PATCH /api/foglalo/kollegak?kollega=) ---------- */
+  function hexRgb(h) { return [1, 3, 5].map(function (i) { return parseInt(h.slice(i, i + 2), 16) / 255; }); }
+  function lum(h) { var c = hexRgb(h).map(function (v) { return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; }
+  function kontraszt(a, b) { var x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+  function kiHasznalja(hex, kid) {
+    return torzs.kollegak.filter(function (x) { return x.id !== kid && szinOf(x) === hex; }).map(function (x) { return x.nev; });
+  }
+  function szinValaszto(k) {
+    var cur = szinOf(k), sajat = !PALETTA.some(function (p) { return p.hex === cur; });
+    return '<fieldset class="kc-pick" data-kid="' + esc(k.id) + '"' + kcStyle(k) + '><legend>Szín a naptárban</legend>' +
+      '<p class="kc-pick__d">Ezzel a színnel látszanak ' + esc(k.nev) + ' foglalásai a napi és a heti nézetben. A fehér pöttyös színt már egy másik kolléga használja.</p>' +
+      '<div class="kc-pick__row">' + PALETTA.map(function (p) {
+        var foglalt = kiHasznalja(p.hex, k.id);
+        return '<label class="kc-sw" style="--kc:' + p.hex + '" title="' + esc(p.nev + (foglalt.length ? ', ' + foglalt.join(', ') + ' is ezt használja' : '')) + '">' +
+          '<input type="radio" name="kc" value="' + p.hex + '"' + (p.hex === cur ? ' checked' : '') + '>' +
+          '<span class="kc-sw__c" aria-hidden="true"></span><span class="sr">' + esc(p.nev) + (foglalt.length ? ' (' + esc(foglalt.join(', ')) + ' is ezt használja)' : '') + '</span>' +
+          (foglalt.length ? '<span class="kc-sw__used" aria-hidden="true"></span>' : '') + '</label>';
+      }).join('') +
+      '<label class="kc-own' + (sajat ? ' is-on' : '') + '"><input type="color" id="kc-own" value="' + cur + '"><span>Egyedi szín</span></label>' +
+      '</div><p class="kc-pick__n" id="kc-note" aria-live="polite">' + esc(szinMegjegyzes(cur, k.id)) + '</p></fieldset>';
+  }
+  function szinMegjegyzes(hex, kid) {
+    var f = kiHasznalja(hex, kid);
+    return f.length ? 'Ezt a színt ' + f.join(' és ') + ' is használja. Válassz másikat, hogy a naptárban meg lehessen különböztetni.' : '';
+  }
+  var szinReq = 0;
+  function szinMent(hex) {
+    var k = koll(bo.kid), kid = bo.kid, req = ++szinReq, pick = $('.kc-pick');
+    if (!pick || pick.getAttribute('data-kid') !== kid) return;
+    hex = String(hex).toLowerCase();
+    if (!HEX_RE.test(hex) || hex === szinOf(k)) return;
+    if (kontraszt(hex, '#ffffff') < 3) {
+      $('#kc-note').textContent = 'Ez a szín túl világos, a naptárban alig látszana. Válassz sötétebbet.';
+      $('#kc-own').value = szinOf(k);
+      return;
+    }
+    pick.setAttribute('aria-busy', 'true'); pick.style.setProperty('--kc', hex);
+    api('/kollegak?kollega=' + encodeURIComponent(kid), { method: 'PATCH', json: { szin: hex } }).then(function (r) {
+      var uj = (r && r.szin) || hex;
+      koll(kid).szin = uj;
+      if (be.t) be.t.kollegak.forEach(function (x) { if (x.id === kid) x.szin = uj; });
+      if (req !== szinReq || bo.kid !== kid) return;
+      renderPeople();
+      var keep = bo.dirty; renderBo(); if (keep) boChanged();
+      toast('Mentve: ' + k.nev + ' új színe a naptárban');
+      var on = $('.kc-pick input:checked') || $('#kc-own'); if (on) on.focus();
+    }).catch(function (e) {
+      if (req !== szinReq) return;
+      toast(e.message, 'error');
+      var after = function () { if (bo.kid === kid) { renderPeople(); var keep = bo.dirty; renderBo(); if (keep) boChanged(); } };
+      if (e.status === 409) loadTorzs(true).then(after, after); else after();
+    });
   }
   function boValid() {
     for (var i = 0; i < bo.sorok.length; i++) {
@@ -686,6 +776,15 @@
     var t = e.target;
     var v = t.closest('#view-foglalasok [data-nezet]');
     if (v) { fg.nezet = v.getAttribute('data-nezet'); location.hash = fgHash(); return; }
+    var pk = t.closest('[data-pkoll]');
+    if (pk) {
+      var pid = pk.getAttribute('data-pkoll');
+      fg.koll = fg.koll === pid ? '' : pid;
+      $('#fg-koll').value = fg.koll;
+      fillFgFilters(); renderFg();
+      var again = $('[data-pkoll="' + pid + '"]'); if (again) again.focus();
+      return;
+    }
     var it = t.closest('#fg-board [data-az]');
     if (it) { openDetail(it.getAttribute('data-az')); return; }
     if (t.closest('#fg-prev')) return fgMozgat(-1);
@@ -775,7 +874,9 @@
   document.addEventListener('change', function (e) {
     var t = e.target;
     if (t.id === 'fg-hely') { fg.hely = t.value; fillFgFilters(); renderFg(); return; }
-    if (t.id === 'fg-koll') { fg.koll = t.value; renderFg(); return; }
+    if (t.id === 'fg-koll') { fg.koll = t.value; fillFgFilters(); renderFg(); return; }
+    if (t.matches('.kc-pick input[name="kc"]')) return szinMent(t.value);
+    if (t.id === 'kc-own') return szinMent(t.value);
     if (t.id === 'fg-date' && t.value) { fg.datum = t.value; location.hash = fgHash(); return; }
     if (t.id === 'n-hely') return newFill('hely');
     if (t.id === 'n-szolg') return newFill('szolg');

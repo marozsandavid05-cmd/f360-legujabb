@@ -48,13 +48,13 @@
         { id: 'gepi-nyirokmasszazs', nev: 'Gépi nyirokmasszázs, nyirokcsizma', perc: 45, ar: 10000, puffer: 10, helyszinek: ['reitter'] }
       ],
       kollegak: [
-        { id: 'kodacsine-labancz-agnes', nev: 'Kodácsiné Labancz Ágnes', szerep: 'gyógytornász, manuálterapeuta', helyszinek: ['mexikoi'], szolgaltatasok: ['gyogytorna'] },
-        { id: 'vas-luca', nev: 'Vas Luca', szerep: 'gyógytornász, perinatális tréner', helyszinek: ['mexikoi'], szolgaltatasok: ['gyogytorna', 'kismama-masszazs'] },
-        { id: 'szegedi-botond', nev: 'Szegedi Botond', szerep: 'gyógymasszőr, nyirokmasszőr, sportmasszőr', helyszinek: ['mexikoi', 'reitter'],
+        { id: 'kodacsine-labancz-agnes', szin: '#4f6d8a', nev: 'Kodácsiné Labancz Ágnes', szerep: 'gyógytornász, manuálterapeuta', helyszinek: ['mexikoi'], szolgaltatasok: ['gyogytorna'] },
+        { id: 'vas-luca', szin: '#a0553c', nev: 'Vas Luca', szerep: 'gyógytornász, perinatális tréner', helyszinek: ['mexikoi'], szolgaltatasok: ['gyogytorna', 'kismama-masszazs'] },
+        { id: 'szegedi-botond', szin: '#5b7d55', nev: 'Szegedi Botond', szerep: 'gyógymasszőr, nyirokmasszőr, sportmasszőr', helyszinek: ['mexikoi', 'reitter'],
           szolgaltatasok: ['gyogymasszazs-50', 'gyogymasszazs-90', 'relaxalo-masszazs', 'nyirokmasszazs-teljes', 'kismama-masszazs', 'sportmasszazs', 'gepi-nyirokmasszazs'] },
-        { id: 'adorjani-anna', nev: 'Adorjáni Anna', szerep: 'gyógytornász, manuálterapeuta', helyszinek: ['reitter'], szolgaltatasok: ['sportrehab-felmeres', 'sportrehab-gyogytorna'] },
-        { id: 'kovacs-sebestyen', nev: 'Kovács Sebestyén', szerep: 'gyógytornász, sportrehabilitáció', helyszinek: ['reitter'], szolgaltatasok: ['sportrehab-felmeres', 'sportrehab-gyogytorna', 'kinvent-pro', 'gepi-nyirokmasszazs'] },
-        { id: 'osvath-bence', nev: 'Osváth Bence', szerep: 'személyi edző, erőnléti edző', helyszinek: ['reitter'], szolgaltatasok: ['kinvent-pro'] }
+        { id: 'adorjani-anna', szin: '#7d5a8e', nev: 'Adorjáni Anna', szerep: 'gyógytornász, manuálterapeuta', helyszinek: ['reitter'], szolgaltatasok: ['sportrehab-felmeres', 'sportrehab-gyogytorna'] },
+        { id: 'kovacs-sebestyen', szin: '#8c6b2a', nev: 'Kovács Sebestyén', szerep: 'gyógytornász, sportrehabilitáció', helyszinek: ['reitter'], szolgaltatasok: ['sportrehab-felmeres', 'sportrehab-gyogytorna', 'kinvent-pro', 'gepi-nyirokmasszazs'] },
+        { id: 'osvath-bence', szin: '#2f6e6e', nev: 'Osváth Bence', szerep: 'személyi edző, erőnléti edző', helyszinek: ['reitter'], szolgaltatasok: ['kinvent-pro'] }
       ],
       szabalyok: { minEloreOra: 2, maxEloreNap: 60, lemondasOra: 24, telefon: '+36 30 503 0578', studioEmail: 'info@f360.hu' }
     };
@@ -78,8 +78,29 @@
   var db = null;
   function save() { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { /* tele */ } }
   function load() {
-    try { var raw = localStorage.getItem(KEY); if (raw) { db = JSON.parse(raw); if (db && db.v === 2) return; } } catch (e) { /* sérült */ }
+    try { var raw = localStorage.getItem(KEY); if (raw) { db = JSON.parse(raw); if (db && db.v === 2) { szinPotol(); return; } } } catch (e) { /* sérült */ }
     seed();
+  }
+  /* ---------------- kollégánkénti szín = a backend szin.js-e ---------------- */
+  var PALETTA = ['#4f6d8a', '#a0553c', '#5b7d55', '#7d5a8e', '#8c6b2a', '#2f6e6e', '#94485e', '#5a5f30', '#3b4580', '#5e4b44'];
+  function szinNormal(v) { if (typeof v !== 'string') return null; var s = v.trim(); return /^#[0-9a-fA-F]{6}$/.test(s) ? s.toLowerCase() : null; }
+  // mint a szinKioszt: a meglévő érvényes szín marad, a hiányzó a legkevésbé használt palettaszínt kapja
+  function szinKioszt(kollegak) {
+    var h = {}; PALETTA.forEach(function (p) { h[p] = 0; });
+    var ki = kollegak.map(function (k) { return Object.assign({}, k, { szin: szinNormal(k.szin) }); });
+    ki.forEach(function (k) { if (k.szin && h[k.szin] != null) h[k.szin]++; });
+    ki.forEach(function (k) {
+      if (k.szin) return;
+      var best = PALETTA[0];
+      PALETTA.forEach(function (p) { if (h[p] < h[best]) best = p; });
+      k.szin = best; h[best]++;
+    });
+    return ki;
+  }
+  // a régi (szín nélküli) mentett mock-adat színt kap, mint a torzsBetolt migrációja
+  function szinPotol() {
+    if (db.torzs.kollegak.every(function (k) { return szinNormal(k.szin); })) return;
+    db.torzs.kollegak = szinKioszt(db.torzs.kollegak); save();
   }
   function T() { return db.torzs; }
   function hetNapja(d) { return F.hetNapja(d) || 7; }
@@ -253,13 +274,13 @@
     var koll = t.kollegak.filter(function (k) { return k.id === r.staff_id; })[0] || { id: r.staff_id, nev: r.staff_id };
     return {
       azonosito: r.id, allapot: r.status, helyszin: { id: hely.id, nev: hely.nev, cim: hely.cim },
-      szolgaltatas: { id: szolg.id, nev: szolg.nev, perc: r.dur_min, ar: r.price }, kollega: { id: koll.id, nev: koll.nev },
+      szolgaltatas: { id: szolg.id, nev: szolg.nev, perc: r.dur_min, ar: r.price }, kollega: koll.szin ? { id: koll.id, nev: koll.nev, szin: koll.szin } : { id: koll.id, nev: koll.nev },
       datum: r.date, kezd: hm(r.start_min), veg: hm(r.start_min + r.dur_min), kezdPerc: r.start_min,
       nev: r.name, email: r.email, telefon: r.phone, megjegyzes: r.note, forras: r.source
     };
   }
   function publikusNezet(f) {
-    return { azonosito: f.azonosito, allapot: f.allapot, helyszin: f.helyszin, szolgaltatas: f.szolgaltatas, kollega: f.kollega, datum: f.datum, kezd: f.kezd, veg: f.veg, nev: f.nev };
+    return { azonosito: f.azonosito, allapot: f.allapot, helyszin: f.helyszin, szolgaltatas: f.szolgaltatas, kollega: { id: f.kollega.id, nev: f.kollega.nev }, datum: f.datum, kezd: f.kezd, veg: f.veg, nev: f.nev };
   }
   function katalogus() {
     var t = T();
@@ -425,7 +446,9 @@
     });
     egyediId(d.kollegak, 'kolléga');
     var kollegak = d.kollegak.map(function (k) {
-      return { id: k.id, nev: str(k.nev, 'név', 100), szerep: str(k.szerep, 'szerep', 200, false),
+      var szin = null;
+      if (k.szin != null && k.szin !== '') { szin = szinNormal(k.szin); if (!szin) throw hiba('Hibás szín (' + k.id + '): #rrggbb alakú hex kell, például #4f6d8a.'); }
+      return { id: k.id, szin: szin, nev: str(k.nev, 'név', 100), szerep: str(k.szerep, 'szerep', 200, false),
         helyszinek: idLista(k.helyszinek, 'kolléga helyszínei', hIds), szolgaltatasok: idLista(k.szolgaltatasok, 'kolléga szolgáltatásai', sIds) };
     });
     var sz = d.szabalyok || {};
@@ -435,7 +458,7 @@
   }
   function kiBeosztas(b) { return { nap: b.nap, helyszin: b.helyszin, kezd: hm(b.kezd), veg: hm(b.veg) }; }
   function beosztasLekerd(kid) {
-    if (!kid) return { kollegak: T().kollegak.map(function (k) { return { id: k.id, nev: k.nev, sorok: db.beosztas.filter(function (b) { return b.kollega === k.id; }).map(kiBeosztas) }; }) };
+    if (!kid) return { kollegak: T().kollegak.map(function (k) { return { id: k.id, nev: k.nev, szin: k.szin, sorok: db.beosztas.filter(function (b) { return b.kollega === k.id; }).map(kiBeosztas) }; }) };
     if (!T().kollegak.some(function (k) { return k.id === kid; })) throw hiba('Ismeretlen szakember.');
     return { kollega: kid, sorok: db.beosztas.filter(function (b) { return b.kollega === kid; }).sort(function (a, b) { return a.nap - b.nap || a.kezd - b.kezd; }).map(kiBeosztas) };
   }
@@ -582,7 +605,22 @@
     var ut = reszek[0];
     if (ut === 'beallitasok') {
       if (method === 'GET') return json(200, T());
-      if (method === 'PUT') { db.torzs = torzsEllenoriz(body); save(); return json(200, db.torzs); }
+      if (method === 'PUT') {
+        var be = torzsEllenoriz(body), regi = {};
+        T().kollegak.forEach(function (k) { regi[k.id] = k.szin; });
+        be.kollegak = szinKioszt(be.kollegak.map(function (k) { return k.szin ? k : Object.assign({}, k, { szin: regi[k.id] }); }));
+        db.torzs = be; save(); return json(200, db.torzs);
+      }
+    }
+    if (ut === 'kollegak' && method === 'PATCH') {
+      var kk = q.get('kollega');
+      if (!kk) throw hiba('Hiányzó paraméter: kollega.');
+      if (!body || typeof body !== 'object' || Array.isArray(body)) throw hiba('Hibás kérés.');
+      var uj = szinNormal(body.szin);
+      if (!uj) throw hiba('Hibás szín: #rrggbb alakú hex kell, például #4f6d8a.');
+      if (!T().kollegak.some(function (k) { return k.id === kk; })) throw HttpErr(404, 'Ismeretlen szakember.');
+      db.torzs.kollegak = szinKioszt(T().kollegak.map(function (k) { return k.id === kk ? Object.assign({}, k, { szin: uj }) : k; }));
+      save(); return json(200, { id: kk, szin: uj });
     }
     if (ut === 'beosztas') {
       if (method === 'GET') return json(200, beosztasLekerd(q.get('kollega')));

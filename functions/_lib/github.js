@@ -11,7 +11,9 @@ const TIMEOUT_MS = 15000;
 
 export function githubFromEnv(env) {
   if (!env.GITHUB_TOKEN) {
-    throw new HttpError(500, 'A szerver nincs beállítva (hiányzik a GitHub-kapcsolat). Szólj Davidnek.');
+    // Szándékos az előnézeti környezetben: onnan nem szabad a repóba írni. A felület a kódból
+    // tudja, hogy itt nem hiba van, hanem nyugodt tájékoztatást mutat (admin.js blogNincs).
+    throw new HttpError(503, 'A blog ezen a próbaoldalon nem szerkeszthető.', { kod: 'blog_nincs_beallitva' });
   }
   const repo = env.GITHUB_REPO || DEFAULT_REPO;
   if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new HttpError(500, 'Hibás GITHUB_REPO beállítás.');
@@ -63,7 +65,7 @@ export class GitHub {
   fail(r, what) {
     const msg = r.data && r.data.message ? String(r.data.message).slice(0, 200) : '';
     console.error(`[github] ${what}: HTTP ${r.status} ${msg}`);
-    if (r.status === 401) throw new HttpError(502, 'A GitHub-kapcsolat kulcsa érvénytelen vagy lejárt. Szólj Davidnek.');
+    if (r.status === 401) throw new HttpError(502, 'A blog tárhelyének kulcsa érvénytelen vagy lejárt, ezért most nem menthető. Jelezd a weboldal karbantartójának.');
     if (r.status === 403 || r.status === 429) {
       throw new HttpError(503, 'A GitHub átmenetileg korlátozza a kéréseket, vagy nincs jogosultság. Próbáld újra később.');
     }
@@ -117,7 +119,7 @@ export class GitHub {
       this.fail(r, `listDir ${dir}`);
     }
     const repo = r.data.data && r.data.data.repository;
-    if (!repo) throw new HttpError(502, 'A tárhely (GitHub) nem található. Szólj Davidnek.');
+    if (!repo) throw new HttpError(502, 'A blog tárhelye nem található. Jelezd a weboldal karbantartójának.');
     if (!repo.object) return [];
     return repo.object.entries
       .filter((e) => e.type === 'blob')

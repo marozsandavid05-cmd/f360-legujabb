@@ -110,6 +110,7 @@
           }
           var err = new Error(msg);
           err.status = res.status;
+          err.kod = (data && data.kod) || '';
           throw err;
         }
         if (data === null && txt && !opts.raw) {
@@ -361,7 +362,7 @@
       saving: 'Mentés folyamatban',
       building: 'Mentve, élesítés folyamatban',
       live: 'Élesben',
-      failed: 'Mentve, de az élesítés nem sikerült. Szólj Davidnek.',
+      failed: 'Mentve, de az élesítés nem sikerült. Jelezd a weboldal karbantartójának.',
       unknown: 'Mentve. Pár perc múlva nézd meg az oldalon.',
       error: 'Nem sikerült menteni'
     }[s] || '';
@@ -457,14 +458,29 @@
     var ul = $('#posts');
     if (!state.posts.length) ul.innerHTML = '<li class="row-skel"></li><li class="row-skel"></li><li class="row-skel"></li>';
     else renderList();
+    if (state.blogOff) { blogNincs(); return Promise.resolve(); }
     return api('/posts').then(function (list) {
       state.posts = (list || []).slice().sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); });
       renderList();
     }).catch(function (err) {
+      if (err.kod === 'blog_nincs_beallitva') { state.blogOff = true; blogNincs(); return; }
       ul.innerHTML = '';
       $('#posts-empty').hidden = false;
       $('#posts-empty').textContent = err.message;
     });
+  }
+  // A blog ezen a környezeten nincs bekötve (például a foglaló próbaoldalán nincs GitHub-kapcsolat,
+  // szándékosan): nem hiba, hanem nyugodt tájékoztatás, a foglaló fülei ettől függetlenül működnek.
+  var BLOG_ELES = 'https://f360-legujabb.pages.dev/admin/';
+  function blogNincs() {
+    $('#posts').innerHTML = '';
+    $('#filters').innerHTML = '';
+    $('#list-count').textContent = '';
+    $('#list-new').hidden = true;
+    var e = $('#posts-empty');
+    e.hidden = false;
+    e.classList.add('empty--info');
+    e.innerHTML = 'A blog ezen a próbaoldalon nem szerkeszthető. Az éles blog-admin: <a href="' + BLOG_ELES + '">' + BLOG_ELES.replace(/^https:\/\//, '') + '</a>';
   }
   function renderFilters() {
     var counts = { all: state.posts.length };
@@ -480,6 +496,8 @@
     var list = state.filter === 'all' ? state.posts : state.posts.filter(function (p) { return p.category === state.filter; });
     $('#list-count').textContent = state.posts.length + ' bejegyzés a blogon';
     $('#posts-empty').hidden = list.length > 0;
+    $('#posts-empty').classList.remove('empty--info');
+    $('#list-new').hidden = false;
     $('#posts-empty').textContent = 'Még nincs bejegyzés ebben a témakörben.';
     $('#posts').innerHTML = list.map(function (p) {
       var img = p.cover
@@ -553,6 +571,7 @@
   var fTitle = $('#f-title');
 
   function openEditor(slug) {
+    if (state.blogOff) { show('view-list'); blogNincs(); return Promise.resolve(); }
     show('view-edit');
     measureTop();
     state.current = { slug: slug, sha: null };
@@ -577,6 +596,7 @@
       offerDraft();
     }).catch(function (err) {
       setBusy(false);
+      if (err.kod === 'blog_nincs_beallitva') { state.dirty = false; state.blogOff = true; show('view-list'); blogNincs(); return; }
       show('view-msg');
       $('#msg').innerHTML = esc(err.message) + '<br><br><a class="btn btn--ghost" href="#/">Vissza a listához</a>';
     });

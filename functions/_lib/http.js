@@ -25,7 +25,7 @@ export function errorResponse(err) {
   }
   // Váratlan hiba: a részlet csak a logba kerül (titok nélkül), a kliens általános üzenetet kap
   console.error('[api] váratlan hiba:', err && err.stack ? err.stack : String(err));
-  return json({ error: 'Váratlan hiba történt a szerveren. Próbáld újra, és ha ismétlődik, szólj Davidnek.' }, 500);
+  return json({ error: 'Váratlan hiba történt a szerveren. Próbáld újra, és ha ismétlődik, jelezd a weboldal karbantartójának.' }, 500);
 }
 
 // Metódus szerinti elosztó: ismeretlen metódusra 405 JSON (nem esik át statikus oldalra)

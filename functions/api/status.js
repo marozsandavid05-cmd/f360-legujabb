@@ -18,7 +18,7 @@ export function deployState(dep) {
 export const onRequest = methods({
   GET: async ({ env }) => {
     if (!env.CF_API_TOKEN || !env.CF_ACCOUNT_ID) {
-      throw new HttpError(500, 'Az élesítés állapota nincs beállítva a szerveren. Szólj Davidnek.');
+      throw new HttpError(503, 'Az élesítés állapota ezen az oldalon nem követhető.', { kod: 'statusz_nincs_beallitva' });
     }
     const project = env.CF_PAGES_PROJECT || DEFAULT_PROJECT;
     const url = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(env.CF_ACCOUNT_ID)}`

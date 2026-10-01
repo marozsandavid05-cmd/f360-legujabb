@@ -36,7 +36,7 @@ export async function onRequest(context) {
     } else {
       if (!env.ACCESS_TEAM_DOMAIN || !env.ACCESS_AUD) {
         console.error('[auth] ACCESS_TEAM_DOMAIN / ACCESS_AUD nincs beállítva');
-        return json({ error: 'A belépés nincs beállítva a szerveren. Szólj Davidnek.' }, 500);
+        return json({ error: 'A belépés nincs beállítva a szerveren. Jelezd a weboldal karbantartójának.' }, 500);
       }
       const token = request.headers.get('Cf-Access-Jwt-Assertion');
       if (!token) return unauthorized();

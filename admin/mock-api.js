@@ -17,6 +17,14 @@
   var posts = {};           // slug → { title, date, author, category, cover, excerpt, body, sha }
   var deploy = { status: 'success', time: new Date(Date.now() - 3600e3).toISOString() };
   var buildTimer = null;
+  // ?blog=0: a blog-kapcsolat nincs beállítva (mint az előnézeti környezet GITHUB_TOKEN nélkül);
+  // a sessionStorage megtartja a hash-váltások és újratöltések között, ?blog=1 visszakapcsolja
+  var NOBLOG = 'f360-mock-blog-off';
+  try {
+    if (/[?&]blog=0(&|$)/.test(location.search)) sessionStorage.setItem(NOBLOG, '1');
+    if (/[?&]blog=1(&|$)/.test(location.search)) sessionStorage.removeItem(NOBLOG);
+  } catch (e) { /* nincs tárhely */ }
+  function blogOff() { try { return sessionStorage.getItem(NOBLOG) === '1'; } catch (e) { return false; } }
 
   function sha(s) {
     var h = 2166136261 >>> 0;
@@ -126,7 +134,12 @@
     if (init.body && typeof init.body === 'string') { try { body = JSON.parse(init.body); } catch (e) { body = null; } }
 
     var res;
-    if (path === '/me' && method === 'GET') {
+    if (blogOff() && /^\/(posts|upload|status)(\/|$)/.test(path)) {
+      // pontosan, amit a githubFromEnv és a status.js ad beállítás nélkül
+      res = path === '/status'
+        ? json(503, { error: 'Az élesítés állapota ezen az oldalon nem követhető.', kod: 'statusz_nincs_beallitva' })
+        : json(503, { error: 'A blog ezen a próbaoldalon nem szerkeszthető.', kod: 'blog_nincs_beallitva' });
+    } else if (path === '/me' && method === 'GET') {
       res = json(200, { email: 'teszt@f360.hu' });
     } else if (path === '/status' && method === 'GET') {
       res = json(200, deploy);

@@ -3,6 +3,8 @@
    Ugyanaz a nyelv, mint az admin.css: csak az arculati színek
    (#303030 #EAEAEA #BFA18F #CCD6D9 #E4DBD2 #FFFFFF #000000, rgba ezekből).
    Mexikói út = Cocoa jel, Reitter = Sky Blue jel (mint a honlapon).
+   Kivétel: a kollégánkénti szín (Caesar szin.js PALETTA, --kc/--kct/--kcl a JS-ből)
+   csak a foglalás-blokkon, a jelmagyarázatban és a színválasztóban jelenik meg.
    Nem informatikus használja: nagy célfelületek (min. 44 px), magyar feliratok.
    ===================================================================== */
 
@@ -75,9 +77,8 @@ body[data-view="view-edit"] .tabs{display:none}
 .legend li{display:inline-flex;align-items:center;gap:.45rem}
 .legend__h{font-weight:600}
 .lg{width:18px;height:12px;border-radius:3px;flex:none}
-.lg--mex{background:var(--paper);box-shadow:inset 3px 0 0 var(--cocoa),0 0 0 1px rgba(48,48,48,.25)}
-.lg--reit{background:#CCD6D9;box-shadow:inset 3px 0 0 var(--ink),0 0 0 1px rgba(48,48,48,.25)}
-.lg--work{background:rgba(191,161,143,.22)}
+.lg--work{background:rgba(191,161,143,.16);box-shadow:inset 3px 0 0 var(--cocoa)}
+.lg--work.is-reit{background:rgba(204,214,217,.5);box-shadow:inset 3px 0 0 #CCD6D9,0 0 0 1px rgba(48,48,48,.12)}
 .lg--off{background:repeating-linear-gradient(135deg,rgba(48,48,48,.25) 0 3px,transparent 3px 6px);box-shadow:0 0 0 1px rgba(48,48,48,.2)}
 .lg--cx{box-shadow:inset 0 0 0 1px rgba(48,48,48,.45)}
 .day{
@@ -100,20 +101,22 @@ body[data-view="view-edit"] .tabs{display:none}
 .day__slot{position:relative;z-index:2;padding:1px 4px;min-height:0;display:flex}
 .day__now{grid-column:1 / -1;position:relative;z-index:4;pointer-events:none;height:0;border-top:2px solid var(--ink)}
 .day__now span{position:sticky;left:0;display:inline-block;transform:translateY(-55%);background:var(--ink);color:var(--paper);font-size:.6875rem;font-weight:700;padding:.1rem .35rem;border-radius:4px;font-variant-numeric:tabular-nums}
+/* foglalás-blokk: a kolléga színe (--kc tömör sáv, --kct 16%-os tónus kitöltés, --kcl 40%-os keret);
+   a változókat a foglalo.js kcVars() adja, az arculati szín csak a keret körül marad */
 .bk-item{
+  --kc:#303030;--kct:#EAEAEA;--kcl:rgba(48,48,48,.4);
   flex:1;min-width:0;display:grid;align-content:start;gap:.05rem;text-align:left;
-  padding:.35rem .6rem;border-radius:7px;background:var(--paper);
-  box-shadow:inset 3px 0 0 var(--cocoa),0 0 0 1px rgba(48,48,48,.14),0 6px 14px -10px rgba(0,0,0,.35);
+  padding:.35rem .6rem .35rem .75rem;border-radius:7px;background:var(--kct);
+  box-shadow:inset 5px 0 0 var(--kc),inset 0 0 0 1px var(--kcl),0 6px 14px -10px rgba(0,0,0,.35);
   overflow:hidden;transition:box-shadow .15s,transform .12s;
 }
-.bk-item.is-reit{box-shadow:inset 3px 0 0 var(--ink),0 0 0 1px rgba(48,48,48,.14),0 6px 14px -10px rgba(0,0,0,.35);background:#CCD6D9}
-.bk-item:hover{box-shadow:inset 3px 0 0 var(--ink),0 0 0 1.5px var(--ink),0 10px 20px -12px rgba(0,0,0,.4)}
+.bk-item:hover{box-shadow:inset 5px 0 0 var(--kc),inset 0 0 0 1.5px var(--ink),0 10px 20px -12px rgba(0,0,0,.4)}
 .bk-item:active{transform:scale(.99)}
 .bk-item__t{font-size:.8125rem;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2}
 .bk-item__t span{font-weight:500}
 .bk-item__n{font-size:.875rem;font-weight:600;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bk-item__s{font-size:.75rem;line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-.bk-item.is-cx{background:transparent;box-shadow:inset 0 0 0 1px rgba(48,48,48,.3);opacity:.8}
+.bk-item.is-cx{background:var(--paper);box-shadow:inset 5px 0 0 var(--kcl),inset 0 0 0 1px rgba(48,48,48,.3);opacity:.8}
 .bk-item.is-cx .bk-item__n,.bk-item.is-cx .bk-item__t{text-decoration:line-through}
 .bk-item--row{display:grid;grid-template-columns:6.5rem minmax(0,1fr);grid-template-rows:auto auto;column-gap:.75rem;padding:.7rem .9rem;min-height:56px;width:100%}
 .bk-item--row .bk-item__t{grid-row:1 / span 2;align-self:center;font-size:.95rem}
@@ -135,14 +138,57 @@ body[data-view="view-edit"] .tabs{display:none}
 .week__h:hover{background:var(--rice)}
 .week__off{margin:.5rem .5rem 0;font-size:.75rem;font-weight:600;padding:.35rem .5rem;border-radius:6px;background:repeating-linear-gradient(135deg,rgba(48,48,48,.07) 0 6px,transparent 6px 12px)}
 .week__list{display:grid;gap:.3rem;padding:.5rem}
-.wk-item{display:grid;grid-template-columns:auto minmax(0,1fr);gap:0 .45rem;text-align:left;padding:.4rem .5rem;border-radius:7px;background:var(--base);box-shadow:inset 3px 0 0 var(--cocoa);min-height:44px;transition:box-shadow .15s}
-.wk-item.is-reit{background:#CCD6D9;box-shadow:inset 3px 0 0 var(--ink)}
+.wk-item{--kc:#303030;--kct:#EAEAEA;--kcl:rgba(48,48,48,.4);display:grid;grid-template-columns:auto minmax(0,1fr);gap:0 .45rem;text-align:left;padding:.4rem .5rem .4rem .7rem;border-radius:7px;background:var(--kct);box-shadow:inset 5px 0 0 var(--kc),inset 0 0 0 1px var(--kcl);min-height:44px;transition:box-shadow .15s}
 .wk-item b{font-size:.8125rem;font-variant-numeric:tabular-nums}
 .wk-item span{font-size:.8125rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .wk-item small{grid-column:1 / -1;font-size:.6875rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.wk-item:hover{box-shadow:inset 3px 0 0 var(--ink),0 0 0 1.5px var(--ink)}
-.wk-item.is-cx{background:transparent;box-shadow:inset 0 0 0 1px rgba(48,48,48,.3)}
-.wk-item.is-cx span{text-decoration:line-through}
+.wk-item:hover{box-shadow:inset 5px 0 0 var(--kc),inset 0 0 0 1.5px var(--ink)}
+.wk-item.is-cx{background:var(--paper);box-shadow:inset 5px 0 0 var(--kcl),inset 0 0 0 1px rgba(48,48,48,.3);opacity:.8}
+.wk-item.is-cx b,.wk-item.is-cx span{text-decoration:line-through}
+
+/* jelmagyarázat: kié az időpont (kattintásra szűr a szakemberre) */
+.pl{display:flex;flex-wrap:wrap;align-items:center;gap:.4rem .9rem;margin:0 0 .9rem}
+.pl:empty{display:none}
+.pl__h{font-size:.8125rem;font-weight:600}
+.pl__list{list-style:none;display:flex;flex-wrap:wrap;gap:.35rem}
+.pl__b{
+  display:inline-flex;align-items:center;gap:.5rem;min-height:40px;padding:.3rem .85rem .3rem .6rem;border-radius:999px;
+  background:var(--paper);font-size:.875rem;font-weight:500;box-shadow:inset 0 0 0 1px var(--rice);
+  transition:box-shadow .15s,opacity .15s,background-color .15s;
+}
+.pl__dot{flex:none;width:14px;height:14px;border-radius:50%;background:var(--kc);box-shadow:0 0 0 2px var(--paper),0 0 0 3px var(--kcl)}
+.pl__b:hover{box-shadow:inset 0 0 0 1.5px var(--ink)}
+.pl__b[aria-pressed="true"]{background:var(--kct);font-weight:700;box-shadow:inset 0 0 0 2px var(--kc)}
+.pl.is-filtered .pl__b[aria-pressed="false"]{opacity:.6}
+.pl.is-filtered .pl__b[aria-pressed="false"]:hover{opacity:1}
+
+/* színválasztó a beosztásban */
+.kc-pick{border:0;margin:0 0 1rem;padding:.9rem 1rem;border-radius:var(--r);background:var(--base);min-width:0}
+.kc-pick legend{float:left;width:100%;font-size:.75rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;margin-bottom:.15rem}
+.kc-pick__d{clear:both;font-size:.875rem;margin-bottom:.7rem}
+.kc-pick__row{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem}
+.kc-pick[aria-busy="true"]{opacity:.7;pointer-events:none}
+.kc-sw{position:relative;cursor:pointer;display:grid;place-items:center;width:44px;height:44px}
+.kc-sw input{position:absolute;opacity:0;width:1px;height:1px}
+.kc-sw__c{width:34px;height:34px;border-radius:50%;background:var(--kc);transition:box-shadow .15s,transform .12s}
+.kc-sw:hover .kc-sw__c{transform:scale(1.06)}
+.kc-sw input:checked + .kc-sw__c{box-shadow:0 0 0 3px var(--base),0 0 0 5px var(--ink)}
+.kc-sw input:focus-visible + .kc-sw__c{outline:2px solid var(--ink);outline-offset:5px}
+.kc-sw__used{position:absolute;right:3px;bottom:3px;width:11px;height:11px;border-radius:50%;background:var(--paper);box-shadow:inset 0 0 0 2px var(--ink)}
+.kc-own{display:inline-flex;align-items:center;gap:.5rem;min-height:44px;padding:.2rem .85rem .2rem .3rem;border-radius:999px;background:var(--paper);box-shadow:inset 0 0 0 1px rgba(48,48,48,.28);font-size:.875rem;font-weight:500;cursor:pointer;margin-left:.6rem}
+.kc-own.is-on{box-shadow:inset 0 0 0 2px var(--ink);font-weight:700}
+.kc-own:focus-within{outline:2px solid var(--ink);outline-offset:2px}
+.kc-own input{width:36px;height:36px;padding:0;border:0;border-radius:50%;background:none;cursor:pointer;overflow:hidden}
+.kc-own input::-webkit-color-swatch-wrapper{padding:0}
+.kc-own input::-webkit-color-swatch{border:0;border-radius:50%}
+.kc-own input::-moz-color-swatch{border:0;border-radius:50%}
+.kc-pick__n{font-size:.8125rem;font-weight:600;margin-top:.6rem;display:flex;gap:.45rem;align-items:flex-start}
+.kc-pick__n::before{content:'!';flex:none;display:grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--ink);color:var(--paper);font-size:.7rem;font-weight:700;margin-top:.05rem}
+.kc-pick__n:empty{display:none}
+
+/* blog nincs bekötve ezen a környezeten: nyugodt tájékoztatás, nem hiba */
+.empty--info{background:var(--paper);border-radius:var(--r);padding:1.25rem 1.35rem;font-size:.9375rem;max-width:62ch}
+.empty--info a{text-decoration:underline;text-decoration-color:var(--cocoa);text-underline-offset:3px;font-weight:600;overflow-wrap:anywhere}
 
 /* kézi felvétel: időpont-választó */
 .slotpick{border:0;padding:0;margin:.9rem 0}
