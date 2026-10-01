@@ -432,6 +432,7 @@
   }
 
   /* ---------- 4. nap + időpont ---------- */
+  var kesz = {}; // a már megérkezett hetek (cacheKey → napok), hogy a visszalapozás azonnali legyen
   function cacheKey(tol) { return [mod ? 'm' : '', st.h, st.sz, st.k || 'barki', tol].join('|'); }
   function fetchWeek(tol) {
     var key = cacheKey(tol);
@@ -442,7 +443,7 @@
         ? '/szabad?t=' + encodeURIComponent(mod.tok) + '&kollega=' + encodeURIComponent(st.k || 'barki') + '&tol=' + tol + '&ig=' + ig
         : '/szabad?helyszin=' + encodeURIComponent(st.h) + '&szolgaltatas=' + encodeURIComponent(st.sz) +
           '&kollega=' + encodeURIComponent(st.k || 'barki') + '&tol=' + tol + '&ig=' + ig;
-      cache[key] = api(path).then(function (r) { return (r && r.napok) || {}; })
+      cache[key] = api(path).then(function (r) { var n = (r && r.napok) || {}; kesz[key] = n; return n; })
         .catch(function (e) { delete cache[key]; throw e; });
     }
     return cache[key];
@@ -471,9 +472,10 @@
     $('#wk-next').disabled = st.het >= L.max;
     var days = $('#wk-days');
     var req = ++weekReq;
-    if (!days.children.length || dir) days.innerHTML = dayButtons(st.het, null);
+    var megvan = kesz[cacheKey(st.het)];
+    if (!days.children.length || dir) days.innerHTML = dayButtons(st.het, megvan || null);
     if (dir && !reduce) { days.classList.remove('is-slide', 'is-slide-back'); void days.offsetWidth; days.classList.add(dir > 0 ? 'is-slide' : 'is-slide-back'); }
-    setSlotsLoading(true);
+    if (!megvan) setSlotsLoading(true);
     fetchWeek(st.het).then(function (napok) {
       if (req !== weekReq) return;
       // ha még nincs nap kiválasztva ezen a héten: az első nap, ahol van szabad időpont
@@ -521,12 +523,48 @@
     }
     return out;
   }
+  // Töltés alatt a doboz nem eshet össze (különben az oldal ugrál): a magasság rögzül, a meglévő időpontok
+  // halványítva maradnak; a váz csak akkor jelenik meg, ha 150 ms alatt sem jött válasz és a doboz üres.
+  var vazIdozito = 0;
   function setSlotsLoading(on) {
     var s = $('#slots');
     s.setAttribute('aria-busy', on ? 'true' : 'false');
-    if (on) s.innerHTML = '<div class="slots__grp"><p class="slots__h"><span class="sr-only">Szabad időpontok betöltése</span>&nbsp;</p><div class="slots__grid">' + new Array(9).join('<span class="skel"></span>') + '</div></div>';
+    clearTimeout(vazIdozito);
+    if (on) {
+      s.style.minHeight = s.getBoundingClientRect().height + 'px';
+      s.classList.add('is-load');
+      vazIdozito = setTimeout(function () {
+        if (s.getAttribute('aria-busy') !== 'true' || s.querySelector('.slot')) return;
+        s.innerHTML = '<div class="slots__grp"><p class="slots__h"><span class="sr-only">Szabad időpontok betöltése</span>&nbsp;</p><div class="slots__grid">' + new Array(9).join('<span class="skel"></span>') + '</div></div>';
+      }, 150);
+    } else {
+      s.classList.remove('is-load');
+    }
+  }
+  // Új tartalom után a rögzített magasság fokozatosan enged az új magasságra (mozgás-csökkentésnél azonnal).
+  var engedIdozito = 0;
+  function slotsMagassagEngedes(regi) {
+    var s = $('#slots');
+    s.style.minHeight = '';
+    if (!regi) return;
+    if (reduce) return;
+    var uj = s.getBoundingClientRect().height;
+    if (Math.abs(uj - regi) < 2) return;
+    // a régi magasságról az újra úszik (nő vagy csökken), így az alatta lévő gombok nem ugranak
+    clearTimeout(engedIdozito);
+    s.style.height = regi + 'px';
+    s.style.overflow = 'hidden';
+    void s.offsetHeight;
+    s.classList.add('is-meret');
+    s.style.height = uj + 'px';
+    engedIdozito = setTimeout(function () { s.classList.remove('is-meret'); s.style.height = ''; s.style.overflow = ''; }, 280);
   }
   function renderSlots(list, napok) {
+    var sb = $('#slots');
+    var regi = sb.style.minHeight ? parseFloat(sb.style.minHeight) : sb.getBoundingClientRect().height;
+    renderSlotsBelso(list, napok); slotsMagassagEngedes(regi);
+  }
+  function renderSlotsBelso(list, napok) {
     setSlotsLoading(false);
     var box = $('#slots');
     if (!st.d) {
