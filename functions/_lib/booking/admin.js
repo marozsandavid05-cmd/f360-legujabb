@@ -3,7 +3,7 @@ import { HttpError } from '../http.js';
 import { budapestMost, ervenyesDatum, hhmmToPerc, percToHHMM } from './ido.js';
 import { torzsBetolt } from './schema.js';
 import { szinKioszt, szinNormal } from './szin.js';
-import { KOLLEGA_UJ_MEZOK, SZABALY_UJ_ALAP, aktivSorrend, kinalasGlobalis, kinalasSzolgaltatas, kollegaAlap, kollegaUjMezok, szabalyUjMezok, szukitoFeltetel, torzsAlap } from './torzs-alap.js';
+import { KOLLEGA_UJ_MEZOK, SZABALY_UJ_ALAP, aktivSorrend, kinalasGlobalis, kinalasSzolgaltatas, kollegaAlap, kollegaUjMezok, naptarAzonosito, szabalyUjMezok, szukitoFeltetel, torzsAlap } from './torzs-alap.js';
 import { beosztasBetolt, kivetelekBetolt } from './foglalas.js';
 
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,59}$/;
@@ -364,6 +364,17 @@ export async function szolgaltatasKinalasMent(db, id, d) {
   await torzsFeltetelesMent(db, ertek, { ...torzs, szolgaltatasok });
   const s = szolgaltatasok.find((x) => x.id === id);
   return { ...s, kinalas: s.kinalas ?? null };
+}
+
+/** PATCH /api/foglalo/naptar { studioNaptarId }: a közös stúdió Google Naptár azonosítója ('' = nincs). */
+export async function studioNaptarMent(db, d) {
+  if (!d || typeof d !== 'object' || Array.isArray(d)) throw hiba('Hibás kérés.');
+  const kulcsok = Object.keys(d);
+  if (kulcsok.length !== 1 || kulcsok[0] !== 'studioNaptarId') throw hiba('Itt csak a studioNaptarId mező módosítható.');
+  const studioNaptarId = naptarAzonosito(d.studioNaptarId, 'stúdiónaptár-azonosító');
+  const { ertek, torzs } = await torzsNyersen(db);
+  await torzsFeltetelesMent(db, ertek, { ...torzs, szabalyok: { ...torzs.szabalyok, studioNaptarId } });
+  return { studioNaptarId };
 }
 
 // ---------------------------------------------------------------- beosztás

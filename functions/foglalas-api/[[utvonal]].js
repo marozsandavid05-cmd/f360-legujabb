@@ -31,6 +31,7 @@ import {
   oraModosit, oraTokenFoglalas,
 } from '../_lib/booking/orak.js';
 import { hatterKuldes, outboxKuld } from '../_lib/booking/mailer.js';
+import { naptarHatter, naptarSzinkron } from '../_lib/booking/naptar.js';
 
 const MAX_BODY = 8 * 1024;
 
@@ -79,7 +80,15 @@ const UTAK = {
       const oraEmlek = await oraEmlekeztetoFuttat(env, db, { origin });
       // ugyanez a futás küldi el (ha van szolgáltató) az új és a korábban sikertelen leveleket
       const levelek = await outboxKuld(env, db);
-      return json({ mod: levelek.mod, ...emlek, csoportos: { generalva: orak.letrehozva, emlekeztetve: oraEmlek.emlekeztetve }, levelek });
+      // és próbálja újra a Google Naptárba el nem jutott tételeket (kulcs nélkül no-op)
+      let naptar;
+      try {
+        naptar = await naptarSzinkron(env, db, { sorbol: true, csakRegi: true, origin });
+      } catch (e) {
+        console.error('[naptar] cron-szinkron hiba:', e && e.message);
+        naptar = { hiba: 'A naptár-szinkron most nem futott le, a következő futás újrapróbálja.' };
+      }
+      return json({ mod: levelek.mod, ...emlek, csoportos: { generalva: orak.letrehozva, emlekeztetve: oraEmlek.emlekeztetve }, levelek, naptar });
     },
   },
 
@@ -90,14 +99,16 @@ const UTAK = {
   orak: { GET: async ({ env, url }) => json(await oraLista(dbVagy503(env), url.searchParams)) },
 
   'ora-foglalas': {
-    POST: async ({ env, request, url }) => {
+    POST: async ({ env, request, url, naptar }) => {
       const db = dbVagy503(env);
       sajatOrigin(request);
       const d = await jsonBody(request);
       if (d.web != null && String(d.web).trim() !== '') return json({ ok: true }); // honeypot, mint a foglalásnál
       await ipKorlat(env, db, request);
       const be = { ...ugyfelBemenet(d), ora: oraBemenet(d) };
-      return json(await oraFoglal(env, db, be, { origin: url.origin }), 201);
+      const valasz = await oraFoglal(env, db, be, { origin: url.origin });
+      naptar.push(be.ora);
+      return json(valasz, 201);
     },
   },
 
@@ -108,7 +119,7 @@ const UTAK = {
       const db = dbVagy503(env);
       return json(csoportosToken(t) ? await oraFoglalasTokennel(env, db, t, url.origin) : await foglalasTokennel(env, db, t, url.origin));
     },
-    POST: async ({ env, request, url }) => {
+    POST: async ({ env, request, url, naptar }) => {
       const db = dbVagy503(env);
       sajatOrigin(request);
       const d = await jsonBody(request);
@@ -117,7 +128,9 @@ const UTAK = {
       if (d.web != null && String(d.web).trim() !== '') return json({ ok: true });
       await ipKorlat(env, db, request);
       const be = foglalasBemenet(d);
-      return json(await foglal(env, db, be, { origin: url.origin }), 201);
+      const valasz = await foglal(env, db, be, { origin: url.origin });
+      naptar.push(valasz.azonosito);
+      return json(valasz, 201);
     },
   },
 
@@ -126,21 +139,28 @@ const UTAK = {
       const t = url.searchParams.get('t');
       return json(csoportosToken(t) ? await oraLemondasInfo(env, dbVagy503(env), t) : await lemondasInfo(env, dbVagy503(env), t));
     },
-    POST: async ({ env, request }) => {
+    POST: async ({ env, request, naptar }) => {
       const db = dbVagy503(env);
       sajatOrigin(request);
       const d = await jsonBody(request);
       // ugyanaz a napi IP-korlát, mint a foglalásnál és a módosításnál: a token-találgatást is fékezi
       await ipKorlat(env, db, request);
       const t = typeof d.t === 'string' ? d.t : '';
-      if (csoportosToken(t)) return json(await oraLemond(env, db, await oraTokenFoglalas(env, db, t)));
+      if (csoportosToken(t)) {
+        const cs = await oraTokenFoglalas(env, db, t);
+        const valasz = await oraLemond(env, db, cs);
+        naptar.push(cs.session_id);
+        return json(valasz);
+      }
       const row = await tokenFoglalas(env, db, t);
-      return json(await lemond(env, db, row));
+      const valasz = await lemond(env, db, row);
+      naptar.push(row.id);
+      return json(valasz);
     },
   },
 
   modositas: {
-    POST: async ({ env, request, url }) => {
+    POST: async ({ env, request, url, naptar }) => {
       const db = dbVagy503(env);
       sajatOrigin(request);
       const d = await jsonBody(request);
@@ -151,11 +171,16 @@ const UTAK = {
       if (csoportosToken(t)) {
         if ('datum' in d || 'kezd' in d || 'kollega' in d) throw new HttpError(400, 'Csoportos jelentkezésnél másik órát kell választani (ora).');
         const row = await oraTokenFoglalas(env, db, t);
-        return json(await oraModosit(env, db, row, oraBemenet(d), { origin: url.origin }));
+        const ujOra = oraBemenet(d);
+        const valasz = await oraModosit(env, db, row, ujOra, { origin: url.origin });
+        naptar.push(row.session_id, ujOra);
+        return json(valasz);
       }
       if ('ora' in d) throw new HttpError(400, 'Egyéni foglalásnál az időpontot kell megadni (datum, kezd).');
       const row = await tokenFoglalas(env, db, t);
-      return json(await modosit(env, db, row, modositasBemenet(d), { origin: url.origin }));
+      const valasz = await modosit(env, db, row, modositasBemenet(d), { origin: url.origin });
+      naptar.push(row.id);
+      return json(valasz);
     },
   },
 
@@ -185,10 +210,13 @@ export async function onRequest(context) {
     if (!ut) return json({ error: 'Ismeretlen végpont.' }, 404);
     const h = ut[request.method];
     if (!h) return json({ error: 'Ez a művelet itt nem engedélyezett.' }, 405, { Allow: Object.keys(ut).join(', ') });
-    const valasz = await h({ ...context, url });
+    const naptar = [];
+    const valasz = await h({ ...context, url, naptar });
     // sikeres foglalás, lemondás vagy módosítás után a friss levelek a háttérben mennek ki (ha van
     // beállított szolgáltató; outbox-módban semmi nem történik). A cron maga küld, ott nem kell.
     if (request.method === 'POST' && valasz.ok && nev !== 'cron/emlekezteto') hatterKuldes(context, context.env, context.env.BOOKING_DB);
+    // a Google Naptár szinkron szintén a háttérben (kulcs nélkül no-op); a válasz nem vár rá
+    if (valasz.ok && naptar.length) naptarHatter(context, context.env, context.env.BOOKING_DB, naptar, { origin: url.origin });
     return valasz;
   } catch (e) {
     return errorResponse(e);

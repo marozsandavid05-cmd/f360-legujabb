@@ -7,15 +7,17 @@
 //   foto          kép URL (https:// vagy a weboldalon belüli /út), vagy üres
 //   bemutatkozas  rövid szöveg (legfeljebb 2000 karakter)
 //   archivalt     true: nem foglalható, nem látszik a katalógusban, de a régi foglalásokhoz megmarad
+//   naptar_id     a kolléga Google Naptárának azonosítója (calendarId) vagy üres; a nyilvános API-ban SOHA
 // A régi (mezők nélküli) adat betöltéskor alapértéket kap; ehhez ALTER TABLE nem kell.
 //
-// Új szabályok: ertesitKollega (alap: be), emlekeztetoBe (alap: be), emlekeztetoOra (alap: 30).
+// Új szabályok: ertesitKollega (alap: be), emlekeztetoBe (alap: be), emlekeztetoOra (alap: 30),
+// studioNaptarId (a közös stúdió Google Naptár azonosítója, alap: üres).
 
 import { HttpError } from '../http.js';
 import { ervenyesDatum } from './ido.js';
 
-export const KOLLEGA_UJ_MEZOK = ['email', 'aktiv_tol', 'aktiv_ig', 'foto', 'bemutatkozas', 'archivalt'];
-export const SZABALY_UJ_ALAP = Object.freeze({ ertesitKollega: true, emlekeztetoBe: true, emlekeztetoOra: 30, reggeliHatarOra: 22, reggeliKezdesElott: 10, kinalas: 'igazitott' });
+export const KOLLEGA_UJ_MEZOK = ['email', 'aktiv_tol', 'aktiv_ig', 'foto', 'bemutatkozas', 'archivalt', 'naptar_id'];
+export const SZABALY_UJ_ALAP = Object.freeze({ ertesitKollega: true, emlekeztetoBe: true, emlekeztetoOra: 30, reggeliHatarOra: 22, reggeliKezdesElott: 10, kinalas: 'igazitott', studioNaptarId: '' });
 
 // A felkínált kezdések lépése (a belső 15 perces rács ettől nem változik):
 //   globálisan (szabalyok.kinalas): 'igazitott' (időtartam + puffer, felfelé a 15 többszörösére) | 15 | 30 | 60
@@ -35,6 +37,20 @@ export function kinalasSzolgaltatas(v, id = '') {
 }
 
 const EMAIL_RE = /^[^\s@<>"]{1,64}@[^\s@<>"]+\.[^\s@<>"]{2,}$/;
+// Google calendarId: egy e-mail-cím alakú azonosító (a saját naptárnál a fiók címe, a létrehozottnál
+// ...@group.calendar.google.com; az ünnepnaptárakban # is előfordul)
+const NAPTAR_RE = /^[A-Za-z0-9._%+#-]{1,200}@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/;
+
+/** Egy Google naptár-azonosító ellenőrzése: üres (nincs naptár) vagy érvényes calendarId. */
+export function naptarAzonosito(v, mezo = 'naptár-azonosító') {
+  if (v == null || v === '') return '';
+  if (typeof v !== 'string') throw hiba(`Hibás mező: ${mezo}.`);
+  const s = v.trim();
+  if (s && (s.length > 254 || !NAPTAR_RE.test(s))) {
+    throw hiba(`Hibás ${mezo}: a Google Naptár beállításaiban, a „Naptár integrálása” résznél látható azonosító kell, például valami@group.calendar.google.com.`);
+  }
+  return s;
+}
 const hiba = (m) => new HttpError(400, m);
 
 export function kollegaAlap(k) {
@@ -46,6 +62,7 @@ export function kollegaAlap(k) {
     foto: typeof k.foto === 'string' ? k.foto : '',
     bemutatkozas: typeof k.bemutatkozas === 'string' ? k.bemutatkozas : '',
     archivalt: k.archivalt === true,
+    naptar_id: typeof k.naptar_id === 'string' ? k.naptar_id : '',
   };
 }
 
@@ -124,6 +141,7 @@ export function kollegaUjMezok(d) {
     }
     ki.foto = f;
   }
+  if ('naptar_id' in d) ki.naptar_id = naptarAzonosito(d.naptar_id, 'naptár-azonosító (kolléga)');
   if ('bemutatkozas' in d) ki.bemutatkozas = szoveg(d.bemutatkozas, 'bemutatkozás', 2000);
   if ('archivalt' in d) {
     if (typeof d.archivalt !== 'boolean') throw hiba('Hibás mező: archivalt (true vagy false).');
@@ -161,5 +179,6 @@ export function szabalyUjMezok(sz) {
     ki.reggeliKezdesElott = sz.reggeliKezdesElott;
   }
   if ('kinalas' in sz) ki.kinalas = kinalasGlobalis(sz.kinalas);
+  if ('studioNaptarId' in sz) ki.studioNaptarId = naptarAzonosito(sz.studioNaptarId, 'stúdiónaptár-azonosító');
   return ki;
 }

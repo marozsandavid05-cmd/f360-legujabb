@@ -30,13 +30,22 @@
 //   POST     /api/foglalo/ora-foglalasok/:id/lemondas  egy jelentkezés lemondása (határidő nélkül)
 //   GET|POST /api/foglalo/ora-tipusok, PATCH /api/foglalo/ora-tipusok/:id
 //   GET|POST /api/foglalo/ora-sablonok, PATCH|DELETE /api/foglalo/ora-sablonok/:id
+//
+//   Google Naptár (naptar.js; a kolléga naptar_id-ja a kollégák végpontjain, a studioNaptarId a szabályok között):
+//   GET      /api/foglalo/naptar/allapot               bekotve, kulcsHiba, szolgaltatasFiok, studioNaptarId, kollegak
+//                                                      [{id,nev,szin,naptar_id}], varakozik, elakadt, utolsoHiba {azonosito,uzenet,probalkozas,ido}
+//   PATCH    /api/foglalo/naptar                       { studioNaptarId: '' | '<calendarId>' }
+//   POST     /api/foglalo/naptar/ujraszinkron          { mind?: true }  a sor újrapróbálása (mind: minden jövőbeli tétel); kulcs nélkül 409
+//   A foglalást, órát vagy naptárat érintő minden sikeres művelet után a szinkron a háttérben fut (ctx.waitUntil).
 
 import { HttpError, errorResponse, json, readJson } from '../../_lib/http.js';
 import { adminLemond, adminModosit, dbVagy503, foglal, foglalasBemenet, foglalasLista, szabad } from '../../_lib/booking/foglalas.js';
 import {
   beallitasokMent, beosztasLekerd, beosztasMent, kinalasMent, kivetelFelvesz, kivetelLista, kivetelTorol, kollegaArchival, kollegaLetrehoz, kollegaModosit, kollegaSzinMent,
   szolgaltatasKinalasMent,
+  studioNaptarMent,
 } from '../../_lib/booking/admin.js';
+import { bekotve, naptarAllapot, naptarHatter, naptarHatterUjra, naptarUjraszinkron, naptarValtozas } from '../../_lib/booking/naptar.js';
 import { torzsBetolt } from '../../_lib/booking/schema.js';
 import { hatterKuldes, mailMod, outboxKuld, outboxLista } from '../../_lib/booking/mailer.js';
 import { emlekeztetoFuttat } from '../../_lib/booking/emlekezteto.js';
@@ -143,15 +152,61 @@ async function emlekeztetoKezi({ env, db, url }) {
   return json({ mod: levelek.mod, ...emlek, levelek });
 }
 
+// a törzsadatot (kolléga, szabályok, helyszín, szolgáltatás) módosító útvonalak: a mentés előtti és utáni
+// állapotból dől el, mely naptár-események frissüljenek
+const TORZS_UTAK = ['kollegak', 'beallitasok', 'naptar', 'szolgaltatasok'];
+// ezek megnyitásakor (GET) a háttérben újrapróbáljuk az elakadt naptár-tételeket
+const MEGNYITAS_UTAK = ['foglalasok', 'orak', 'beallitasok', 'naptar'];
+
+/** A Google Naptárat érintő elemek egy sikeres admin-művelet után (elem-azonosítók és szűrők). */
+async function naptarElemek(env, request, reszek, valasz, torzsElotte) {
+  const m = request.method;
+  const [a, b, c] = reszek;
+  if (m === 'GET' || !valasz.ok) return [];
+  const db = env.BOOKING_DB;
+  if (a === 'foglalasok' && reszek.length === 1 && m === 'POST') {
+    try { return [(await valasz.clone().json()).azonosito]; } catch { return []; }
+  }
+  if (a === 'foglalasok' && b) return [b];
+  if (a === 'orak' && b && b !== 'general') return [b];
+  if (a === 'ora-foglalasok' && b && c === 'lemondas') {
+    const s = await db.prepare(`SELECT session_id FROM class_bookings WHERE id = ?`).bind(b).first('session_id');
+    return s ? [s] : [];
+  }
+  if (a === 'ora-tipusok' && b) return [{ tipus: b }];
+  // a sablon oktatócseréje a sablon minden jövőbeli órájára átíródik (orak.js oraSablonModosit)
+  if (a === 'ora-sablonok' && b && m === 'PATCH') return [{ sablon: b }];
+  if (torzsElotte) return naptarValtozas(torzsElotte, await torzsBetolt(db));
+  return [];
+}
+
 export async function onRequest(context) {
   const { request, env } = context;
   const url = new URL(request.url);
   const reszek = url.pathname.replace(/^\/api\/foglalo\/?/, '').split('/').filter(Boolean);
   try {
+    // kulcs nélkül a naptár-rész semmit nem olvas és nem ír (a meglévő működés változatlan)
+    const naptarBe = bekotve(env) && !!env.BOOKING_DB;
+    let torzsElotte = null;
+    if (naptarBe && request.method !== 'GET' && TORZS_UTAK.includes(reszek[0]) && reszek[1] !== 'ujraszinkron') {
+      // ha ez az olvasás hibázik, a módosítás ettől még lefut (a naptárat a kézi újraszinkron pótolja)
+      try { torzsElotte = await torzsBetolt(env.BOOKING_DB); } catch (e) { console.error('[naptar] törzsadat-olvasás:', e && e.message); }
+    }
     const valasz = (await csoportos(context, request, env, url, reszek)) || await kezel(context, request, env, url, reszek);
     // foglalás felvétele, lemondása vagy áthelyezése (és a csoportos jelentkezések, elmaradás) után a friss
     // levelek a háttérben mennek ki (ha van beállított szolgáltató; outbox-módban semmi nem történik)
     if (valasz.ok && ['foglalasok', 'orak', 'ora-foglalasok'].includes(reszek[0]) && request.method !== 'GET') hatterKuldes(context, env, env.BOOKING_DB);
+    // Google Naptár: a módosított elemek a háttérben, megnyitáskor az elakadt tételek (kulcs nélkül no-op)
+    // (a módosítás ekkor már megtörtént: egy itteni hiba a választ nem ronthatja el)
+    if (naptarBe) {
+      try {
+        const elemek = await naptarElemek(env, request, reszek, valasz, torzsElotte);
+        if (elemek.length) naptarHatter(context, env, env.BOOKING_DB, elemek, { origin: url.origin });
+        else if (request.method === 'GET' && valasz.ok && MEGNYITAS_UTAK.includes(reszek[0])) naptarHatterUjra(context, env, env.BOOKING_DB, { origin: url.origin });
+      } catch (e) {
+        console.error('[naptar] a módosított elemek összegyűjtése nem sikerült:', e && e.message);
+      }
+    }
     return valasz;
   } catch (e) {
     return errorResponse(e);
@@ -163,6 +218,24 @@ async function kezel(context, request, env, url, reszek) {
   if (reszek.length === 2 && reszek[0] === 'riport' && reszek[1] === 'forrasok') {
     if (request.method !== 'GET') return json({ error: 'Ez a művelet itt nem engedélyezett.' }, 405, { Allow: 'GET' });
     return json(await forrasRiport(dbVagy503(env), url.searchParams));
+  }
+  // Google Naptár: GET naptar/allapot, POST naptar/ujraszinkron, PATCH naptar { studioNaptarId }
+  if (reszek[0] === 'naptar') {
+    const db = dbVagy503(env);
+    if (reszek.length === 2 && reszek[1] === 'allapot') {
+      if (request.method !== 'GET') return json({ error: 'Ez a művelet itt nem engedélyezett.' }, 405, { Allow: 'GET' });
+      return json(await naptarAllapot(env, db));
+    }
+    if (reszek.length === 2 && reszek[1] === 'ujraszinkron') {
+      if (request.method !== 'POST') return json({ error: 'Ez a művelet itt nem engedélyezett.' }, 405, { Allow: 'POST' });
+      const d = (request.headers.get('Content-Type') || '').includes('application/json') ? await readJson(request, 1024) : {};
+      return json(await naptarUjraszinkron(env, db, d, { origin: url.origin }));
+    }
+    if (reszek.length === 1) {
+      if (request.method !== 'PATCH') return json({ error: 'Ez a művelet itt nem engedélyezett.' }, 405, { Allow: 'PATCH' });
+      return json(await studioNaptarMent(db, await readJson(request, 1024)));
+    }
+    throw new HttpError(404, 'Ismeretlen API-végpont.');
   }
   // POST /api/foglalo/emlekezteto/futtat
   if (reszek.length === 2 && reszek[0] === 'emlekezteto' && reszek[1] === 'futtat') {

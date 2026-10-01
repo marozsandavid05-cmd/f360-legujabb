@@ -59,3 +59,8 @@ CREATE TABLE IF NOT EXISTS class_bookings (id TEXT PRIMARY KEY, session_id TEXT 
 CREATE INDEX IF NOT EXISTS class_bookings_session ON class_bookings (session_id, status);
 
 CREATE UNIQUE INDEX IF NOT EXISTS class_bookings_egy ON class_bookings (session_id, email) WHERE status = 'megerositett' AND email != '';
+
+-- Google Naptár szinkron (naptar.js): elem (F... foglalás, S... óra) + cél → a Google-esemény, és a várakozó sor
+CREATE TABLE IF NOT EXISTS gcal_esemeny (elem_id TEXT NOT NULL, cel TEXT NOT NULL CHECK (cel IN ('kollega', 'studio')), naptar_id TEXT NOT NULL, esemeny_id TEXT NOT NULL, frissitve INTEGER NOT NULL, PRIMARY KEY (elem_id, cel, naptar_id));
+
+CREATE TABLE IF NOT EXISTS gcal_sor (elem_id TEXT PRIMARY KEY, verzio INTEGER NOT NULL DEFAULT 1, probalkozas INTEGER NOT NULL DEFAULT 0, hiba TEXT, zarolva_at INTEGER, letrehozva INTEGER NOT NULL, frissitve INTEGER NOT NULL);
