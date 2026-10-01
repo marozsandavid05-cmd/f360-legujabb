@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS schedule (staff_id TEXT NOT NULL, weekday INTEGER NOT
 
 CREATE TABLE IF NOT EXISTS exceptions (id TEXT PRIMARY KEY, staff_id TEXT, location_id TEXT, date_from TEXT NOT NULL, date_to TEXT NOT NULL, start_min INTEGER, end_min INTEGER, note TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL);
 
-CREATE TABLE IF NOT EXISTS bookings (id TEXT PRIMARY KEY, location_id TEXT NOT NULL, service_id TEXT NOT NULL, staff_id TEXT NOT NULL, date TEXT NOT NULL, start_min INTEGER NOT NULL, dur_min INTEGER NOT NULL, buffer_min INTEGER NOT NULL, price INTEGER, name TEXT NOT NULL, email TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'megerositett' CHECK (status IN ('megerositett', 'lemondva')), source TEXT NOT NULL DEFAULT 'web', token_salt TEXT NOT NULL, created_at INTEGER NOT NULL, cancelled_at INTEGER);
+-- emlekeztetve_at: mikor ment ki (outboxba) a páciens emlékeztetője; forras: kampány-adatok JSON-ban (UTM).
+CREATE TABLE IF NOT EXISTS bookings (id TEXT PRIMARY KEY, location_id TEXT NOT NULL, service_id TEXT NOT NULL, staff_id TEXT NOT NULL, date TEXT NOT NULL, start_min INTEGER NOT NULL, dur_min INTEGER NOT NULL, buffer_min INTEGER NOT NULL, price INTEGER, name TEXT NOT NULL, email TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'megerositett' CHECK (status IN ('megerositett', 'lemondva')), source TEXT NOT NULL DEFAULT 'web', token_salt TEXT NOT NULL, created_at INTEGER NOT NULL, cancelled_at INTEGER, emlekeztetve_at INTEGER, forras TEXT);
 
 CREATE INDEX IF NOT EXISTS bookings_date ON bookings (date, start_min);
 
@@ -26,7 +27,11 @@ CREATE INDEX IF NOT EXISTS slot_locks_booking ON slot_locks (booking_id);
 CREATE INDEX IF NOT EXISTS slot_locks_date ON slot_locks (date);
 
 -- Elkészült, de (bemutatóban) el nem küldött levelek. sent = 0 amíg nincs e-mail-szolgáltató.
-CREATE TABLE IF NOT EXISTS outbox (id INTEGER PRIMARY KEY AUTOINCREMENT, booking_id TEXT, tipus TEXT NOT NULL, cimzett TEXT NOT NULL, targy TEXT NOT NULL, html TEXT NOT NULL, szoveg TEXT NOT NULL, ics TEXT, sent INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL);
+-- sent: 0 = küldendő, 1 = elküldve, 2 = végleg sikertelen (hiba mezőben az ok). A küldő (mailer.js)
+-- zarolva_at-tal foglalja le a sort, probalkozas számolja az újrapróbálást.
+CREATE TABLE IF NOT EXISTS outbox (id INTEGER PRIMARY KEY AUTOINCREMENT, booking_id TEXT, tipus TEXT NOT NULL, cimzett TEXT NOT NULL, targy TEXT NOT NULL, html TEXT NOT NULL, szoveg TEXT NOT NULL, ics TEXT, sent INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, hiba TEXT, probalkozas INTEGER NOT NULL DEFAULT 0, zarolva_at INTEGER, kuldve_at INTEGER, provider_id TEXT);
+
+CREATE INDEX IF NOT EXISTS outbox_kuldendo ON outbox (sent, id);
 
 -- Napi foglalási korlát IP-nként. Az IP csak napi sóval hash-elve kerül ide, 2 nap után törlődik.
 CREATE TABLE IF NOT EXISTS foglalas_korlat (iph TEXT NOT NULL, nap TEXT NOT NULL, n INTEGER NOT NULL, PRIMARY KEY (iph, nap));

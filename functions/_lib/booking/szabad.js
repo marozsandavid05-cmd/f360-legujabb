@@ -9,6 +9,7 @@
 // belül be kell fejeződnie (a puffer átlóghat a zárás utánra).
 
 import { RACS, budapestMost, datumPlusz, hetNapja, helyiToUtc, napok, percToHHMM } from './ido.js';
+import { aktivANapon } from './torzs-alap.js';
 
 /** Egy foglalás által lefoglalt rácspontok (ezekből lesz a slot_locks sor). */
 export function foglalasSlotjai({ kollega, datum, kezd, perc, puffer = 0 }) {
@@ -43,10 +44,10 @@ export function szabadIdopontok({ torzs, beosztas, kivetelek = [], foglalt = [],
 
   const jeloltek = torzs.kollegak
     .filter((k) => (kollega === 'barki' || k.id === kollega)
+      && k.archivalt !== true
       && (k.helyszinek || []).includes(helyszin)
       && (k.szolgaltatasok || []).includes(szolgaltatas))
-    .map((k) => k.id)
-    .sort();
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   if (!jeloltek.length) return { napok: eredmeny };
 
   const szabalyok = torzs.szabalyok || {};
@@ -60,7 +61,8 @@ export function szabadIdopontok({ torzs, beosztas, kivetelek = [], foglalt = [],
     if (helyiToUtc(datum, 24 * 60) <= legkorabbiMs) continue; // az egész nap a határ előtt van
     const nap = hetNapja(datum);
     const kezdesek = new Map(); // perc → [kolléga-id]
-    for (const kid of jeloltek) {
+    // belépés előtt és kilépés után a kolléga nem foglalható (a „bárki” sem osztja rá)
+    for (const kid of jeloltek.filter((k) => aktivANapon(k, datum)).map((k) => k.id)) {
       for (const b of beosztas) {
         if (b.kollega !== kid || b.nap !== nap || b.helyszin !== helyszin) continue;
         const tol0 = Math.max(b.kezd, hely.nyit);

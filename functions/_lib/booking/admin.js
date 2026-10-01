@@ -1,8 +1,9 @@
 // Időpontfoglaló · admin műveletek: törzsadat, heti beosztás, kivételek
 import { HttpError } from '../http.js';
-import { ervenyesDatum, hhmmToPerc, percToHHMM } from './ido.js';
+import { budapestMost, ervenyesDatum, hhmmToPerc, percToHHMM } from './ido.js';
 import { torzsBetolt } from './schema.js';
 import { szinKioszt, szinNormal } from './szin.js';
+import { KOLLEGA_UJ_MEZOK, SZABALY_UJ_ALAP, aktivSorrend, kollegaAlap, kollegaUjMezok, szabalyUjMezok, szukitoFeltetel, torzsAlap } from './torzs-alap.js';
 import { beosztasBetolt, kivetelekBetolt } from './foglalas.js';
 
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,59}$/;
@@ -70,6 +71,8 @@ export function torzsEllenoriz(d) {
       szin = szinNormal(k.szin);
       if (!szin) throw hiba(`Hibás szín (${k.id}): #rrggbb alakú hex kell, például #4f6d8a.`);
     }
+    // a Lilla-kör mezői: csak ami a kérésben szerepel (a mentés a régi értéket megtartja a többire)
+    const uj = kollegaUjMezok(k);
     return {
       id: k.id,
       ...(szin ? { szin } : {}),
@@ -77,6 +80,7 @@ export function torzsEllenoriz(d) {
       szerep: str(k.szerep, 'szerep', 200, { kotelezo: false }),
       helyszinek: idLista(k.helyszinek, 'kolléga helyszínei', hIds),
       szolgaltatasok: idLista(k.szolgaltatasok, 'kolléga szolgáltatásai', sIds),
+      ...uj,
     };
   });
   const sz = d.szabalyok || {};
@@ -86,19 +90,179 @@ export function torzsEllenoriz(d) {
     lemondasOra: egesz(sz.lemondasOra, 'lemondasOra', 0, 168),
     telefon: str(sz.telefon, 'telefon', 30),
     studioEmail: str(sz.studioEmail, 'studioEmail', 254),
+    ...szabalyUjMezok(sz),
   };
   return { minta: d.minta === true, helyszinek, szolgaltatasok, kollegak, szabalyok };
 }
 
 export async function beallitasokMent(db, d) {
   const be = torzsEllenoriz(d);
-  const regi = await torzsBetolt(db); // séma + seed, ha még nincs
-  // a szín nélkül küldött kolléga megtartja a mentett színét; az új kolléga szabad színt kap
-  const regiSzin = new Map(regi.kollegak.map((k) => [k.id, k.szin]));
-  const kollegak = szinKioszt(be.kollegak.map((k) => (k.szin ? k : { ...k, szin: regiSzin.get(k.id) })));
-  const torzs = { ...be, kollegak };
-  await db.prepare(`UPDATE settings SET ertek = ?, modositva = ? WHERE kulcs = 'torzs'`).bind(JSON.stringify(torzs), Date.now()).run();
+  // a mentett állapot nyersen is (a feltételes mentéshez): ha a beolvasás és az írás között valaki
+  // módosította, 409, így a szűkítés-ellenőrzés mindig a ténylegesen felülírt állapotra vonatkozik
+  const { ertek, torzs: regi } = await torzsNyersen(db);
+  // a szín nélkül küldött kolléga megtartja a mentett színét; az új kolléga szabad színt kap;
+  // a Lilla-kör mezői közül a meg nem küldöttek a mentett értéket tartják (régi felület se töröljön)
+  const regiK = new Map(regi.kollegak.map((k) => [k.id, k]));
+  const kollegak = szinKioszt(be.kollegak.map((k) => {
+    const r = regiK.get(k.id) || {};
+    const megtart = Object.fromEntries(KOLLEGA_UJ_MEZOK.filter((m) => !(m in k) && m in r).map((m) => [m, r[m]]));
+    const egyesitett = kollegaAlap({ ...megtart, ...k, szin: k.szin || r.szin });
+    aktivSorrend(egyesitett);
+    return egyesitett;
+  }));
+  const szabalyok = { ...SZABALY_UJ_ALAP, ...Object.fromEntries(Object.keys(SZABALY_UJ_ALAP).map((m) => [m, regi.szabalyok[m]])), ...be.szabalyok };
+  const torzs = { ...be, kollegak, szabalyok };
+  // a teljes mentés se archiválhasson, törölhessen vagy tehesse a belépést, kilépést jövőbeli foglalás
+  // mellé (ugyanaz az őrfeltétel, mint a kolléga-PATCH-nél)
+  await torzsOrzottMent(db, ertek, torzs, szukitesek(regi.kollegak, kollegak));
   return torzs;
+}
+
+// ---------------------------------------------------------------- kolléga létrehozása, módosítása, archiválása
+
+const KOLLEGA_MEZOK = new Set(['id', 'nev', 'szerep', 'helyszinek', 'szolgaltatasok', 'szin', ...KOLLEGA_UJ_MEZOK]);
+
+/** Név → azonosító (ékezet nélkül, kisbetű, kötőjel), legfeljebb 50 karakter. */
+export function nevbolAzonosito(nev) {
+  const s = String(nev).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50).replace(/-+$/, '');
+  return s && s !== 'barki' ? s : 'kollega';
+}
+
+/**
+ * A törzsadat feltételes mentése: csak akkor ír, ha közben senki nem módosította (különben 409),
+ * így egy párhuzamos beállítás-mentést nem ír felül.
+ */
+async function torzsFeltetelesMent(db, regiErtek, uj) {
+  const r = await db.prepare(`UPDATE settings SET ertek = ?, modositva = ? WHERE kulcs = 'torzs' AND ertek = ?`)
+    .bind(JSON.stringify(uj), Date.now(), regiErtek).run();
+  if (!Number(r.meta && r.meta.changes)) throw new HttpError(409, 'A beállításokat közben módosították. Töltsd újra az oldalt.');
+}
+
+async function torzsNyersen(db) {
+  await torzsBetolt(db); // séma, seed és szín-pótlás, ha kell
+  const ertek = await db.prepare(`SELECT ertek FROM settings WHERE kulcs = 'torzs'`).first('ertek');
+  return { ertek, torzs: torzsAlap(JSON.parse(ertek)) };
+}
+
+/** Egy kolléga mezőinek ellenőrzése a meglévő törzsadat hivatkozásaival. */
+function kollegaMezok(d, torzs, { reszleges }) {
+  if (!d || typeof d !== 'object' || Array.isArray(d)) throw hiba('Hibás kérés.');
+  for (const k of Object.keys(d)) if (!KOLLEGA_MEZOK.has(k)) throw hiba(`Ismeretlen mező: ${k}.`);
+  const ki = {};
+  if (!reszleges || 'nev' in d) ki.nev = str(d.nev, 'név', 100);
+  if ('szerep' in d) ki.szerep = str(d.szerep, 'szerep', 200, { kotelezo: false });
+  const hIds = new Set(torzs.helyszinek.map((h) => h.id));
+  const sIds = new Set(torzs.szolgaltatasok.map((s) => s.id));
+  if (!reszleges || 'helyszinek' in d) ki.helyszinek = idLista(d.helyszinek, 'kolléga helyszínei', hIds);
+  if (!reszleges || 'szolgaltatasok' in d) ki.szolgaltatasok = idLista(d.szolgaltatasok, 'kolléga szolgáltatásai', sIds);
+  if ('szin' in d && d.szin !== '' && d.szin != null) {
+    ki.szin = szinNormal(d.szin);
+    if (!ki.szin) throw hiba('Hibás szín: #rrggbb alakú hex kell, például #4f6d8a.');
+  }
+  return { ...ki, ...kollegaUjMezok(d) };
+}
+
+/** Jövőbeli, megerősített foglalások száma egy kollégánál, egy szűkítő feltétellel (szukitoFeltetel). */
+async function jovobeliFoglalasok(db, kollega, felt) {
+  const ma = budapestMost().datum;
+  return Number(await db.prepare(
+    `SELECT COUNT(*) AS n FROM bookings WHERE staff_id = ? AND status = 'megerositett' AND date >= ? AND (${felt.sql})`,
+  ).bind(kollega, ma, ...felt.args).first('n')) || 0;
+}
+
+function foglalasUtkozes(n, mit) {
+  return new HttpError(409, `A kollégának ${n} jövőbeli foglalása van, ami ${mit}. Előbb helyezd át vagy mondd le ${n > 1 ? 'ezeket' : 'ezt'}.`, { jovobeli: n });
+}
+
+/**
+ * A régi és az új kolléga-listából: azok a kollégák, akiknél a változás jövőbeli foglalást érinthet.
+ * A listából törölt kolléga archiválásnak számít (minden jövőbeli foglalása érintett).
+ */
+function szukitesek(regiKollegak, ujKollegak) {
+  const regiK = new Map(regiKollegak.map((k) => [k.id, kollegaAlap(k)]));
+  const ujIds = new Set(ujKollegak.map((k) => k.id));
+  const torolt = regiKollegak.filter((k) => !ujIds.has(k.id)).map((k) => ({ id: k.id, felt: { sql: '1', args: [] }, archival: true }));
+  return [...torolt, ...ujKollegak.flatMap((k) => {
+    const r = regiK.get(k.id);
+    const felt = r && szukitoFeltetel(r, k);
+    return felt ? [{ id: k.id, felt, archival: k.archivalt === true && r.archivalt !== true }] : [];
+  })];
+}
+
+// egy mentésben legfeljebb ennyi kolléga szűkülhet (a D1 100-as paraméterkorlátja miatt)
+const MAX_SZUKITES = 20;
+
+/**
+ * A törzsadat mentése EGY utasításban, két őrfeltétellel: (1) csak akkor ír, ha közben senki nem
+ * módosította (ertek = a beolvasott); (2) egyik szűkített kollégának sincs a szűkítés által érintett
+ * jövőbeli foglalása. Mivel a feltétel és az írás egy utasítás, egy közben beérkező foglalás nem
+ * csúszhat be a számolás és a mentés közé. Sikertelenségnél kideríti az okot: 409 a darabszámmal,
+ * vagy 409 „közben módosították”.
+ */
+async function torzsOrzottMent(db, regiErtek, uj, szukites) {
+  // a D1 egy utasításban legfeljebb 100 paramétert fogad; egy őr legfeljebb 4-et köt
+  if (szukites.length > MAX_SZUKITES) {
+    throw hiba(`Egyszerre legfeljebb ${MAX_SZUKITES} kolléga törölhető, archiválható vagy kaphat új belépési, kilépési dátumot. Mentsd több lépésben.`);
+  }
+  const ma = budapestMost().datum;
+  const felt = [`kulcs = 'torzs'`];
+  const args = [JSON.stringify(uj), Date.now()];
+  if (regiErtek != null) { felt.push('ertek = ?'); args.push(regiErtek); }
+  for (const s of szukites) {
+    felt.push(`NOT EXISTS (SELECT 1 FROM bookings WHERE staff_id = ? AND status = 'megerositett' AND date >= ? AND (${s.felt.sql}))`);
+    args.push(s.id, ma, ...s.felt.args);
+  }
+  const r = await db.prepare(`UPDATE settings SET ertek = ?, modositva = ? WHERE ${felt.join(' AND ')}`).bind(...args).run();
+  if (Number(r.meta && r.meta.changes)) return;
+  for (const s of szukites) {
+    const n = await jovobeliFoglalasok(db, s.id, s.felt);
+    if (n) throw foglalasUtkozes(n, s.archival ? 'archiválás után gazdátlan maradna' : 'a belépés előtt vagy a kilépés után esik');
+  }
+  throw new HttpError(409, 'A beállításokat közben módosították. Töltsd újra az oldalt.');
+}
+
+/** POST /api/foglalo/kollegak: új kolléga (201). */
+export async function kollegaLetrehoz(db, d) {
+  const { ertek, torzs } = await torzsNyersen(db);
+  const mezok = kollegaMezok(d, torzs, { reszleges: false });
+  let id;
+  if (d.id != null && d.id !== '') {
+    if (typeof d.id !== 'string' || !ID_RE.test(d.id) || d.id === 'barki') throw hiba('Hibás azonosító: csak kisbetű, szám és kötőjel.');
+    if (torzs.kollegak.some((k) => k.id === d.id)) throw new HttpError(409, 'Ilyen azonosítójú kolléga már van.');
+    id = d.id;
+  } else {
+    const alap = nevbolAzonosito(mezok.nev);
+    id = alap;
+    for (let i = 2; torzs.kollegak.some((k) => k.id === id); i++) id = `${alap}-${i}`;
+  }
+  const uj = kollegaAlap({ id, szerep: '', ...mezok });
+  aktivSorrend(uj);
+  const kollegak = szinKioszt([...torzs.kollegak, uj]);
+  await torzsFeltetelesMent(db, ertek, { ...torzs, kollegak });
+  return kollegak[kollegak.length - 1];
+}
+
+/**
+ * PATCH /api/foglalo/kollegak/:id: csak a küldött mezők változnak. Ha a kilépés vagy a belépés
+ * napja, vagy az archiválás miatt egy jövőbeli foglalás foglalhatatlanná válna, 409.
+ */
+export async function kollegaModosit(db, id, d) {
+  const { ertek, torzs } = await torzsNyersen(db);
+  const regi = torzs.kollegak.find((k) => k.id === id);
+  if (!regi) throw new HttpError(404, 'Ismeretlen szakember.');
+  if (d && typeof d === 'object' && 'id' in d) throw hiba('Az azonosító nem módosítható.');
+  const mezok = kollegaMezok(d, torzs, { reszleges: true });
+  const uj = kollegaAlap({ ...regi, ...mezok });
+  aktivSorrend(uj);
+  const kollegak = szinKioszt(torzs.kollegak.map((k) => (k.id === id ? uj : k)));
+  await torzsOrzottMent(db, ertek, { ...torzs, kollegak }, szukitesek([regi], [uj]));
+  return kollegak.find((k) => k.id === id);
+}
+
+/** POST /api/foglalo/kollegak/:id/archivalas: jövőbeli foglalás esetén 409 (a darabszámmal). */
+export async function kollegaArchival(db, id) {
+  return kollegaModosit(db, id, { archivalt: true });
 }
 
 /**

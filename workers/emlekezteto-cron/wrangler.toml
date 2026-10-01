@@ -1,0 +1,21 @@
+# Studio F360 · emlékeztető-ütemező (15 percenként hívja a foglaló cron-végpontját).
+# NINCS DEPLOYOLVA. Élesítés előtt: README.md.
+name = "f360-emlekezteto-cron"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = false
+
+[triggers]
+crons = ["*/15 * * * *"]
+
+[vars]
+# a foglaló éles (vagy előnézeti) címe, perjel nélkül
+FOGLALO_URL = "https://f360-legujabb.pages.dev"
+
+[observability]
+enabled = true
+
+[observability.traces]
+enabled = true
+
+# CRON_SECRET: secret, NEM ide kerül:  npx wrangler secret put CRON_SECRET
