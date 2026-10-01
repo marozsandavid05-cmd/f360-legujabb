@@ -77,7 +77,7 @@
     f = egyseges(f);
     var rows = [
       [cs ? 'Óra' : 'Kezelés', f.szolgaltatas.nev, f.szolgaltatas.perc + ' perc'],
-      [cs ? 'Oktató' : 'Szakember', f.kollega.nev, ''],
+      [cs ? 'Oktató' : 'Szakember', cs && !(done.foglalas.kollega && done.foglalas.kollega.nev) ? 'Hamarosan közöljük' : f.kollega.nev, ''],
       ['Helyszín', f.helyszin.nev, f.helyszin.cim],
       ['Foglalás száma', done.azonosito, done.modositva ? 'Nem változott, a levélben lévő link is marad' : 'Erre hivatkozz, ha telefonálsz'],
       ['Díj', f.szolgaltatas.ar != null ? F.ft(f.szolgaltatas.ar) : '', 'a helyszínen fizetendő']

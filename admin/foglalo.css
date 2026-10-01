@@ -300,6 +300,26 @@ body[data-view="view-edit"] .tabs{display:none}
 .be-add{margin-top:.6rem}
 .rules{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.9rem 1rem}
 .rules .field + .field{margin-top:0}
+/* ---- időpontok kínálása: közös választó + élő példa, kezelésenként „Kezdések” ---- */
+.kin{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:1rem 1.5rem;align-items:start}
+.kin__opts{border:0;padding:0;margin:0;display:grid;gap:.4rem}
+.kin__lg{float:left;width:100%;padding:0;margin-bottom:.45rem;font-size:.8125rem;font-weight:600}
+.kin__lg + *{clear:both}
+.kin-o{display:flex;align-items:center;gap:.7rem;min-height:52px;padding:.55rem .9rem;border-radius:var(--r-sm);background:var(--paper);box-shadow:inset 0 0 0 1px var(--rice);cursor:pointer;font-size:.9375rem;font-weight:500;transition:box-shadow .15s}
+.kin-o:hover{box-shadow:inset 0 0 0 1px rgba(48,48,48,.45)}
+.kin-o input{width:20px;height:20px;flex:none;accent-color:#303030;margin:0}
+.kin-o:has(input:checked){box-shadow:inset 0 0 0 2px var(--ink)}
+.kin-o:has(input:focus-visible){outline:2px solid var(--ink);outline-offset:2px}
+.kin-pelda{display:grid;gap:.8rem;padding:1rem 1.1rem;border-radius:var(--r-sm);background:var(--base)}
+.kin-pelda .field select{background-color:var(--paper)}
+.kin-pelda__o{display:grid;gap:.3rem}
+.kin-pelda__n{font-size:.875rem;font-weight:600}
+.kin-pelda__k{font-size:clamp(1.25rem,1.6vw,1.55rem);font-weight:300;line-height:1.25;font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.kin-pelda__o .hint{margin-top:.15rem;max-width:52ch;opacity:1}
+.kin__fn{margin-top:.9rem}
+.erow__kin{display:grid;grid-template-columns:minmax(12rem,2fr) minmax(7.5rem,1fr) minmax(0,2fr);gap:.4rem 1rem;align-items:end}
+.erow__kin-e[hidden] + .erow__kin-t{grid-column:2 / -1}
+.erow__kin-t{font-size:.8125rem;font-variant-numeric:tabular-nums;padding-bottom:.7rem;min-height:1em}
 .savebar--page{position:sticky;bottom:0;z-index:30;margin:0;padding:.75rem 1.1rem calc(.75rem + env(safe-area-inset-bottom));background:var(--paper);border-radius:var(--r) var(--r) 0 0;box-shadow:0 -12px 30px -22px rgba(0,0,0,.4);border-top:0}
 
 /* ============ LEVELEK ============ */
@@ -442,6 +462,7 @@ body[data-view="view-edit"] .tabs{display:none}
 }
 @media (max-width:900px){
   .bo{grid-template-columns:1fr}
+  .kin{grid-template-columns:1fr}
   .ko{grid-template-columns:1fr}
   .ko-side{position:static}
   .ko-list{display:flex;overflow-x:auto;gap:.35rem;padding-bottom:.3rem;scrollbar-width:thin}
@@ -476,6 +497,9 @@ body[data-view="view-edit"] .tabs{display:none}
   .exform__g input,.exform__g select{width:100%;min-width:0}
   .erow__main,.erow__main--k,.erow__main--h{grid-template-columns:1fr 1fr}
   .erow__nev{grid-column:1 / -1}
+  .erow__kin{grid-template-columns:1fr 1fr}
+  .erow__kin-v,.erow__kin-t,.erow__kin-e[hidden] + .erow__kin-t{grid-column:1 / -1}
+  .erow__kin-t{padding-bottom:0}
   .rules{grid-template-columns:1fr}
   .erow__del{margin-left:0}
   .bo-card,.be-sec{padding:1rem}

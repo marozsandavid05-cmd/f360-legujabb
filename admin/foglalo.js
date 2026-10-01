@@ -1252,8 +1252,80 @@
   function chk(name, val, on, label, extra) {
     return '<label class="tick-l"><input type="checkbox" data-' + name + '="' + esc(val) + '"' + (on ? ' checked' : '') + (extra || '') + '><span>' + esc(label) + '</span></label>';
   }
+  /* ---- a felkínált kezdések lépése (a backend szabad.js kinalasLepes másolata, csak megjelenítéshez) ---- */
+  var KIN_RACS = 15, KIN_PELDA_KEZD = 9 * 60;
+  var KIN_OPC = [['igazitott', 'A kezelés hosszához igazítva (ajánlott)'], [15, '15 percenként'], [30, '30 percenként'], [60, 'Óránként']];
+  function kinGlobal(t) { var k = (t.szabalyok || {}).kinalas; return k == null ? 'igazitott' : k; }
+  function kinIgazitott(sz) {
+    var p = Number(sz.perc), u = sz.puffer == null ? 10 : Number(sz.puffer);
+    if (!(p > 0)) return null;
+    return Math.max(KIN_RACS, Math.ceil((p + (u > 0 ? u : 0)) / KIN_RACS) * KIN_RACS);
+  }
+  function kinErvenyes(k) { return Number.isInteger(k) && k >= KIN_RACS && k <= 240 && k % KIN_RACS === 0; }
+  function kinLepes(sz, glob) {
+    var k = sz.kinalas != null ? sz.kinalas : glob;
+    return kinErvenyes(k) ? k : kinIgazitott(sz);
+  }
+  function kinSzoveg(l) { return l == null ? 'nincs megadva' : l === 60 ? 'óránként' : l + ' percenként'; }
+  function kinKezdesek(l, db) {
+    if (!l) return '';
+    var out = []; for (var i = 0; i < (db || 4); i++) out.push(F.hm(KIN_PELDA_KEZD + i * l));
+    return out.join(', ') + ' …';
+  }
+  // a kezelés-sor választójának értéke: '' = a közös beállítás (null), 'egyedi' = 15-240 perc, ami nem 15/30/60
+  function kinValaszto(sz) {
+    var k = sz.kinalas;
+    if (k == null) return '';
+    if (k === 'igazitott' || k === 15 || k === 30 || k === 60) return String(k);
+    return 'egyedi';
+  }
+  function kinOpciok(sz, glob) {
+    var v = kinValaszto(sz), ig = kinIgazitott(sz), kozos = kinLepes({ perc: sz.perc, puffer: sz.puffer }, glob);
+    return [['', 'Közös beállítás szerint (' + kinSzoveg(kozos) + ')'], ['igazitott', 'Igazítva (' + kinSzoveg(ig) + ')'], ['15', '15 percenként'], ['30', '30 percenként'], ['60', 'Óránként'], ['egyedi', 'Egyedi…']]
+      .map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === v ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('');
+  }
+  function kinSorHtml(sz, i, glob) {
+    var v = kinValaszto(sz), l = kinLepes(sz, glob);
+    return '<div class="erow__kin"><div class="field erow__kin-v"><label for="sz-k-' + i + '">Kezdések</label><select id="sz-k-' + i + '" data-szk="1" aria-describedby="sz-kt-' + i + '">' + kinOpciok(sz, glob) + '</select></div>' +
+      '<div class="field erow__kin-e"' + (v === 'egyedi' ? '' : ' hidden') + '><label for="sz-ke-' + i + '">Egyedi lépés</label><div class="unit"><input id="sz-ke-' + i + '" data-szke="1" type="number" inputmode="numeric" min="15" max="240" step="15" value="' + esc(v === 'egyedi' ? sz.kinalas : (kinIgazitott(sz) || 60)) + '"><span>perc</span></div></div>' +
+      '<p class="erow__kin-t" id="sz-kt-' + i + '">' + (l ? 'Kezdés: ' + esc(kinKezdesek(l, 4)) : 'Add meg az időtartamot.') + '</p></div>';
+  }
+  function kinPeldaHtml(t) {
+    var glob = kinGlobal(t), sl = t.szolgaltatasok.filter(function (x) { return String(x.nev || '').trim(); });
+    if (!sl.length) return '';
+    var sel = be.pelda && sl.some(function (x) { return x.id === be.pelda; }) ? be.pelda : (sl.filter(function (x) { return x.id === 'kismama-masszazs'; })[0] || sl[0]).id;
+    be.pelda = sel;
+    var sz = sl.filter(function (x) { return x.id === sel; })[0], l = kinLepes({ perc: sz.perc, puffer: sz.puffer }, glob);
+    var sajat = sz.kinalas != null ? kinLepes(sz, glob) : null;
+    return '<div class="field kin-pelda__v"><label for="kin-pelda">Példa ezzel a kezeléssel</label><select id="kin-pelda">' +
+        sl.map(function (x) { return '<option value="' + esc(x.id) + '"' + (x.id === sel ? ' selected' : '') + '>' + esc(x.nev + ' ' + x.perc + "'") + '</option>'; }).join('') + '</select></div>' +
+      '<div class="kin-pelda__o" aria-live="polite"><p class="kin-pelda__n">' + esc(sz.nev) + ', ' + esc(sz.perc) + ' + ' + esc(sz.puffer == null ? 10 : sz.puffer) + ' perc</p>' +
+        '<p class="kin-pelda__k">' + esc(kinKezdesek(l, 5) || 'nincs megadva időtartam') + '</p>' +
+        '<p class="hint">Ha a szakember 9:00-kor kezd. Ha egy foglalás korábban ér véget, utána is felkínálunk kezdést, így nem marad kihasználatlan rés.' +
+        (sajat ? ' Ennél a kezelésnél saját beállítás van: ' + esc(kinSzoveg(sajat)) + '.' : '') + '</p></div>';
+  }
+  function kinFrissit() {
+    var t = be.t, glob = kinGlobal(t);
+    $$('#be-form [data-szi]').forEach(function (row) {
+      var i = +row.getAttribute('data-szi'), sz = t.szolgaltatasok[i]; if (!sz) return;
+      var sel = $('[data-szk]', row), v = sel.value;
+      sel.innerHTML = kinOpciok(sz, glob); sel.value = v;
+      var l = kinLepes(sz, glob), p = $('.erow__kin-t', row);
+      p.textContent = l ? 'Kezdés: ' + kinKezdesek(l, 4) : 'Add meg az időtartamot.';
+    });
+    var pe = $('#kin-pelda-box'); if (pe) pe.innerHTML = kinPeldaHtml(t);
+  }
   function renderBe() {
-    var t = be.t, html = '';
+    var t = be.t, html = '', glob = kinGlobal(t);
+    // időpontok kínálása (közös): milyen kezdéseket lát a vendég
+    html += '<section class="be-sec" aria-labelledby="be-kin-h"><div class="be-sec__head"><h2 id="be-kin-h">Időpontok kínálása</h2>' +
+      '<p>A foglalások ütközését ez nem befolyásolja, csak azt, milyen kezdéseket lát a vendég.</p></div>' +
+      '<div class="kin"><fieldset class="kin__opts"><legend class="kin__lg">Milyen időközönként kínáljuk a kezdéseket</legend>' +
+      KIN_OPC.map(function (o) {
+        return '<label class="kin-o"><input type="radio" name="kin" data-kin="' + o[0] + '"' + (String(glob) === String(o[0]) ? ' checked' : '') + '><span>' + esc(o[1]) + '</span></label>';
+      }).join('') + '</fieldset>' +
+      '<div class="kin-pelda" id="kin-pelda-box">' + kinPeldaHtml(t) + '</div></div>' +
+      '<p class="hint kin__fn">Kezelésenként eltérhetsz ettől: lent, a kezelésnél a Kezdések mezőben.</p></section>';
     // kezelések
     html += '<section class="be-sec" aria-labelledby="be-sz-h"><div class="be-sec__head"><h2 id="be-sz-h">Kezelések</h2><p>Ezeket lehet foglalni. Az időtartam percben, 5 perces lépésben. A szünet a következő vendégig tart (takarítás, átöltözés).</p></div><div class="rows">';
     t.szolgaltatasok.forEach(function (s, i) {
@@ -1262,7 +1334,7 @@
         '<div class="field erow__num"><label for="sz-p-' + i + '">Időtartam</label><div class="unit"><input id="sz-p-' + i + '" data-sz="perc" type="number" inputmode="numeric" min="10" max="480" step="5" value="' + esc(s.perc) + '"><span>perc</span></div></div>' +
         '<div class="field erow__num"><label for="sz-a-' + i + '">Ár</label><div class="unit"><input id="sz-a-' + i + '" data-sz="ar" type="number" inputmode="numeric" min="0" step="500" value="' + esc(s.ar == null ? '' : s.ar) + '"><span>Ft</span></div></div>' +
         '<div class="field erow__num"><label for="sz-u-' + i + '">Szünet utána</label><div class="unit"><input id="sz-u-' + i + '" data-sz="puffer" type="number" inputmode="numeric" min="0" max="120" step="5" value="' + esc(s.puffer == null ? 10 : s.puffer) + '"><span>perc</span></div></div>' +
-        '</div><div class="erow__sub"><span class="erow__lbl">Helyszín</span>' + t.helyszinek.map(function (h) { return chk('szh', h.id, s.helyszinek.indexOf(h.id) >= 0, h.nev); }).join('') +
+        '</div>' + kinSorHtml(s, i, glob) + '<div class="erow__sub"><span class="erow__lbl">Helyszín</span>' + t.helyszinek.map(function (h) { return chk('szh', h.id, s.helyszinek.indexOf(h.id) >= 0, h.nev); }).join('') +
         '<button type="button" class="linkbtn linkbtn--danger erow__del" data-szdel="' + i + '">Kezelés törlése</button></div></div>';
     });
     html += '</div><button type="button" class="btn btn--ghost be-add" id="be-add-sz">Új kezelés</button></section>';
@@ -1315,9 +1387,24 @@
   }
   function beInput(e) {
     var el = e.target, t = be.t, row;
+    if (el.id === 'kin-pelda') { if (e.type === 'change') { be.pelda = el.value; $('#kin-pelda-box').innerHTML = kinPeldaHtml(t); $('#kin-pelda').focus(); } return; }
+    if (el.dataset.kin) {
+      if (!el.checked || e.type !== 'change') return;
+      t.szabalyok.kinalas = el.dataset.kin === 'igazitott' ? 'igazitott' : Number(el.dataset.kin);
+      kinFrissit(); beChanged(); return;
+    }
     if ((row = el.closest('[data-szi]'))) {
       var s = t.szolgaltatasok[+row.getAttribute('data-szi')];
-      if (el.dataset.sz) { var v = el.value; s[el.dataset.sz] = el.dataset.sz === 'nev' ? v : (v === '' ? (el.dataset.sz === 'ar' ? null : NaN) : Number(v)); }
+      if (el.dataset.szk) {
+        if (e.type !== 'change') return;
+        var kv = el.value, ef = $('.erow__kin-e', row), ei = $('[data-szke]', row);
+        ef.hidden = kv !== 'egyedi';
+        if (kv === 'egyedi') { var n = Number(ei.value); s.kinalas = Number.isInteger(n) ? n : NaN; ei.focus(); }
+        else s.kinalas = kv === '' ? null : kv === 'igazitott' ? 'igazitott' : Number(kv);
+        kinFrissit(); beChanged(); return;
+      }
+      if (el.dataset.szke) { s.kinalas = el.value === '' ? NaN : Number(el.value); kinFrissit(); beChanged(); return; }
+      if (el.dataset.sz) { var v = el.value; s[el.dataset.sz] = el.dataset.sz === 'nev' ? v : (v === '' ? (el.dataset.sz === 'ar' ? null : NaN) : Number(v)); if (el.dataset.sz !== 'ar') kinFrissit(); }
       if (el.dataset.szh) toggleIn(s.helyszinek, el.dataset.szh, el.checked);
     } else if ((row = el.closest('[data-ki]'))) {
       var k = t.kollegak[+row.getAttribute('data-ki')];
@@ -1344,6 +1431,7 @@
       if (s.ar != null && (!Number.isInteger(s.ar) || s.ar < 0)) return n + ': az ár egész szám legyen.';
       if (!Number.isInteger(s.puffer) || s.puffer < 0 || s.puffer > 120) return n + ': a szünet 0 és 120 perc között lehet.';
       if (!s.helyszinek.length) return n + ': jelöld be, melyik helyszínen van.';
+      if (s.kinalas != null && s.kinalas !== 'igazitott' && !kinErvenyes(s.kinalas)) return n + ': az egyedi kezdés 15 és 240 perc között, 15 perces lépésben lehet.';
     }
     for (var j = 0; j < t.kollegak.length; j++) {
       var k = t.kollegak[j];

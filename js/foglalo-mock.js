@@ -97,7 +97,16 @@
   }
   /* ---------------- torzs-alap.js: a kolléga Lilla-kör mezői és az új szabályok ---------------- */
   var KOLLEGA_UJ_MEZOK = ['email', 'aktiv_tol', 'aktiv_ig', 'foto', 'bemutatkozas', 'archivalt'];
-  var SZABALY_UJ_ALAP = { ertesitKollega: true, emlekeztetoBe: true, emlekeztetoOra: 30, reggeliHatarOra: 22, reggeliKezdesElott: 10 };
+  var SZABALY_UJ_ALAP = { ertesitKollega: true, emlekeztetoBe: true, emlekeztetoOra: 30, reggeliHatarOra: 22, reggeliKezdesElott: 10, kinalas: 'igazitott' };
+  /* torzs-alap.js: a felkínált kezdések lépése (a belső 15 perces rács ettől nem változik)
+     globálisan (szabalyok.kinalas): 'igazitott' | 15 | 30 | 60; szolgáltatásonként (kinalas): null | 'igazitott' | 15 többszöröse 15 és 240 között */
+  var KINALAS_GLOBALIS = ['igazitott', 15, 30, 60];
+  function kinalasGlobalis(v) { if (KINALAS_GLOBALIS.indexOf(v) < 0) throw hiba("Hibás beállítás: kinalas ('igazitott', 15, 30 vagy 60)."); return v; }
+  function kinalasSzolgaltatas(v, id) {
+    if (v === null || v === 'igazitott') return v;
+    if (Number.isInteger(v) && v >= 15 && v <= 240 && v % 15 === 0) return v;
+    throw hiba('Hibás kínálás' + (id ? ' (' + id + ')' : '') + ": null, 'igazitott', vagy 15 többszöröse 15 és 240 perc között.");
+  }
   function kollegaAlap(k) {
     return Object.assign({}, k, {
       email: typeof k.email === 'string' ? k.email : '', aktiv_tol: typeof k.aktiv_tol === 'string' ? k.aktiv_tol : '',
@@ -152,6 +161,7 @@
       if (!Number.isInteger(sz.emlekeztetoOra) || sz.emlekeztetoOra < 1 || sz.emlekeztetoOra > 168) throw hiba('Hibás szám: emlekeztetoOra (1 és 168 között).');
       ki.emlekeztetoOra = sz.emlekeztetoOra;
     }
+    if ('kinalas' in sz) ki.kinalas = kinalasGlobalis(sz.kinalas);
     return ki;
   }
   // a régi és az új kolléga: mely jövőbeli, megerősített foglalások válnának foglalhatatlanná (szukitoFeltetel)
@@ -198,7 +208,7 @@
     db.torzs.kollegak = szinKioszt(db.torzs.kollegak); save();
   }
   // mint a backend torzsBetolt: a Lilla-kör mezői mindig kitöltve (a régi adatban is)
-  function T() { if (!db.torzs.szabalyok || db.torzs.szabalyok.emlekeztetoOra == null || db.torzs.kollegak.some(function (k) { return k.archivalt == null; })) db.torzs = torzsAlap(db.torzs); return db.torzs; }
+  function T() { if (!db.torzs.szabalyok || db.torzs.szabalyok.emlekeztetoOra == null || db.torzs.szabalyok.kinalas == null || db.torzs.kollegak.some(function (k) { return k.archivalt == null; })) db.torzs = torzsAlap(db.torzs); return db.torzs; }
   function hetNapja(d) { return F.hetNapja(d) || 7; }
   function hm(p) { return F.hm2(p); }
   // HH:MM → perc; csak a 15 perces rácson (mint a backend hhmmToPerc)
@@ -232,6 +242,36 @@
       return o.kezd < k.veg && k.kezd < o.veg;
     });
   }
+  function napiKivetelek(kiv, o) {
+    return kiv.filter(function (k) {
+      if (k.kollega && k.kollega !== o.kollega) return false;
+      if (k.helyszin && k.helyszin !== o.helyszin) return false;
+      if (!k.kollega && !k.helyszin) return false;
+      return o.datum >= k.tol && o.datum <= k.ig;
+    });
+  }
+  // a felkínált kezdések lépése percben (szabad.js kinalasLepes): a szolgáltatás kinalas mezője erősebb,
+  // 'igazitott' = időtartam + puffer, felfelé a 15 többszörösére
+  function kinalasLepes(szolg, szabalyok) {
+    var k = szolg.kinalas != null ? szolg.kinalas : ((szabalyok || {}).kinalas != null ? szabalyok.kinalas : 'igazitott');
+    if (Number.isInteger(k) && k >= RACS && k <= 240 && k % RACS === 0) return k;
+    return Math.max(RACS, Math.ceil((szolg.perc + (szolg.puffer == null ? 10 : szolg.puffer)) / RACS) * RACS);
+  }
+  // a [tol, ig) szakasz részleges kivételekkel nem fedett részei; egész napos kivételnél üres
+  function szabadSzakaszok(tol, ig, kiv) {
+    var sz = [[tol, ig]];
+    for (var i = 0; i < kiv.length; i++) {
+      var k = kiv[i];
+      if (k.kezd == null || k.veg == null) return [];
+      sz = sz.reduce(function (acc, ab) {
+        var a = ab[0], b = ab[1];
+        if (!(a < k.veg && k.kezd < b)) { acc.push([a, b]); return acc; }
+        [[a, Math.min(b, k.kezd)], [Math.max(a, k.veg), b]].forEach(function (x) { if (x[0] < x[1]) acc.push(x); });
+        return acc;
+      }, []);
+    }
+    return sz;
+  }
   function foglaltLista(kiveve) {
     var out = [];
     db.bookings.forEach(function (b) {
@@ -257,23 +297,34 @@
     var fs = {};
     (o.foglalt || []).forEach(function (f) { fs[f.kollega + '|' + f.datum + '|' + f.slot] = 1; });
     var puffer = szolg.puffer == null ? 10 : szolg.puffer;
-    var nyit = F.perc(hely.nyit), zar = F.perc(hely.zar);
+    var nyit = F.perc(hely.nyit), zar = F.perc(hely.zar), lepes = kinalasLepes(szolg, sz);
+    var kivAll = o.kivetelek || db.kivetelek;
     osszes.forEach(function (datum) {
       if (datum > utolso) return;
       if (helyiToUtc(datum, 24 * 60 - 1) <= legkorabbi) return;
       var nap = hetNapja(datum), kezdesek = {};
       // belépés előtt és kilépés után a kolléga nem foglalható (a „bárki” sem osztja rá)
       jeloltek.filter(function (k) { return aktivANapon(k, datum); }).map(function (k) { return k.id; }).forEach(function (kid) {
+        var napiKiv = napiKivetelek(kivAll, { kollega: kid, helyszin: o.helyszin, datum: datum });
+        // a kolléga aznapi foglalásainak vége: egy zár-sorozat utolsó rácspontja utáni rácspont
+        var foglalasVegek = (o.foglalt || []).filter(function (f) { return f.kollega === kid && f.datum === datum && !fs[kid + '|' + datum + '|' + (f.slot + RACS)]; })
+          .map(function (f) { return f.slot + RACS; });
         db.beosztas.forEach(function (b) {
           if (b.kollega !== kid || b.nap !== nap || b.helyszin !== o.helyszin) return;
-          var t0 = Math.max(b.kezd, nyit), i0 = Math.min(b.veg, zar);
-          for (var k = Math.ceil(t0 / RACS) * RACS; k + szolg.perc <= i0; k += RACS) {
-            if (helyiToUtc(datum, k) < legkorabbi) continue;
-            if (kivetelUtkozik(o.kivetelek || db.kivetelek, { kollega: kid, helyszin: o.helyszin, datum: datum, kezd: k, veg: k + szolg.perc })) continue;
-            var sl = foglalasSlotjai({ kollega: kid, datum: datum, kezd: k, perc: szolg.perc, puffer: puffer });
-            if (sl.some(function (s) { return fs[kid + '|' + datum + '|' + s.slot]; })) continue;
-            (kezdesek[k] = kezdesek[k] || []).indexOf(kid) < 0 && kezdesek[k].push(kid);
-          }
+          // a rács horgonya a beosztási blokk, illetve a részleges kivétel utáni szabad szakasz eleje
+          szabadSzakaszok(Math.max(b.kezd, nyit), Math.min(b.veg, zar), napiKiv).forEach(function (ab) {
+            var elso = Math.ceil(ab[0] / RACS) * RACS, i0 = ab[1], jelolt = {};
+            for (var k = elso; k + szolg.perc <= i0; k += lepes) jelolt[k] = 1;
+            // hézagkitöltés: a foglalás vége utáni első rácspont is, ha a kezelés belefér
+            foglalasVegek.forEach(function (v) { if (v >= elso && v + szolg.perc <= i0) jelolt[v] = 1; });
+            Object.keys(jelolt).map(Number).forEach(function (k) {
+              if (helyiToUtc(datum, k) < legkorabbi) return;
+              if (kivetelUtkozik(kivAll, { kollega: kid, helyszin: o.helyszin, datum: datum, kezd: k, veg: k + szolg.perc })) return;
+              var sl = foglalasSlotjai({ kollega: kid, datum: datum, kezd: k, perc: szolg.perc, puffer: puffer });
+              if (sl.some(function (s) { return fs[kid + '|' + datum + '|' + s.slot]; })) return;
+              (kezdesek[k] = kezdesek[k] || []).indexOf(kid) < 0 && kezdesek[k].push(kid);
+            });
+          });
         });
       });
       eredmeny[datum] = Object.keys(kezdesek).map(Number).sort(function (a, b) { return a - b; })
@@ -543,7 +594,7 @@
       minta: t.minta === true,
       helyszinek: t.helyszinek.map(function (h) { return { id: h.id, nev: h.nev, cim: h.cim, nyit: h.nyit, zar: h.zar }; }),
       szolgaltatasok: t.szolgaltatasok.map(function (s) {
-        var o = { id: s.id, nev: s.nev, perc: s.perc, ar: s.ar, helyszinek: s.helyszinek };
+        var o = { id: s.id, nev: s.nev, perc: s.perc, ar: s.ar, helyszinek: s.helyszinek, lepes: kinalasLepes(s, t.szabalyok) };
         if (s.leiras) o.leiras = s.leiras;
         if (s.elokeszites && s.elokeszites.length) o.elokeszites = s.elokeszites;
         o.vanBeosztas = vanBeosztas(s, t);
@@ -594,13 +645,27 @@
     });
     if (db.outbox.length > 100) db.outbox.length = 100;
   }
+  // foglalas.js jeloltKollegak: a hézag-kezdés csak a foglalásokkal létezik, ezért a két számítás uniója
+  function jeloltKollegak(alap, foglalt, datum, kezd) {
+    function keres(f) { return ((szabadIdopontok(Object.assign({}, alap, { foglalt: f })).napok[datum] || []).filter(function (s) { return s.kezd === kezd; })[0] || { kollegak: [] }).kollegak; }
+    var most = keres(foglalt), u = most.slice();
+    keres([]).forEach(function (k) { if (u.indexOf(k) < 0) u.push(k); });
+    return { mind: u, most: most };
+  }
+  // az admin bármely 15 perces rácspontra vehet fel (a kínálás rá nem vonatkozik), és nincs minEloreOra/maxEloreNap
+  function adminTorzs(t) {
+    return Object.assign({}, t, { szabalyok: Object.assign({}, t.szabalyok, { minEloreOra: 0, maxEloreNap: 3660 }),
+      szolgaltatasok: t.szolgaltatasok.map(function (s) { return Object.assign({}, s, { kinalas: RACS }); }) });
+  }
   function foglal(be, admin) {
     var r = hivatkozasok(be), hely = r.hely, szolg = r.szolg, t = T();
-    var szT = admin ? Object.assign({}, t, { szabalyok: Object.assign({}, t.szabalyok, { minEloreOra: 0, maxEloreNap: 3660 }) }) : t;
+    var szT = admin ? adminTorzs(t) : t;
     var kezd = hm(be.kezdPerc);
     var alap = { torzs: szT, helyszin: be.helyszin, szolgaltatas: be.szolgaltatas, kollega: be.kollega, tol: be.datum, ig: be.datum };
-    var beoSz = (szabadIdopontok(Object.assign({}, alap, { foglalt: [] })).napok[be.datum] || []).filter(function (s) { return s.kezd === kezd; })[0];
-    if (!beoSz) throw HttpErr(409, 'Ez az időpont nem foglalható. Kérjük, válassz a szabad időpontok közül.');
+    // csak felkínált kezdésre (a rács vagy hézagkitöltés szerint); ha egyik kolléga sem, 409
+    var jk = jeloltKollegak(alap, foglaltLista(), be.datum, kezd);
+    if (!jk.mind.length) throw HttpErr(409, 'Ez az időpont nem foglalható. Kérjük, válassz a szabad időpontok közül.');
+    var beoSz = { kollegak: jk.mind };
     // ütközés-próba: a kért időpontot „közben” elviszi egy másik vendég (mindegyik jelöltnél)
     var utk = false;
     if (!admin) { try { utk = sessionStorage.getItem(FLAG) === '1'; if (utk) sessionStorage.removeItem(FLAG); } catch (e) { /* nincs */ } }
@@ -692,7 +757,7 @@
   // a számítás törzse: adminnak nincs minEloreOra/maxEloreNap; a foglaláskor rögzített időtartam és puffer számít
   function szamitasra(admin, row) {
     var t = T();
-    if (admin) t = Object.assign({}, t, { szabalyok: Object.assign({}, t.szabalyok, { minEloreOra: 0, maxEloreNap: 3660 }) });
+    if (admin) t = adminTorzs(t);
     if (row) t = Object.assign({}, t, { szolgaltatasok: t.szolgaltatasok.map(function (s) { return s.id === row.service_id ? Object.assign({}, s, { perc: row.dur_min, puffer: row.buffer_min }) : s; }) });
     return t;
   }
@@ -702,8 +767,9 @@
     if (be.datum === row.date && be.kezdPerc === row.start_min && (be.kollega === 'barki' || be.kollega === row.staff_id)) throw HttpErr(400, 'Ez a jelenlegi időpontod. Válassz másikat.');
     var t = T(), szT = szamitasra(admin, row), kezd = hm(be.kezdPerc);
     var alap = { torzs: szT, helyszin: row.location_id, szolgaltatas: row.service_id, kollega: be.kollega, tol: be.datum, ig: be.datum };
-    var beoSz = (szabadIdopontok(Object.assign({}, alap, { foglalt: [] })).napok[be.datum] || []).filter(function (s) { return s.kezd === kezd; })[0];
-    if (!beoSz) throw HttpErr(409, 'Ez az időpont nem foglalható. Kérjük, válassz a szabad időpontok közül.');
+    var jk = jeloltKollegak(alap, foglaltLista(row.id), be.datum, kezd);
+    if (!jk.mind.length) throw HttpErr(409, 'Ez az időpont nem foglalható. Kérjük, válassz a szabad időpontok közül.');
+    var beoSz = { kollegak: jk.mind };
     // ütközés-próba: ?utkozes=1 mellett az új időpontot „közben” elviszi valaki (mindegyik jelöltnél)
     var utk = false;
     if (!admin) { try { utk = sessionStorage.getItem(FLAG) === '1'; if (utk) sessionStorage.removeItem(FLAG); } catch (e) { /* nincs */ } }
@@ -746,6 +812,11 @@
     var kollega = q.get('kollega') || 'barki';
     hivatkozasok({ helyszin: row.location_id, szolgaltatas: row.service_id, kollega: kollega });
     return szabadIdopontok({ torzs: szamitasra(admin, row), foglalt: foglaltLista(row.id), helyszin: row.location_id, szolgaltatas: row.service_id, kollega: kollega, tol: tol, ig: ig });
+  }
+  function csakKinalas(d) {
+    if (!d || typeof d !== 'object' || Array.isArray(d)) throw hiba('Hibás kérés.');
+    var kk = Object.keys(d);
+    if (kk.length !== 1 || kk[0] !== 'kinalas') throw hiba('Itt csak a kinalas mező módosítható.');
   }
   function foglalasId(id) {
     var r = /^F[0-9A-Z]{10}$/.test(String(id || '')) ? db.bookings.filter(function (b) { return b.id === id; })[0] : null;
@@ -790,8 +861,12 @@
     var szolgaltatasok = d.szolgaltatasok.map(function (s) {
       var perc = egesz(s.perc, 'időtartam', 10, 480);
       if (perc % 5 !== 0) throw hiba('Az időtartam 5 perc többszöröse legyen: ' + s.id + '.');
-      return { id: s.id, nev: str(s.nev, 'név', 120), perc: perc, ar: s.ar == null ? null : egesz(s.ar, 'ár', 0, 10000000),
+      var ki = { id: s.id, nev: str(s.nev, 'név', 120), perc: perc, ar: s.ar == null ? null : egesz(s.ar, 'ár', 0, 10000000),
         puffer: s.puffer == null ? 10 : egesz(s.puffer, 'puffer', 0, 120), helyszinek: idLista(s.helyszinek, 'szolgáltatás helyszínei', hIds) };
+      // a kínált kezdések felülírása: csak ha megadták (null = a globálisat követi, a mentés törli)
+      if ('kinalas' in s) ki.kinalas = kinalasSzolgaltatas(s.kinalas, s.id);
+      ['leiras', 'elokeszites', 'idotartam_megerositendo'].forEach(function (m) { if (s[m] != null) ki[m] = s[m]; });
+      return ki;
     });
     egyediId(d.kollegak, 'kolléga');
     var kollegak = d.kollegak.map(function (k) {
@@ -1459,9 +1534,36 @@
     var ut = reszek[0];
     if (ut === 'kollegak' && method === 'POST' && reszek.length === 1) return json(201, kollegaLetrehoz(body));
     // GET /api/foglalo/szabad?foglalas=&kollega=&tol=&ig=  az áthelyezés szabad időpontjai
-    if (ut === 'szabad' && method === 'GET') return json(200, szabadModositashoz(foglalasId(q.get('foglalas')), q, true));
+    if (ut === 'szabad' && method === 'GET') {
+      if (q.has('foglalas')) return json(200, szabadModositashoz(foglalasId(q.get('foglalas')), q, true));
+      // kézi felvétel: bármely 15 perces rácspont, minEloreOra és maxEloreNap nélkül (foglalas.js szabad, admin ág)
+      var at = q.get('tol'), ai = q.get('ig');
+      if (!ervenyesDatum(at) || !ervenyesDatum(ai) || ai < at) throw HttpErr(400, 'Hibás dátum-tartomány.');
+      if (napok(at, ai, 15).length > 14) throw HttpErr(400, 'Egyszerre legfeljebb 14 nap kérhető le.');
+      var ap = { helyszin: q.get('helyszin'), szolgaltatas: q.get('szolgaltatas'), kollega: q.get('kollega') || 'barki' };
+      hivatkozasok(ap);
+      return json(200, szabadIdopontok({ torzs: adminTorzs(T()), foglalt: foglaltLista(), helyszin: ap.helyszin, szolgaltatas: ap.szolgaltatas, kollega: ap.kollega, tol: at, ig: ai }));
+    }
+    // PATCH /api/foglalo/szolgaltatasok/:id { kinalas }  (admin.js szolgaltatasKinalasMent)
+    if (ut === 'szolgaltatasok' && reszek.length === 2) {
+      if (method !== 'PATCH') return json(405, { error: 'Ez a művelet itt nem engedélyezett.' });
+      csakKinalas(body);
+      var sid = decodeURIComponent(reszek[1]), kv = kinalasSzolgaltatas(body.kinalas, sid);
+      if (!T().szolgaltatasok.some(function (x) { return x.id === sid; })) throw HttpErr(404, 'Ismeretlen szolgáltatás.');
+      db.torzs = Object.assign({}, T(), { szolgaltatasok: T().szolgaltatasok.map(function (x) {
+        if (x.id !== sid) return x; var c = Object.assign({}, x); delete c.kinalas; if (kv != null) c.kinalas = kv; return c; }) });
+      save();
+      var sk = db.torzs.szolgaltatasok.filter(function (x) { return x.id === sid; })[0];
+      return json(200, Object.assign({}, sk, { kinalas: sk.kinalas == null ? null : sk.kinalas }));
+    }
     if (ut === 'beallitasok') {
       if (method === 'GET') return json(200, T());
+      // PATCH { kinalas }: a globális kínálás (admin.js kinalasMent)
+      if (method === 'PATCH') {
+        csakKinalas(body);
+        var kg = kinalasGlobalis(body.kinalas);
+        db.torzs = Object.assign({}, T(), { szabalyok: Object.assign({}, T().szabalyok, { kinalas: kg }) }); save(); return json(200, db.torzs);
+      }
       if (method === 'PUT') {
         // mint a backend beallitasokMent: a meg nem küldött új mezők a mentett értéket tartják, a szűkítés 409
         var be = torzsEllenoriz(body), regiT = T(), regiK = {};
@@ -1475,7 +1577,12 @@
         var szab = Object.assign({}, SZABALY_UJ_ALAP);
         Object.keys(SZABALY_UJ_ALAP).forEach(function (m) { if (regiT.szabalyok[m] !== undefined) szab[m] = regiT.szabalyok[m]; });
         szukitesOr(regiT.kollegak, kl);
-        db.torzs = Object.assign({}, be, { kollegak: kl, szabalyok: Object.assign(szab, be.szabalyok) }); save(); return json(200, db.torzs);
+        var regiS = {}; regiT.szolgaltatasok.forEach(function (x) { regiS[x.id] = x; });
+        var szl = be.szolgaltatasok.map(function (x) {
+          var kin = 'kinalas' in x ? x.kinalas : (regiS[x.id] || {}).kinalas, c = Object.assign({}, x);
+          delete c.kinalas; if (kin != null) c.kinalas = kin; return c;
+        });
+        db.torzs = Object.assign({}, be, { szolgaltatasok: szl, kollegak: kl, szabalyok: Object.assign(szab, be.szabalyok) }); save(); return json(200, db.torzs);
       }
     }
     if (ut === 'kollegak' && method === 'PATCH') {

@@ -739,7 +739,10 @@
   }
   function oraCacheUrit() { oraCache = {}; oraKesz = {}; }
   function isMineOra(id) { return !!mod && !!mod.cs && id === mod.f.session; }
-  function oktatoRovid(k) { return k && k.nev ? keresztnev(k.nev) : ''; }
+  function oktatoRovid(k) { return k && k.nev ? keresztnev(k.nev) : 'oktató hamarosan'; }
+  // ha az órához még nincs oktató kiírva (Lillától kérdezzük), ne üres sor legyen
+  var OKTATO_NINCS = 'Hamarosan közöljük';
+  function oktatoNev(k) { return k && k.nev ? k.nev : OKTATO_NINCS; }
   function hetCimke(tol) {
     var ig = F.addDays(tol, 6);
     return tol.slice(5, 7) === ig.slice(5, 7) ? F.HONAPOK[Number(tol.slice(5, 7)) - 1] + ' ' + Number(tol.slice(8)) + '-' + Number(ig.slice(8)) + '.'
@@ -755,7 +758,7 @@
     return '<span class="tt-dots" aria-hidden="true">' + out + '</span>';
   }
   function oraSr(o, extra) {
-    return [F.datumNap(o.datum) + ', ' + F.hm(F.perc(o.kezd)) + '-' + F.hm(F.perc(o.veg)), o.ora.nev, o.kollega ? o.kollega.nev : '', o.ora.perc + ' perc',
+    return [F.datumNap(o.datum) + ', ' + F.hm(F.perc(o.kezd)) + '-' + F.hm(F.perc(o.veg)), o.ora.nev, o.kollega ? o.kollega.nev : 'oktató hamarosan', o.ora.perc + ' perc',
       o.ora.ar != null ? F.ft(o.ora.ar).replace(/\u00a0/g, ' ') : '', extra].filter(Boolean).join(', ');
   }
   function oraCella(o) {
@@ -860,7 +863,7 @@
     rows = rows.concat([
       ['o', mod ? 'Új óra' : 'Óra', o ? o.ora.nev : '', o ? o.ora.perc + ' perc' : '', 'ora'],
       ['i', 'Időpont', o ? F.datumNap(o.datum) : '', o ? F.hm(F.perc(o.kezd)) + '-' + F.hm(F.perc(o.veg)) : '', 'ora'],
-      ['k', 'Oktató', o && o.kollega ? o.kollega.nev : '', '', null],
+      ['k', 'Oktató', o ? oktatoNev(o.kollega) : '', '', null],
       ['h', 'Helyszín', o ? o.helyszin.nev : '', o ? (meta(o.helyszin.id).utca || o.helyszin.cim || '') : '', null],
       ['a', 'Díj', o && o.ora.ar != null ? F.ft(o.ora.ar).replace(/\u00a0/g, ' ') : '', o ? 'a helyszínen fizetendő' : '', null, 'rev__sum']
     ]);
@@ -875,13 +878,13 @@
     var rows = mod && mod.cs ? [
       ['Új óra', o.ora.nev, F.datumHosszu(o.datum) + ', ' + F.hm(F.perc(o.kezd)) + '-' + F.hm(F.perc(o.veg)), 'ora', 'rev__new'],
       ['Eddig', mod.f.ora.nev, F.datumHosszu(mod.f.datum) + ', ' + F.hm(F.perc(mod.f.kezd)), null, 'rev__old'],
-      ['Oktató', o.kollega ? o.kollega.nev : '', ''],
+      ['Oktató', oktatoNev(o.kollega), ''],
       ['Helyszín', o.helyszin.nev, meta(o.helyszin.id).utca || o.helyszin.cim],
       ['Foglalás száma', mod.info.azonosito, 'marad, és a levélben lévő link is']
     ] : [
       ['Óra', o.ora.nev, o.ora.perc + ' perc', 'ora'],
       ['Időpont', F.datumHosszu(o.datum), F.hm(F.perc(o.kezd)) + '-' + F.hm(F.perc(o.veg)) + ', ' + helyTxt(o), 'ora'],
-      ['Oktató', o.kollega ? o.kollega.nev : '', o.kollega ? o.kollega.szerep : ''],
+      ['Oktató', oktatoNev(o.kollega), o.kollega ? o.kollega.szerep : ''],
       ['Helyszín', o.helyszin.nev, meta(o.helyszin.id).utca || o.helyszin.cim],
       ['Adataid', d.nev, [d.email, d.telefon].join(' · ') + (d.megjegyzes ? '\n' + d.megjegyzes : ''), 'adatok'],
       ['Díj', o.ora.ar != null ? F.ft(o.ora.ar) : '', 'a helyszínen fizetendő', null, 'rev__sum']
@@ -1231,7 +1234,7 @@
       $('#cx-rev').innerHTML = revHtml(csop ? [
         ['Óra', f.ora.nev, f.ora.perc + ' perc' + (elmarad ? ', ELMARAD' : '')],
         ['Időpont', F.datumHosszu(f.datum), F.hm(F.perc(f.kezd)) + '-' + F.hm(F.perc(f.veg))],
-        ['Oktató', f.kollega ? f.kollega.nev : '', ''],
+        ['Oktató', oktatoNev(f.kollega), ''],
         ['Helyszín', f.helyszin.nev, f.helyszin.cim],
         ['Díj', f.ora.ar != null ? F.ft(f.ora.ar) : '', 'a helyszínen fizetendő'],
         ['Foglalás száma', r.azonosito, '']
