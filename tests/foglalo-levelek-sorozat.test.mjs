@@ -60,6 +60,17 @@ test('kolléga-értesítő: vendég adatai benne, a vendég lemondó linkje NINC
   }
 });
 
+test('stúdió-értesítő: saját típus, a kolléga neve a tárgyban, nincs vendég-link', () => {
+  for (const esemeny of ['uj', 'leallitva']) {
+    const l = sorozatKollegaErtesito(alap(), 'info@f360.hu', { alkalmak: alk(2), esemeny, studio: true });
+    assert.equal(l.tipus, 'sorozat-studio'); assert.equal(l.cimzett, 'info@f360.hu');
+    assert.match(l.targy, /Szegedi Botond/);
+    assert.doesNotMatch(l.szoveg, /hozzád/); assert.doesNotMatch(l.html + l.szoveg, /\?t=T/);
+    tiszta(l);
+  }
+  assert.equal(sorozatKollegaErtesito(alap(), 'b@x.hu', { esemeny: 'uj' }).tipus, 'sorozat-kollega');
+});
+
 test('leállítás: lemondott és megmaradt alkalmak külön, csak a megmaradtak kapnak linket', () => {
   const l = sorozatLeallitva(alap(), { lemondott: alk(2, true), maradt: [{ datum: '2026-10-07', kezd: '16:00', lemondasUrl: 'https://x/kezeles?t=MARAD' }], szabalyok });
   assert.equal(l.tipus, 'sorozat-leallitva');

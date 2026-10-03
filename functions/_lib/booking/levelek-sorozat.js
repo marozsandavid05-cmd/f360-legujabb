@@ -8,7 +8,7 @@
 //     kollega: { nev }, nap: 1..7 (1 = hétfő), kezd: 'HH:MM', ismetles: 1 | 2,
 //     kezdoDatum: 'YYYY-MM-DD', vege: { tipus: 'datum', datum } | { tipus: 'alkalom', db } | { tipus: 'nyitott' } }
 // Egy alkalom: { datum: 'YYYY-MM-DD', kezd: 'HH:MM', lemondasUrl? } (a lemondó link mindig CSAK erre az alkalomra szól).
-// Levéltípusok: sorozat-visszaigazolas, sorozat-kollega, sorozat-leallitva (az admin Levelek fül szűrőjéhez).
+// Levéltípusok: sorozat-visszaigazolas, sorozat-kollega, sorozat-studio, sorozat-leallitva (az admin Levelek fül szűrőjéhez).
 
 import { esc, KEZELO_GOMB, szepDatum } from './levelek.js';
 
@@ -111,15 +111,17 @@ export function sorozatVisszaigazolas(s, { alkalmak = [], szabalyok }) {
 }
 
 /**
- * Értesítő a kollégának (privát cím): új állandó időpont, vagy leállt. A vendég lemondó linkjei NEM kerülnek bele.
+ * Értesítő a kollégának (privát cím) vagy a stúdiónak (studio: true, a stúdió e-mail-címére): új állandó időpont, vagy leállt.
+ * A vendég lemondó linkjei NEM kerülnek bele. A stúdió-változat típusa 'sorozat-studio', a tárgyban a kolléga neve is szerepel.
  * @param esemeny  'uj' | 'leallitva'
  */
-export function sorozatKollegaErtesito(s, cimzett, { alkalmak = [], esemeny = 'uj' } = {}) {
+export function sorozatKollegaErtesito(s, cimzett, { alkalmak = [], esemeny = 'uj', studio = false } = {}) {
   const v = s.vendeg || {};
   const uj = esemeny === 'uj';
-  const targy = `${uj ? 'Új állandó időpont' : 'Leállt állandó időpont'} · ${egysor(v.nev)} · ${ritmus(s)}`;
+  const kinel = egysor(s.kollega && s.kollega.nev);
+  const targy = `${uj ? 'Új állandó időpont' : 'Leállt állandó időpont'} · ${egysor(v.nev)} · ${ritmus(s)}${studio && kinel ? ` · ${kinel}` : ''}`;
   const bev = uj
-    ? 'Új állandó időpontot vettek fel hozzád az adminban.'
+    ? (studio ? `Új állandó időpontot vettek fel az adminban${kinel ? `, ${kinel} kollégához` : ''}.` : 'Új állandó időpontot vettek fel hozzád az adminban.')
     : 'Az adminban leállították egy vendég állandó időpontját. Az alábbi alkalmakat lemondtuk.';
   const sorok = [
     ...sorozatSorok(s).filter(([k]) => k !== 'Ár'),
@@ -129,7 +131,7 @@ export function sorozatKollegaErtesito(s, cimzett, { alkalmak = [], esemeny = 'u
     + (alkalmak.length ? `<p><strong>${uj ? 'Alkalmak' : 'Lemondott alkalmak'}</strong></p>${alkalomListaHtml(alkalmak, { linkkel: false })}` : ''));
   const szoveg = `${bev}\n\n${szovegSorok(sorok)}\n`
     + (alkalmak.length ? `\n${uj ? 'Alkalmak' : 'Lemondott alkalmak'}:\n${alkalomListaSzoveg(alkalmak, { linkkel: false })}\n` : '');
-  return { tipus: 'sorozat-kollega', sorozat: true, esemeny: uj ? 'uj' : 'leallitva', cimzett, targy, html, szoveg };
+  return { tipus: studio ? 'sorozat-studio' : 'sorozat-kollega', sorozat: true, esemeny: uj ? 'uj' : 'leallitva', cimzett, targy, html, szoveg };
 }
 
 /**
