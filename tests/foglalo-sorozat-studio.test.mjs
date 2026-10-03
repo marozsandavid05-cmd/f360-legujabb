@@ -124,4 +124,9 @@ test('leállítás utólag korábbi naptól, ha a köztes időben nincs megerős
   assert.deepEqual((await r.json()).lemondott, []);
   assert.equal(sorok(e, 'SELECT leallitva_tol FROM sorozatok WHERE id = ?', id)[0].leallitva_tol, het(1));
   assert.ok(!outbox(e).slice(elotte).some((l) => l.tipus === 'sorozat-leallitva'), 'üres lemondott listával nincs vendég-levél');
+  // utána a sima leállítás (tol nélkül, vagy ugyanazzal a nappal) 409, és nem megy ki második, üres levél
+  const levelek = outbox(e).length;
+  assert.equal((await leallit(e, id, {})).status, 409);
+  assert.equal((await leallit(e, id, { tol: het(1) })).status, 409);
+  assert.equal(outbox(e).length, levelek);
 });

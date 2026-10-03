@@ -440,6 +440,11 @@ export async function sorozatLeallit(env, db, id, d, { origin, most = Date.now()
   }
   const s = sorozatNezet({ ...s0, status: 'leallitva', leallitva_at: leallitvaAt }, torzs);
   const lem = lemondott.map((b) => ({ datum: b.date, kezd: percToHHMM(b.start_min) }));
+  if (kiterjesztes && !lem.length) {
+    // a kiterjesztés nem mondott le semmit: a leállítás időpontja a régi marad (a nap az új), így a régi
+    // összefoglaló számít „kiküldöttnek”, és a következő hívás 409, nem egy második, üres levél
+    await db.prepare(`UPDATE sorozatok SET leallitva_at = ? WHERE id = ? AND leallitva_at = ?`).bind(Number(s0.leallitva_at || most), s0.id, most).run();
+  }
   // kiterjesztésnél csak akkor megy levél, ha tényleg lett újonnan lemondott alkalom
   const levelek = kiterjesztes && !lem.length ? [] : [
     sorozatLeallitva(s, { lemondott: lem, maradt, szabalyok: torzs.szabalyok }),
