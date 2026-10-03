@@ -7,6 +7,7 @@
      nyilvános: /foglalas-api/katalogus | szabad | foglalas (GET ?t= is) | lemondas | modositas | foglalas.ics
      admin:     /api/foglalo/beallitasok | kollegak (POST, PATCH /:id, POST /:id/archivalas) | beosztas
                 | kivetelek | foglalasok | szabad | outbox | emlekezteto/futtat | riport/forrasok
+                | sorozatok (állandó időpont: elonezet, létrehozás, lista, részletek, leallitas)
    Ha a backend változik, ezt a fájlt is hozzá kell igazítani.
    Az adat a localStorage-ban él (a foglaló és az admin ugyanazt látja).
    Alaphelyzet: F360FoglaloMock.reset(). Ütközés-próba: ?utkozes=1 (a következő
@@ -972,6 +973,7 @@
     }).sort(function (a, b) { return a.date.localeCompare(b.date) || a.start_min - b.start_min || a.staff_id.localeCompare(b.staff_id); }).map(function (r) {
       var f = nezet(r); delete f.kezdPerc;
       f.kampany = r.forras || null;
+      f.sorozat = sorozatJel(r);
       f.letrehozva = new Date(r.created_at).toISOString(); f.lemondva = r.cancelled_at ? new Date(r.cancelled_at).toISOString() : null;
       return f;
     }) };
@@ -1413,6 +1415,269 @@
     return b;
   }
 
+  /* =====================================================================
+     ÁLLANDÓ IDŐPONT (sorozat, „R…”): SZERZODES.md, Claude tesztelés\f360-allando-idopont-2026-10-01
+     Minden alkalom közönséges foglalás (bookings sor) + sorozat_id; a lemondás és az áthelyezés
+     alkalmanként a meglévő úttal megy. A levelek a functions/_lib/booking/levelek-sorozat.js másolatai.
+     Végpontok: POST /sorozatok/elonezet, POST /sorozatok, GET /sorozatok?allapot=, GET /sorozatok/:id,
+                POST /sorozatok/:id/leallitas
+     ===================================================================== */
+  // a backend sorozat.js-ének böngészős másolata (Caesar, 2026-10-03, még munkában): ha az változik, ezt is igazítani kell
+  var SOROZAT_RE = /^R[0-9A-Z]{10}$/, SOROZAT_MAX = 104;
+  var NAPOKON = ['', 'hétfőnként', 'keddenként', 'szerdánként', 'csütörtökönként', 'péntekenként', 'szombatonként', 'vasárnaponként'];
+  var NAPON_R = ['', 'hétfőn', 'kedden', 'szerdán', 'csütörtökön', 'pénteken', 'szombaton', 'vasárnap'];
+  function S() { if (!db.sorozatok) db.sorozatok = []; return db.sorozatok; }
+  /* ---- a levelek-sorozat.js másolata ---- */
+  function egysor(s) { return String(s == null ? '' : s).replace(/[\r\n\t\u2028\u2029]+/g, ' ').trim(); }
+  function ritmus(s) {
+    var nap = Number(s.nap);
+    if (!(nap >= 1 && nap <= 7)) return '';
+    return Number(s.ismetles) === 2 ? 'minden második ' + NAPON_R[nap] + ' ' + s.kezd + '-kor' : NAPOKON[nap] + ' ' + s.kezd + '-kor';
+  }
+  function vegeSzoveg(s) {
+    var v = s.vege || {};
+    if (v.tipus === 'datum' && v.datum) return szepDatum(v.datum) + '-ig';
+    if (v.tipus === 'alkalom' && Number.isInteger(v.db)) return v.db + ' alkalom';
+    return 'visszavonásig';
+  }
+  var LISTA_MAX = 12;
+  function sTabla(sorok) { return ktabla(sorok); }
+  function sorozatSorok(s) {
+    var sz = s.szolgaltatas || {};
+    return [['Állandó időpont', ritmus(s)], ['Kezdés', s.kezdoDatum ? szepDatum(s.kezdoDatum) : ''], ['Időtartam', vegeSzoveg(s)],
+      ['Szolgáltatás', sz.nev ? egysor(sz.nev) + (sz.perc ? ' (' + sz.perc + ' perc)' : '') : ''], ['Szakember', egysor(s.kollega && s.kollega.nev)],
+      ['Helyszín', s.helyszin ? egysor(s.helyszin.nev) + ', ' + egysor(s.helyszin.cim) : ''], ['Ár', sz.ar != null ? ft(sz.ar) + ' alkalmanként, a helyszínen fizetendő' : '']];
+  }
+  function alkSz(a) { return szepDatum(a.datum) + ', ' + a.kezd; }
+  function alkListaH(alk, linkkel) {
+    var lat = alk.slice(0, LISTA_MAX), tobb = alk.length - lat.length;
+    return '<ul style="margin:8px 0 16px;padding-left:20px">' + lat.map(function (a) {
+      return '<li style="margin:0 0 6px">' + esc(alkSz(a)) + (linkkel !== false && a.lemondasUrl ? ' · <a href="' + esc(a.lemondasUrl) + '" style="color:' + SZIN.ink + '">lemondás vagy módosítás</a>' : '') + '</li>';
+    }).join('') + '</ul>' + (tobb > 0 ? '<p>És még ' + tobb + ' alkalom, mindegyik ugyanebben az időpontban.</p>' : '');
+  }
+  function alkListaSz(alk, linkkel) {
+    var lat = alk.slice(0, LISTA_MAX), tobb = alk.length - lat.length;
+    return lat.map(function (a) { return '- ' + alkSz(a) + (linkkel !== false && a.lemondasUrl ? '\n  lemondás vagy módosítás: ' + a.lemondasUrl : ''); }).join('\n') +
+      (tobb > 0 ? '\nÉs még ' + tobb + ' alkalom, mindegyik ugyanebben az időpontban.' : '');
+  }
+  function sorozatVisszaigazolas(s, o) {
+    var v = s.vendeg || {}, sz = o.szabalyok, alk = o.alkalmak || [];
+    var targy = 'Állandó időpontod a Studio F360-ban · ' + ritmus(s);
+    var bev = 'Rögzítettük az állandó időpontodat. Az alábbi alkalmakra a helyed le van foglalva.';
+    var kezelo = 'Ha egy alkalomra mégsem tudsz jönni, a kezdés előtt ' + sz.lemondasOra + ' óráig az adott alkalom melletti linkkel lemondhatod vagy áthelyezheted. A link mindig csak arra az egy alkalomra vonatkozik, a többi időpontod megmarad.';
+    var tel = sz.lemondasOra + ' órán belül, vagy ha az egész állandó időpontot módosítanád, hívj minket: ' + egysor(sz.telefon) + '.';
+    var emlek = 'Minden alkalom előtt küldünk emlékeztetőt.';
+    var ny = (s.vege || {}).tipus === 'nyitott', nyH = ny ? '<p>Az állandó időpontod visszavonásig érvényes: a további alkalmakat folyamatosan rögzítjük.</p>' : '';
+    var html = keret(targy, '<p>Kedves ' + esc(egysor(v.nev)) + '!</p><p>' + bev + '</p>' + sTabla(sorozatSorok(s)) + '<p><strong>Alkalmak</strong></p>' + alkListaH(alk) + nyH +
+      '<p>' + esc(kezelo) + '</p><p>' + esc(tel) + '</p><p>' + emlek + '</p><p>Várunk szeretettel,<br>a Studio F360 csapata</p>');
+    var szoveg = 'Kedves ' + egysor(v.nev) + '!\n\n' + bev + '\n\n' + kszoveg(sorozatSorok(s)) + '\n\nAlkalmak:\n' + alkListaSz(alk) + '\n\n' +
+      (ny ? 'Az állandó időpontod visszavonásig érvényes: a további alkalmakat folyamatosan rögzítjük.\n\n' : '') + kezelo + '\n' + tel + '\n' + emlek + '\n\nVárunk szeretettel,\na Studio F360 csapata\n';
+    return { tipus: 'sorozat-visszaigazolas', sorozat: true, cimzett: v.email || '', targy: targy, html: html, szoveg: szoveg };
+  }
+  function sorozatKollegaErtesito(s, cimzett, o) {
+    var v = s.vendeg || {}, uj = o.esemeny !== 'leallitva', alk = o.alkalmak || [];
+    var targy = (uj ? 'Új állandó időpont' : 'Leállt állandó időpont') + ' · ' + egysor(v.nev) + ' · ' + ritmus(s);
+    var bev = uj ? 'Új állandó időpontot vettek fel hozzád az adminban.' : 'Az adminban leállították egy vendég állandó időpontját. Az alábbi alkalmakat lemondtuk.';
+    var sorok = sorozatSorok(s).filter(function (r) { return r[0] !== 'Ár'; }).concat([['Vendég', egysor(v.nev)], ['E-mail', egysor(v.email)], ['Telefon', egysor(v.telefon)], ['Megjegyzés', egysor(v.megjegyzes)]]);
+    var cim = uj ? 'Alkalmak' : 'Lemondott alkalmak';
+    var html = keret(targy, '<p>' + esc(bev) + '</p>' + sTabla(sorok) + (alk.length ? '<p><strong>' + cim + '</strong></p>' + alkListaH(alk, false) : ''));
+    var szoveg = bev + '\n\n' + kszoveg(sorok) + '\n' + (alk.length ? '\n' + cim + ':\n' + alkListaSz(alk, false) + '\n' : '');
+    return { tipus: 'sorozat-kollega', sorozat: true, esemeny: uj ? 'uj' : 'leallitva', cimzett: cimzett, targy: targy, html: html, szoveg: szoveg };
+  }
+  function sorozatLeallitvaLevel(s, o) {
+    var v = s.vendeg || {}, lem = o.lemondott || [], mar = o.maradt || [];
+    var targy = 'Az állandó időpontod véget ért · Studio F360';
+    var bev = 'Az állandó időpontod (' + ritmus(s) + ', ' + egysor(s.kollega && s.kollega.nev) + ') véget ért.';
+    var hivj = 'Ha kérdésed van, vagy újra állandó időpontot szeretnél, hívj minket: ' + egysor(o.szabalyok.telefon) + '.';
+    var html = keret(targy, '<p>Kedves ' + esc(egysor(v.nev)) + '!</p><p>' + esc(bev) + '</p>' +
+      (lem.length ? '<p><strong>Ezeket az alkalmakat lemondtuk</strong></p>' + alkListaH(lem, false) : '') +
+      (mar.length ? '<p><strong>Ezek az alkalmak megmaradnak</strong></p>' + alkListaH(mar) : '') + '<p>' + esc(hivj) + '</p><p>Üdvözlettel,<br>a Studio F360 csapata</p>');
+    var szoveg = 'Kedves ' + egysor(v.nev) + '!\n\n' + bev + '\n\n' + (lem.length ? 'Ezeket az alkalmakat lemondtuk:\n' + alkListaSz(lem, false) + '\n\n' : '') +
+      (mar.length ? 'Ezek az alkalmak megmaradnak:\n' + alkListaSz(mar) + '\n\n' : '') + hivj + '\n\nÜdvözlettel,\na Studio F360 csapata\n';
+    return { tipus: 'sorozat-leallitva', sorozat: true, cimzett: v.email || '', targy: targy, html: html, szoveg: szoveg };
+  }
+  /* ---- bemenet ---- */
+  function sorozatBemenet(d) {
+    if (!d || typeof d !== 'object' || Array.isArray(d)) throw hiba('Hibás kérés.');
+    if (JSON.stringify(d).length > 8192) throw HttpErr(413, 'Túl nagy kérés.');
+    var kollega = d.kollega;
+    if (typeof kollega !== 'string' || !kollega || kollega === 'barki') throw hiba('Állandó időponthoz válassz szakembert.');
+    var r = hivatkozasok({ helyszin: d.helyszin, szolgaltatas: d.szolgaltatas, kollega: kollega });
+    var nap = egesz(d.nap, 'nap (1 = hétfő, 7 = vasárnap)', 1, 7);
+    var kezdPerc = hhmmToPerc(d.kezd);
+    if (kezdPerc == null) throw hiba('Hibás kezdés (HH:MM, 15 perces lépésben).');
+    var ism = d.ismetles == null ? 1 : d.ismetles;
+    if (ism !== 1 && ism !== 2) throw hiba('Hibás ismétlés: 1 (hetente) vagy 2 (kéthetente).');
+    var ma = F.most().datum;
+    if (!ervenyesDatum(d.kezdoDatum)) throw hiba('Hibás kezdő dátum.');
+    if (d.kezdoDatum < F.addDays(ma, -366) || d.kezdoDatum > F.addDays(ma, 366)) throw hiba('A kezdő dátum legfeljebb egy évvel lehet korábbi vagy későbbi a mainál.');
+    var v = d.vege || {}, vege;
+    if (v.tipus === 'datum') { if (!ervenyesDatum(v.datum) || v.datum < d.kezdoDatum) throw hiba('Hibás záró dátum: nem lehet a kezdés előtt.'); vege = { tipus: 'datum', datum: v.datum }; }
+    else if (v.tipus === 'alkalom') vege = { tipus: 'alkalom', db: egesz(v.db, 'alkalmak száma', 1, SOROZAT_MAX) };
+    else if (v.tipus === 'nyitott') vege = { tipus: 'nyitott' };
+    else throw hiba('Hibás vége: datum, alkalom vagy nyitott.');
+    return { helyszin: d.helyszin, szolgaltatas: d.szolgaltatas, kollega: kollega, nap: nap, kezdPerc: kezdPerc, kezd: hm(kezdPerc), ismetles: ism, kezdoDatum: d.kezdoDatum, vege: vege, hely: r.hely, szolg: r.szolg };
+  }
+  function sorozatHorizont() { return F.addDays(F.most().datum, T().szabalyok.maxEloreNap == null ? 60 : T().szabalyok.maxEloreNap); }
+  // az alkalmak dátumai: az első a kezdő napon vagy utána, a napra esik; utána 7 vagy 14 naponként
+  function sorozatDatumok(be, tol) {
+    var d = be.kezdoDatum;
+    while (hetNapja(d) !== be.nap) d = F.addDays(d, 1);
+    var hor = sorozatHorizont(), out = [];
+    for (;; d = F.addDays(d, 7 * be.ismetles)) {
+      if (be.vege.tipus === 'alkalom' && out.length >= be.vege.db) break;
+      if (be.vege.tipus === 'datum' && d > be.vege.datum) break;
+      if (be.vege.tipus === 'nyitott' && d > hor) break;
+      if (out.length >= SOROZAT_MAX) throw hiba('Egy állandó időpontnak legfeljebb ' + SOROZAT_MAX + ' alkalma lehet. Válassz korábbi záró dátumot.');
+      out.push(d);
+    }
+    if (tol) out = out.filter(function (x) { return x >= tol; });
+    return out;
+  }
+  function percAtfed(a1, a2, b1, b2) { return a1 < b2 && b1 < a2; }
+  // miért nem foglalható az alkalom (null = szabad); kiveve: a saját foglalás (áthelyezésnél)
+  function alkalomOk(be, datum, kezdPerc, kiveve) {
+    var t = T(), szolg = be.szolg, veg = kezdPerc + szolg.perc, puffer = szolg.puffer == null ? 10 : szolg.puffer;
+    var k = t.kollegak.filter(function (x) { return x.id === be.kollega; })[0];
+    if (helyiToUtc(datum, kezdPerc) < Date.now()) return 'mult';
+    if (!k || !aktivANapon(k, datum)) return 'kollega_inaktiv';
+    if (kezdPerc < F.perc(be.hely.nyit) || veg > F.perc(be.hely.zar)) return 'zarva';
+    var kiv = db.kivetelek.filter(function (x) { return datum >= x.tol && datum <= x.ig && (x.kezd == null || percAtfed(kezdPerc, veg, x.kezd, x.veg)); });
+    if (kiv.some(function (x) { return !x.kollega && x.helyszin === be.helyszin; })) return 'zarva';
+    if (kiv.some(function (x) { return x.kollega === be.kollega && (!x.helyszin || x.helyszin === be.helyszin); })) return 'szabadsag';
+    var nap = hetNapja(datum);
+    if (!db.beosztas.some(function (b) { return b.kollega === be.kollega && b.nap === nap && b.helyszin === be.helyszin && b.kezd <= kezdPerc && veg <= b.veg; })) return 'nincs_beosztas';
+    var fs = {}; foglaltLista(kiveve).forEach(function (f) { fs[f.kollega + '|' + f.datum + '|' + f.slot] = 1; });
+    if (foglalasSlotjai({ kollega: be.kollega, datum: datum, kezd: kezdPerc, perc: szolg.perc, puffer: puffer }).some(function (s) { return fs[s.kollega + '|' + s.datum + '|' + s.slot]; })) return 'foglalt';
+    if (O().sessions.some(function (x) { return x.kollega === be.kollega && x.datum === datum && x.status !== 'elmarad' && percAtfed(kezdPerc, veg + puffer, x.kezd, x.kezd + x.perc); })) return 'foglalt';
+    return null;
+  }
+  function sorozatElonezet(d) {
+    var be = sorozatBemenet(d), alk = sorozatDatumok(be).map(function (datum) {
+      var ok = alkalomOk(be, datum, be.kezdPerc);
+      return ok ? { datum: datum, kezd: be.kezd, allapot: 'utkozik', ok: ok } : { datum: datum, kezd: be.kezd, allapot: 'szabad' };
+    });
+    var hor = be.vege.tipus === 'nyitott' ? sorozatHorizont() : (alk.length ? alk[alk.length - 1].datum : be.kezdoDatum);
+    return { alkalmak: alk, osszes: alk.length, utkozik: alk.filter(function (a) { return a.allapot === 'utkozik'; }).length, horizontVege: hor };
+  }
+  function sorozatFoglal(s, be, datum, kezdPerc) {
+    var row = sor({ kollega: be.kollega, datum: datum, kezdPerc: kezdPerc, szolg: be.szolg, hely: be.hely, nev: s.name, email: s.email, telefon: s.phone, megjegyzes: s.note, source: 'admin' });
+    row.sorozat_id = s.id;
+    db.bookings.push(row);
+    return row;
+  }
+  function sorozatBe(s) {
+    var t = T();
+    return { helyszin: s.location_id, szolgaltatas: s.service_id, kollega: s.staff_id, nap: s.weekday, kezdPerc: s.start_min, kezd: hm(s.start_min), ismetles: s.interval_het,
+      kezdoDatum: s.kezdo_datum, vege: s.vege_tipus === 'datum' ? { tipus: 'datum', datum: s.vege_datum } : s.vege_tipus === 'alkalom' ? { tipus: 'alkalom', db: s.alkalmak_szama } : { tipus: 'nyitott' },
+      hely: t.helyszinek.filter(function (h) { return h.id === s.location_id; })[0], szolg: t.szolgaltatasok.filter(function (x) { return x.id === s.service_id; })[0] };
+  }
+  function sorozatLetrehoz(d) {
+    var be = sorozatBemenet(d), vb = ugyfelBemenet(Object.assign({}, d.vendeg || {}), true);
+    var kihagy = Array.isArray(d.kihagy) ? d.kihagy : [], ath = Array.isArray(d.athelyez) ? d.athelyez : [];
+    var datumok = sorozatDatumok(be), letre = [], kimaradt = [];
+    if (kihagy.some(function (x) { return datumok.indexOf(x) < 0; })) throw hiba('A kihagyott dátum nem tartozik az állandó időponthoz.');
+    var athM = {};
+    ath.forEach(function (a) {
+      if (!a || typeof a !== 'object' || datumok.indexOf(a.datum) < 0) throw hiba('Az áthelyezett dátum nem tartozik az állandó időponthoz.');
+      if (!ervenyesDatum(a.ujDatum) || hhmmToPerc(a.ujKezd) == null) throw hiba('Hibás áthelyezés (ujDatum, ujKezd).');
+      athM[a.datum] = { datum: a.ujDatum, kezdPerc: hhmmToPerc(a.ujKezd) };
+    });
+    if (!datumok.length) throw HttpErr(409, 'A megadott időszakban nincs ilyen nap.', { kimaradt: [] });
+    var s = { id: ujId('R'), location_id: be.helyszin, service_id: be.szolgaltatas, staff_id: be.kollega, weekday: be.nap, start_min: be.kezdPerc, interval_het: be.ismetles,
+      kezdo_datum: be.kezdoDatum, vege_tipus: be.vege.tipus, vege_datum: be.vege.datum || null, alkalmak_szama: be.vege.db || null,
+      name: vb.nev, email: vb.email, phone: vb.telefon, note: vb.megjegyzes, status: 'aktiv', created_at: Date.now(), leallitva_at: null, kimaradt: [], gorditve: '' };
+    var mentes = db.bookings.length;
+    datumok.forEach(function (datum) {
+      var ok = alkalomOk(be, datum, be.kezdPerc);
+      if (kihagy.indexOf(datum) >= 0) { kimaradt.push({ datum: datum, ok: ok || 'kihagyva' }); return; }
+      if (athM[datum] && ok) { // csak ütköző alkalom helyezhető át, a nem ütközőnél az áthelyezés nem számít
+        var u = athM[datum], uok = alkalomOk(be, u.datum, u.kezdPerc);
+        if (uok) { kimaradt.push({ datum: datum, ok: uok }); return; }
+        var r1 = sorozatFoglal(s, be, u.datum, u.kezdPerc); letre.push({ id: r1.id, datum: r1.date, kezd: hm(r1.start_min), athelyezve: datum }); return;
+      }
+      if (ok) { kimaradt.push({ datum: datum, ok: ok }); return; }
+      var r = sorozatFoglal(s, be, datum, be.kezdPerc); letre.push({ id: r.id, datum: r.date, kezd: hm(r.start_min) });
+    });
+    if (!letre.length) { db.bookings.length = mentes; throw HttpErr(409, 'Egyetlen alkalom sem foglalható. Válassz másik napot, időpontot vagy szakembert.', { kimaradt: kimaradt }); }
+    s.kimaradt = kimaradt.filter(function (x) { return x.ok !== 'kihagyva'; });
+    s.gorditve = F.most().datum;
+    S().push(s);
+    var sn = sorozatNezet(s), sz = T().szabalyok;
+    var alk = letre.slice().sort(function (a, b) { return a.datum.localeCompare(b.datum); }).map(function (a) {
+      var row = db.bookings.filter(function (x) { return x.id === a.id; })[0];
+      return { datum: a.datum, kezd: a.kezd, lemondasUrl: linkek(row.token).lemondasUrl };
+    });
+    outboxIr(s.id, [sorozatVisszaigazolas(sn, { alkalmak: alk, szabalyok: sz }), sorozatKollegaErtesito(sn, kollegaCim(s.staff_id), { alkalmak: alk, esemeny: 'uj' })]);
+    save();
+    return { sorozat: sn, letrejott: letre, kimaradt: kimaradt };
+  }
+  function sorozatNezet(s, reszletes) {
+    var t = T(), ma = F.most().datum, most = Date.now();
+    var h = t.helyszinek.filter(function (x) { return x.id === s.location_id; })[0] || { id: s.location_id, nev: s.location_id, cim: '' };
+    var sz = t.szolgaltatasok.filter(function (x) { return x.id === s.service_id; })[0] || { id: s.service_id, nev: s.service_id };
+    var k = t.kollegak.filter(function (x) { return x.id === s.staff_id; })[0] || { id: s.staff_id, nev: s.staff_id };
+    var sajat = db.bookings.filter(function (b) { return b.sorozat_id === s.id; }).sort(function (a, b) { return a.date.localeCompare(b.date) || a.start_min - b.start_min; });
+    var jov = sajat.filter(function (b) { return b.status === 'megerositett' && helyiToUtc(b.date, b.start_min) > most; });
+    var n = { id: s.id, vendeg: { nev: s.name, email: s.email, telefon: s.phone, megjegyzes: s.note },
+      helyszin: { id: h.id, nev: h.nev, cim: h.cim }, szolgaltatas: { id: sz.id, nev: sz.nev, perc: sz.perc, ar: sz.ar }, kollega: { id: k.id, nev: k.nev, szin: k.szin },
+      nap: s.weekday, kezd: hm(s.start_min), ismetles: s.interval_het, kezdoDatum: s.kezdo_datum,
+      vege: s.vege_tipus === 'datum' ? { tipus: 'datum', datum: s.vege_datum } : s.vege_tipus === 'alkalom' ? { tipus: 'alkalom', db: s.alkalmak_szama } : { tipus: 'nyitott' },
+      status: s.status, letrehozva: new Date(s.created_at).toISOString(), leallitva: s.leallitva_at ? new Date(s.leallitva_at).toISOString() : null,
+      kovetkezo: jov[0] ? { datum: jov[0].date, kezd: hm(jov[0].start_min) } : null, jovobeli: jov.length,
+      lemondott: sajat.filter(function (b) { return b.status === 'lemondva'; }).length, kimaradt: (s.kimaradt || []).filter(function (x) { return x.datum >= ma; }) };
+    if (reszletes) n.alkalmak = sajat.map(function (b) { return { id: b.id, datum: b.date, kezd: hm(b.start_min), allapot: b.status === 'lemondva' ? 'lemondva' : 'megerositett' }; });
+    return n;
+  }
+  function sorozatOf(id) {
+    var s = SOROZAT_RE.test(String(id || '')) ? S().filter(function (x) { return x.id === id; })[0] : null;
+    if (!s) throw HttpErr(404, 'Nincs ilyen állandó időpont.');
+    return s;
+  }
+  function sorozatLista(q) {
+    var a = q.get('allapot') || 'aktiv';
+    if (['aktiv', 'leallitva', 'mind'].indexOf(a) < 0) throw hiba('Hibás állapot: aktiv, leallitva vagy mind.');
+    return { sorozatok: S().filter(function (s) { return a === 'mind' || s.status === a; }).map(function (s) { return sorozatNezet(s); })
+      .sort(function (x, y) { return x.nap - y.nap || x.kezd.localeCompare(y.kezd) || x.vendeg.nev.localeCompare(y.vendeg.nev, 'hu'); }) };
+  }
+  function sorozatLeallit(id, d) {
+    var s = sorozatOf(id), ma = F.most().datum, tol = d && d.tol != null && d.tol !== '' ? d.tol : ma;
+    if (!ervenyesDatum(tol)) throw hiba('Hibás dátum: tol (ÉÉÉÉ-HH-NN).');
+    if (tol < ma) throw hiba('A leállítás napja nem lehet a múltban.');
+    if (s.status === 'leallitva') throw HttpErr(409, 'Ez az állandó időpont már le van állítva.');
+    var sajat = db.bookings.filter(function (b) { return b.sorozat_id === s.id && b.status === 'megerositett'; });
+    var most = Date.now(), lem = sajat.filter(function (b) { return b.date >= tol && helyiToUtc(b.date, b.start_min) > most; });
+    lem.forEach(function (b) { b.status = 'lemondva'; b.cancelled_at = most; });
+    var maradt = sajat.filter(function (b) { return b.date < tol && helyiToUtc(b.date, b.start_min) > most; });
+    s.status = 'leallitva'; s.leallitva_at = most;
+    var sn = sorozatNezet(s), sz = T().szabalyok, ki = function (b) { return { datum: b.date, kezd: hm(b.start_min), lemondasUrl: linkek(b.token).lemondasUrl }; };
+    outboxIr(s.id, [sorozatLeallitvaLevel(sn, { lemondott: lem.map(ki), maradt: maradt.map(ki), szabalyok: sz }),
+      sorozatKollegaErtesito(sn, kollegaCim(s.staff_id), { alkalmak: lem.map(ki), esemeny: 'leallitva' })]);
+    save();
+    return { sorozat: sn, lemondott: lem.map(function (b) { return { id: b.id, datum: b.date }; }) };
+  }
+  // a „visszavonásig” sorozat gördítése (élesben a 15 perces cron): a horizontig elkészülnek az alkalmak
+  function sorozatGordit() {
+    var ma = F.most().datum, valt = false;
+    S().forEach(function (s) {
+      if (s.status !== 'aktiv' || s.vege_tipus !== 'nyitott' || s.gorditve === ma) return;
+      var be = sorozatBe(s);
+      sorozatDatumok(be, ma).forEach(function (datum) {
+        if (db.bookings.some(function (b) { return b.sorozat_id === s.id && b.date === datum; })) return;
+        if ((s.kimaradt || []).some(function (x) { return x.datum === datum; })) return;
+        var ok = alkalomOk(be, datum, be.kezdPerc);
+        if (ok) s.kimaradt.push({ datum: datum, ok: ok }); else sorozatFoglal(s, be, datum, be.kezdPerc);
+      });
+      s.gorditve = ma; valt = true;
+    });
+    if (valt) save();
+  }
+  function sorozatJel(r) {
+    if (!r.sorozat_id) return null;
+    var s = S().filter(function (x) { return x.id === r.sorozat_id; })[0];
+    return s ? { id: s.id, nap: s.weekday, kezd: hm(s.start_min), ismetles: s.interval_het } : null;
+  }
+
   /* ---------------- HTTP ---------------- */
   function json(status, body) { return new Response(JSON.stringify(body), { status: status, headers: { 'Content-Type': 'application/json; charset=utf-8' } }); }
   function kesleltet(res, ms) { return new Promise(function (ok) { setTimeout(function () { ok(res); }, ms); }); }
@@ -1505,6 +1770,13 @@
     if (r0 === 'ora-sablonok') {
       if (reszek.length === 1) { if (method === 'GET') return json(200, { sablonok: O().sablonok.slice().sort(function (a, b) { return a.nap - b.nap || a.kezd - b.kezd; }).map(sablonKi) }); if (method === 'POST') return json(201, sablonLetrehoz(body)); return tilt(); }
       if (reszek.length === 2) { if (method === 'PATCH') return json(200, sablonModosit(r1, body)); if (method === 'DELETE') return json(200, sablonTorol(r1)); return tilt(); }
+    }
+    if (r0 === 'sorozatok') {
+      sorozatGordit();
+      if (reszek.length === 1) { if (method === 'GET') return json(200, sorozatLista(q)); if (method === 'POST') return json(201, sorozatLetrehoz(body)); return tilt(); }
+      if (reszek.length === 2 && r1 === 'elonezet') return method === 'POST' ? json(200, sorozatElonezet(body)) : tilt();
+      if (reszek.length === 2) return method === 'GET' ? json(200, sorozatNezet(sorozatOf(r1), true)) : tilt();
+      if (reszek.length === 3 && r2 === 'leallitas') return method === 'POST' ? json(200, sorozatLeallit(r1, body || {})) : tilt();
     }
     if (reszek.length === 3 && reszek[0] === 'foglalasok' && reszek[2] === 'lemondas' && method === 'POST') {
       return json(200, lemond(foglalasId(decodeURIComponent(reszek[1])), true));
@@ -1616,12 +1888,12 @@
       }
     }
     if (ut === 'foglalasok') {
-      if (method === 'GET') return json(200, foglalasLista(q));
+      if (method === 'GET') { sorozatGordit(); return json(200, foglalasLista(q)); }
       if (method === 'POST') return json(201, foglal(foglalasBemenet(body || {}, true), true));
     }
     if (ut === 'outbox' && method === 'GET') {
       return json(200, { mod: 'outbox', levelek: db.outbox.map(function (o) {
-        return { id: o.id, azonosito: o.booking_id, tipus: o.tipus, csoportos: !!o.csoportos || /^C/.test(String(o.booking_id || '')), cimzett: o.cimzett, targy: o.targy, html: o.html, szoveg: o.szoveg, ics: o.ics,
+        return { id: o.id, azonosito: o.booking_id, tipus: o.tipus, csoportos: !!o.csoportos || /^C/.test(String(o.booking_id || '')), sorozat: /^R/.test(String(o.booking_id || '')), cimzett: o.cimzett, targy: o.targy, html: o.html, szoveg: o.szoveg, ics: o.ics,
           elkuldve: o.sent === 1, sikertelen: o.sent === 2, hiba: null, probalkozas: 0, kuldve: null, letrehozva: new Date(o.created_at).toISOString() };
       }) });
     }

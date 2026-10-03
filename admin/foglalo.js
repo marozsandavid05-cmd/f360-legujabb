@@ -118,6 +118,11 @@
   }
   function fgHash() { return '#/foglalasok/' + fg.nezet + '/' + fg.datum; }
   function openFoglalasok(sub) {
+    var al = /^allando(?:\/(R[0-9A-Z]{10}))?$/.exec(sub || '');
+    if (al) return openAllando(al[1] || '');
+    if ($('#dlg-sr').open) $('#dlg-sr').close();
+    fgMode('naptar');
+    srSzamlalo();
     var m = /^(nap|het)\/(\d{4}-\d{2}-\d{2})$/.exec(sub || '');
     if (m) { fg.nezet = m[1]; fg.datum = m[2]; }
     document.title = 'Foglalások · Admin · Studio F360';
@@ -148,6 +153,8 @@
     box.classList.toggle('is-filtered', !!fg.koll);
   }
   function renderFg() {
+    // az Állandó időpontok nézetben a naptár nem frissül (a fejléc-összegzést az a nézet írja)
+    if ($('#fg-naptar').hidden) return;
     var r = fgRange(), req = ++fgReq, board = $('#fg-board');
     $$('.seg__b').forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-nezet') === fg.nezet ? 'true' : 'false'); });
     $('#fg-prev').setAttribute('aria-label', fg.nezet === 'nap' ? 'Előző nap' : 'Előző hét');
@@ -218,8 +225,8 @@
   function foglBlokk(b, extraCls) {
     var lem = b.allapot === 'lemondva';
     return '<button type="button" title="' + esc(b.kezd + '-' + b.veg + ' · ' + b.nev + ' · ' + b.szolgaltatas.nev + ' · ' + b.kollega.nev + ', ' + b.helyszin.nev) + '" class="bk-item' + (lem ? ' is-cx' : '') + (extraCls ? ' ' + extraCls : '') + '" data-az="' + esc(b.azonosito) + '"' + kcStyle(b.kollega) + ' ' +
-      'aria-label="' + esc(b.kezd + '-' + b.veg + ', ' + b.nev + ', ' + b.szolgaltatas.nev + ', ' + b.kollega.nev + ', ' + b.helyszin.nev + (lem ? ', lemondva' : '')) + '">' +
-      '<span class="bk-item__t">' + esc(b.kezd) + '<span>-' + esc(b.veg) + '</span></span>' +
+      'aria-label="' + esc(b.kezd + '-' + b.veg + ', ' + b.nev + ', ' + b.szolgaltatas.nev + ', ' + b.kollega.nev + ', ' + b.helyszin.nev + (b.sorozat ? ', állandó időpont' : '') + (lem ? ', lemondva' : '')) + '">' +
+      '<span class="bk-item__t">' + esc(b.kezd) + '<span>-' + esc(b.veg) + '</span>' + (b.sorozat ? ISM_IKON : '') + '</span>' +
       '<span class="bk-item__n">' + esc(b.nev) + '</span>' +
       '<span class="bk-item__s">' + esc(b.szolgaltatas.nev) + (lem ? ' · lemondva' : '') + '</span>' +
     '</button>';
@@ -281,6 +288,7 @@
       '<li><span class="lg lg--work is-reit" aria-hidden="true"></span>Munkaidő, Reitter Ferenc utca</li>' +
       '<li><span class="lg lg--off" aria-hidden="true"></span>Szabadság, zárva</li>' +
       '<li><span class="lg lg--cx" aria-hidden="true"></span>Lemondott foglalás</li>' +
+      '<li><span class="lg lg--ism" aria-hidden="true">' + ISM_IKON + '</span>Állandó időpont</li>' +
       '<li><span class="lg lg--oc" aria-hidden="true"></span>Csoportos óra, foglalt / összes hely</li></ul>';
   }
   // keskeny képernyőn: időrendi lista szakemberenként
@@ -312,7 +320,7 @@
         '<div class="week__list">' + list.map(function (b) {
           return { p: F.perc(b.kezd), h: '<button type="button" class="wk-item' + (b.allapot === 'lemondva' ? ' is-cx' : '') + '" data-az="' + esc(b.azonosito) + '"' + kcStyle(b.kollega) +
             ' title="' + esc(b.kezd + ' · ' + b.nev + ' · ' + b.szolgaltatas.nev + ' · ' + b.kollega.nev + ', ' + b.helyszin.nev) + '">' +
-            '<b>' + esc(b.kezd) + '</b><span>' + esc(b.nev) + '</span><small>' + esc(rovidNev(b.kollega.nev)) + ' · ' + esc(b.szolgaltatas.nev) + (b.allapot === 'lemondva' ? ' · lemondva' : '') + '</small></button>' };
+            '<b>' + esc(b.kezd) + (b.sorozat ? ISM_IKON + '<span class="sr">, állandó időpont</span>' : '') + '</b><span>' + esc(b.nev) + '</span><small>' + esc(rovidNev(b.kollega.nev)) + ' · ' + esc(b.szolgaltatas.nev) + (b.allapot === 'lemondva' ? ' · lemondva' : '') + '</small></button>' };
         }).concat(ol.map(function (o) { return { p: F.perc(o.kezd), h: oraBlokk(o, 'oc-item--wk') }; })).sort(function (a, b) { return a.p - b.p; }).map(function (x) { return x.h; }).join('') + '</div></section>';
     }
     board.innerHTML = html + '</div>';
@@ -335,6 +343,7 @@
       '<div><dt>Telefon</dt><dd>' + tel + '</dd></div>' +
       '<div><dt>E-mail</dt><dd>' + em + '</dd></div>' +
       (b.megjegyzes ? '<div><dt>Megjegyzés</dt><dd>' + esc(b.megjegyzes) + '</dd></div>' : '') +
+      (b.sorozat ? '<div><dt>Ismétlődik</dt><dd class="dd-ism">' + ISM_IKON + '<span>Állandó időpont: ' + esc(ritmus(b.sorozat)) + '<a class="dd-ism__a" href="#/foglalasok/allando/' + esc(b.sorozat.id) + '" id="fg-ser-link">Az állandó időpont adatai és a többi alkalom</a></span></dd></div>' : '') +
       '<div><dt>Állapot</dt><dd>' + (lem ? '<b>Lemondva</b>' : 'Megerősítve') + ' · ' + (b.forras === 'admin' ? 'kézzel felvéve' : 'a weboldalon foglalta') + '</dd></div>' +
       (b.kampany ? '<div><dt>Honnan jött</dt><dd>' + esc(forrasSzoveg(b.kampany)) + '</dd></div>' : '') +
       '<div><dt>Azonosító</dt><dd class="mono">' + esc(b.azonosito) + '</dd></div>' +
@@ -347,6 +356,8 @@
       '<button type="button" class="btn btn--primary" id="fg-close" autofocus>Bezárás</button>';
     var d = $('#dlg-fg');
     $('#fg-close').addEventListener('click', function () { d.close(); });
+    if (b.sorozat) $('#fg-ser-link').addEventListener('click', function () { d.close(); });
+    if (b.sorozat && !lem) $('#dlg-fg-body').insertAdjacentHTML('beforeend', '<p class="hint">Az áthelyezés és a lemondás csak erre az egy alkalomra vonatkozik, a többi alkalom marad.</p>');
     if (athelyezheto) $('#fg-move').addEventListener('click', function () { d.close(); openMove(b); });
     if (!lem) $('#fg-cx').addEventListener('click', function () {
       d.close();
@@ -489,6 +500,408 @@
   }
 
 
+
+  /* =====================================================================
+     ÁLLANDÓ IDŐPONT (sorozat): létrehozás előnézettel, lista, részletek, leállítás
+     Szerződés: Claude tesztelés\f360-allando-idopont-2026-10-01\SZERZODES.md
+     API: POST /sorozatok/elonezet, POST /sorozatok, GET /sorozatok?allapot=, GET /sorozatok/:id,
+          POST /sorozatok/:id/leallitas; áthelyezéshez GET /szabad (admin ág)
+     A ritmus felirata a levelek-sorozat.js ritmus()-ának másolata: „szerdánként 16:00-kor”.
+     ===================================================================== */
+  var NAPOKON = ['', 'hétfőnként', 'keddenként', 'szerdánként', 'csütörtökönként', 'péntekenként', 'szombatonként', 'vasárnaponként'];
+  var NAPON_R = ['', 'hétfőn', 'kedden', 'szerdán', 'csütörtökön', 'pénteken', 'szombaton', 'vasárnap'];
+  function ritmus(s) {
+    var nap = Number(s.nap);
+    if (!(nap >= 1 && nap <= 7)) return '';
+    return Number(s.ismetles) === 2 ? 'minden második ' + NAPON_R[nap] + ' ' + s.kezd + '-kor' : NAPOKON[nap] + ' ' + s.kezd + '-kor';
+  }
+  function nagyKezd(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+  var SER_OK = {
+    foglalt: 'Foglalt: ekkor már van foglalása vagy csoportos órája',
+    szabadsag: 'Szabadság vagy kiesés',
+    nincs_beosztas: 'Ekkor nincs beosztva ezen a helyszínen',
+    zarva: 'A helyszín zárva',
+    mult: 'Már elmúlt',
+    kollega_inaktiv: 'A szakember ekkor nem foglalható',
+    kihagyva: 'Kihagyva'
+  };
+  function okSz(ok) { return SER_OK[ok] || 'Nem foglalható'; }
+  // ismétlés-ikon: két íves nyíl körben (a naptár-blokkon, a jelmagyarázatban, a gombon)
+  var ISM_IKON = '<svg class="ism" viewBox="0 0 20 20" width="14" height="14" aria-hidden="true" focusable="false"><path d="M4.5 8.5A5.5 5.5 0 0 1 14 5.2L15.5 6.8M15.5 3.5v3.3h-3.3M15.5 11.5A5.5 5.5 0 0 1 6 14.8L4.5 13.2M4.5 16.5v-3.3h3.3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  /* ---------- létrehozás: 1. adatok ---------- */
+  var ser = { step: 'adat', be: null, elo: null, dontes: {}, bo: null, boReq: 0, eloReq: 0, mvDatum: '', mvReq: 0, eredmeny: null };
+  function kovNap(nap, tol) { var d = tol; while ((F.hetNapja(d) || 7) !== nap) d = F.addDays(d, 1); return d; }
+  function openSer() {
+    loadTorzs().then(function () {
+      ser = { step: 'adat', be: null, elo: null, dontes: {}, bo: null, boReq: 0, eloReq: 0, mvDatum: '', mvReq: 0, eredmeny: null };
+      $('#s-hely').innerHTML = optionList(torzs.helyszinek, fg.hely || torzs.helyszinek[0].id);
+      $('#s-nap').innerHTML = NAP_HOSSZU.map(function (n, i) { return '<option value="' + (i + 1) + '"' + (i === 2 ? ' selected' : '') + '>' + n + '</option>'; }).join('');
+      ['#s-nev', '#s-tel', '#s-email', '#s-megj'].forEach(function (s) { $(s).value = ''; });
+      $('input[name="s-ism"][value="1"]').checked = true;
+      $('input[name="s-vege"][value="alkalom"]').checked = true;
+      $('#s-db').value = 10; $('#s-ig').value = '';
+      var ma = F.most().datum;
+      $('#s-tol').min = F.addDays(ma, -366); $('#s-tol').max = F.addDays(ma, 366);
+      $('#s-tol').value = kovNap(3, F.addDays(ma, 1));
+      $('#s-err').hidden = true;
+      serFill('hely');
+      serStep('adat');
+      $('#dlg-ser').showModal();
+      $('#s-nev').focus();
+    }).catch(function (e) { toast(e.message, 'error'); });
+  }
+  function serFill(from) {
+    var h = $('#s-hely').value;
+    if (from === 'hely') {
+      var sl = torzs.szolgaltatasok.filter(function (s) { return s.helyszinek.indexOf(h) >= 0 && torzs.kollegak.some(function (k) { return nemArchiv(k) && k.helyszinek.indexOf(h) >= 0 && k.szolgaltatasok.indexOf(s.id) >= 0; }); });
+      $('#s-szolg').innerHTML = sl.map(function (s) { return '<option value="' + esc(s.id) + '">' + esc(s.nev + ' · ' + s.perc + ' perc') + '</option>'; }).join('');
+    }
+    if (from === 'hely' || from === 'szolg') {
+      var sz = $('#s-szolg').value, elozo = $('#s-koll').value;
+      var kl = torzs.kollegak.filter(function (k) { return nemArchiv(k) && k.helyszinek.indexOf(h) >= 0 && k.szolgaltatasok.indexOf(sz) >= 0; });
+      var pref = kl.some(function (k) { return k.id === elozo; }) ? elozo : fg.koll && kl.some(function (k) { return k.id === fg.koll; }) ? fg.koll : (kl[0] || {}).id;
+      $('#s-koll').innerHTML = optionList(kl, pref);
+    }
+    if (from !== 'kezd') serBeosztas(from === 'nap');
+    else serRitmus();
+  }
+  // a választott szakember beosztása a választott napon: a kezdés-lista ehhez igazodik, de bármely 15 perc választható
+  function serBeosztas(napValt) {
+    var kid = $('#s-koll').value, req = ++ser.boReq;
+    if (!kid) { serKezdLista([]); return; }
+    api('/beosztas?kollega=' + encodeURIComponent(kid)).then(function (r) {
+      if (req !== ser.boReq) return;
+      ser.bo = (r && r.sorok) || [];
+      var nap = Number($('#s-nap').value), h = $('#s-hely').value;
+      var sav = ser.bo.filter(function (s) { return s.nap === nap && s.helyszin === h; });
+      serKezdLista(sav);
+      if (napValt) { var ma = F.most().datum, t = $('#s-tol').value || F.addDays(ma, 1); $('#s-tol').value = kovNap(nap, t < ma ? ma : t); serRitmus(); }
+    }).catch(function () { if (req === ser.boReq) { ser.bo = []; serKezdLista([]); } });
+  }
+  function serKezdLista(sav) {
+    var hely0 = hely($('#s-hely').value), sz = szolg($('#s-szolg').value), sel = $('#s-kezd'), regi = sel.value;
+    var perc = sz ? sz.perc : 50, tol = F.perc(hely0.nyit), ig = F.perc(hely0.zar) - perc;
+    var bent = function (m) { return sav.some(function (s) { return m >= F.perc(s.kezd) && m + perc <= F.perc(s.veg); }); };
+    var opts = [];
+    for (var m = Math.ceil(tol / 15) * 15; m <= ig; m += 15) opts.push(m);
+    sel.innerHTML = opts.map(function (m) { var t = F.hm2(m); return '<option value="' + t + '">' + t + (sav.length && !bent(m) ? ' (nincs beosztva)' : '') + '</option>'; }).join('');
+    var alap = opts.filter(function (m) { return F.hm2(m) === regi && (!sav.length || bent(m)); })[0];
+    if (alap == null) alap = sav.length ? opts.filter(bent)[0] : opts.filter(function (m) { return m >= 16 * 60; })[0];
+    if (alap != null) sel.value = F.hm2(alap);
+    var k = koll($('#s-koll').value), nap = Number($('#s-nap').value);
+    $('#s-bo').textContent = !k ? '' : sav.length
+      ? rovidNev(k.nev) + ' ' + NAPON_R[nap] + ' ' + sav.map(function (s) { return s.kezd + '-' + s.veg; }).join(', ') + ' között dolgozik ' + (hely0.nev === 'Mexikói út' ? 'a Mexikói úton' : 'a ' + hely0.nev + 'ban') + '.'
+      : rovidNev(k.nev) + ' ' + NAPON_R[nap] + ' nincs beosztva ezen a helyszínen. Válassz másik napot, vagy az ellenőrzésnél ütközésként látod.';
+    serRitmus();
+  }
+  function serRitmus() {
+    var nap = Number($('#s-nap').value), kezd = $('#s-kezd').value, ism = Number(($('input[name="s-ism"]:checked') || {}).value || 1);
+    var k = koll($('#s-koll').value), sz = szolg($('#s-szolg').value);
+    $('#s-ritmus').innerHTML = kezd && k ? '<b>' + esc(nagyKezd(ritmus({ nap: nap, kezd: kezd, ismetles: ism }))) + '</b>, ' + esc(k.nev) + (sz ? ', ' + esc(sz.nev) : '') : '';
+    var t = $('#s-tol').value;
+    $('#s-tol-h').textContent = t ? 'Az első alkalom: ' + F.datumNap(kovNap(nap, t)) + '.' : '';
+  }
+  function serBemenet() {
+    var vt = $('input[name="s-vege"]:checked').value;
+    var be = { helyszin: $('#s-hely').value, szolgaltatas: $('#s-szolg').value, kollega: $('#s-koll').value, nap: Number($('#s-nap').value), kezd: $('#s-kezd').value,
+      ismetles: Number($('input[name="s-ism"]:checked').value), kezdoDatum: $('#s-tol').value,
+      vege: vt === 'alkalom' ? { tipus: 'alkalom', db: Number($('#s-db').value) } : vt === 'datum' ? { tipus: 'datum', datum: $('#s-ig').value } : { tipus: 'nyitott' } };
+    var vendeg = { nev: $('#s-nev').value.trim(), telefon: $('#s-tel').value.trim(), email: $('#s-email').value.trim(), megjegyzes: $('#s-megj').value.trim() };
+    var hiba = null;
+    if (vendeg.nev.length < 2) hiba = ['s-nev', 'Add meg a vendég nevét.'];
+    else if (vendeg.email && !/^[^\s@<>"]{1,64}@[^\s@<>"]+\.[^\s@<>"]{2,}$/.test(vendeg.email)) hiba = ['s-email', 'Az e-mail-cím nem tűnik érvényesnek. Például: nev@gmail.com'];
+    else if (!be.kollega) hiba = ['s-koll', 'Ennél a kezelésnél nincs választható szakember ezen a helyszínen.'];
+    else if (!be.kezdoDatum) hiba = ['s-tol', 'Add meg, melyik naptól induljon.'];
+    else if (vt === 'alkalom' && (!Number.isInteger(be.vege.db) || be.vege.db < 1 || be.vege.db > 104)) hiba = ['s-db', 'Az alkalmak száma 1 és 104 között lehet.'];
+    else if (vt === 'datum' && !be.vege.datum) hiba = ['s-ig', 'Add meg az utolsó napot.'];
+    else if (vt === 'datum' && be.vege.datum < be.kezdoDatum) hiba = ['s-ig', 'Az utolsó nap nem lehet korábbi az első napnál.'];
+    return { be: be, vendeg: vendeg, hiba: hiba };
+  }
+  function serStep(st) {
+    ser.step = st;
+    ['adat', 'alk', 'kesz'].forEach(function (x) { $('#ser-' + x).hidden = x !== st; });
+    var idx = ['adat', 'alk', 'kesz'].indexOf(st);
+    $$('[data-serstep]').forEach(function (li, i) {
+      li.classList.toggle('is-done', i < idx);
+      if (i === idx) li.setAttribute('aria-current', 'step'); else li.removeAttribute('aria-current');
+    });
+    var act = $('#ser-act');
+    if (st === 'adat') act.innerHTML = '<button type="button" class="btn btn--ghost" id="ser-cancel">Mégse</button><button type="submit" class="btn btn--primary" id="ser-check">Alkalmak ellenőrzése</button>';
+    if (st === 'alk') act.innerHTML = '<button type="button" class="linkbtn" id="ser-back">Vissza az adatokhoz</button><button type="button" class="btn btn--ghost" id="ser-cancel">Mégse</button><button type="submit" class="btn btn--primary" id="ser-save">Mentés</button>';
+    if (st === 'kesz') act.innerHTML = '<button type="button" class="btn btn--ghost" id="ser-cancel">Bezárás</button><a class="btn btn--primary" id="ser-open" href="#/foglalasok/allando/' + esc(ser.eredmeny ? ser.eredmeny.sorozat.id : '') + '">Az állandó időpont adatai</a>';
+  }
+
+  /* ---------- 2. alkalmak ellenőrzése ---------- */
+  function serEllenoriz() {
+    var b = serBemenet(), err = $('#s-err');
+    if (b.hiba) { err.textContent = b.hiba[1]; err.hidden = false; $('#' + b.hiba[0]).focus(); return; }
+    err.hidden = true;
+    var gomb = $('#ser-check'), req = ++ser.eloReq;
+    gomb.disabled = true; gomb.textContent = 'Ellenőrzés folyamatban';
+    api('/sorozatok/elonezet', { method: 'POST', json: b.be }).then(function (r) {
+      if (req !== ser.eloReq) return;
+      // ha ugyanazt nézi újra, a döntései (kihagyás, áthelyezés) megmaradnak
+      var ugyanaz = ser.be && JSON.stringify(ser.be) === JSON.stringify(b.be);
+      ser.be = b.be; ser.vendeg = b.vendeg; ser.elo = r; if (!ugyanaz) ser.dontes = {};
+      serStep('alk'); renderSerAlk();
+      $('#ser-alk-h').focus();
+    }).catch(function (e) {
+      if (req !== ser.eloReq) return;
+      gomb.disabled = false; gomb.textContent = 'Alkalmak ellenőrzése';
+      err.textContent = e.message; err.hidden = false;
+    });
+  }
+  function serSzamok() {
+    var l = ser.elo.alkalmak, n = { letre: 0, utk: 0, nyitott: 0, kihagy: 0, ath: 0 };
+    l.forEach(function (a) {
+      var d = ser.dontes[a.datum];
+      if (a.allapot === 'szabad') n.letre++;
+      else { n.utk++; if (!d) n.nyitott++; else if (d.tipus === 'kihagy') n.kihagy++; else { n.ath++; n.letre++; } }
+    });
+    return n;
+  }
+  function renderSerAlk() {
+    var be = ser.be, k = koll(be.kollega), sz = szolg(be.szolgaltatas), e = ser.elo, n = serSzamok();
+    var html = '<div class="ser-sum"' + kcStyle(k) + '><p class="ser-sum__r" id="ser-alk-h" tabindex="-1">' + esc(nagyKezd(ritmus(be))) + '</p>' +
+      '<p class="ser-sum__m">' + esc([ser.vendeg.nev, k.nev, sz.nev + ' ' + sz.perc + ' perc', hely(be.helyszin).nev].join(' · ')) + '</p>' +
+      '<p class="ser-sum__n" aria-live="polite" id="ser-cnt">' + serCntSz(n) + '</p></div>';
+    if (be.vege.tipus === 'nyitott') html += '<p class="note ser-note">Visszavonásig: most a ' + esc(F.honapNapRagos(e.horizontVege).replace(/-(án|én|jén)$/, '')) + '-ig tartó alkalmak készülnek el, a későbbieket a rendszer folyamatosan rögzíti. Ha később egy alkalom ütközik, kimarad, és itt, az állandó időpontnál látod.</p>';
+    if (!e.alkalmak.length) html += '<p class="empty-inline">A megadott időszakban nincs ilyen nap. Állítsd át az első napot vagy a végét.</p>';
+    html += '<ol class="ser-list">' + e.alkalmak.map(serSor).join('') + '</ol>';
+    $('#ser-alk').innerHTML = html;
+    var s = $('#ser-save');
+    if (s) { s.disabled = !n.letre; s.textContent = n.letre ? 'Mentés: ' + n.letre + ' alkalom' : 'Nincs menthető alkalom'; }
+  }
+  function serCntSz(n) {
+    return '<b>' + n.letre + '</b> alkalom kerül a naptárba' + (n.utk ? ', <b>' + n.utk + '</b> ütközik' + (n.nyitott ? ' (' + n.nyitott + ' még döntésre vár, mentéskor kimarad)' : '') : '') + '.';
+  }
+  function serSor(a) {
+    var d = ser.dontes[a.datum], utk = a.allapot === 'utkozik';
+    var cls = 'ser-a' + (utk ? ' is-utk' : '') + (d && d.tipus === 'kihagy' ? ' is-skip' : '') + (d && d.tipus === 'athelyez' ? ' is-moved' : '');
+    var nap = '<span class="ser-a__d"><b>' + esc(F.honapNap(a.datum)) + '</b><small>' + esc(F.NAPOK[F.hetNapja(a.datum)]) + '</small></span><span class="ser-a__t">' + esc(a.kezd) + '</span>';
+    if (!utk) return '<li class="' + cls + '">' + nap + '<span class="ser-a__s">Szabad</span></li>';
+    var allapot, gombok;
+    if (!d) {
+      allapot = '<span class="ser-a__s"><span class="ser-a__ok">' + esc(okSz(a.ok)) + '</span></span>';
+      gombok = '<span class="ser-a__act"><button type="button" class="btn btn--ghost btn--sm" data-serskip="' + a.datum + '" aria-label="Kihagyás: ' + esc(F.datumNap(a.datum)) + '">Kihagyás</button>' +
+        (a.ok === 'mult' ? '' : '<button type="button" class="btn btn--ghost btn--sm" data-sermove="' + a.datum + '" aria-label="Áthelyezés: ' + esc(F.datumNap(a.datum)) + '">Áthelyezés</button>') + '</span>';
+    } else if (d.tipus === 'kihagy') {
+      allapot = '<span class="ser-a__s"><span class="ser-a__ok">Kimarad · ' + esc(okSz(a.ok).split(':')[0].toLowerCase()) + '</span></span>';
+      gombok = '<span class="ser-a__act"><button type="button" class="linkbtn" data-serundo="' + a.datum + '" aria-label="Visszavonás: ' + esc(F.datumNap(a.datum)) + '">Visszavonás</button></span>';
+    } else {
+      allapot = '<span class="ser-a__s"><span class="ser-a__ok">Áthelyezve: <b>' + esc(F.datumNap(d.ujDatum) + ', ' + d.ujKezd) + '</b></span></span>';
+      gombok = '<span class="ser-a__act"><button type="button" class="linkbtn" data-serundo="' + a.datum + '" aria-label="Áthelyezés visszavonása: ' + esc(F.datumNap(a.datum)) + '">Visszavonás</button></span>';
+    }
+    var mv = ser.mvDatum === a.datum ? '<div class="ser-mv" id="ser-mv"><div class="ser-mv__h"><div class="field"><label for="ser-mv-d">Új nap</label><input type="date" id="ser-mv-d" value="' + esc(ser.mvNap || a.datum) + '"></div>' +
+      '<p class="hint">Ugyanannál a szakembernél, ugyanazzal a kezeléssel. Csak ez az egy alkalom kerül máshová.</p></div>' +
+      '<fieldset class="slotpick"><legend>Szabad időpontok</legend><div class="slotpick__list" id="ser-mv-slots" aria-live="polite"></div></fieldset>' +
+      '<div class="ser-mv__act"><button type="button" class="btn btn--ghost btn--sm" id="ser-mv-x">Mégse</button><button type="button" class="btn btn--primary btn--sm" id="ser-mv-ok">Ide helyezem</button></div></div>' : '';
+    return '<li class="' + cls + '" data-serdatum="' + a.datum + '">' + nap + allapot + gombok + mv + '</li>';
+  }
+  function serFrissit(fokusz) {
+    renderSerAlk();
+    if (fokusz) { var el = $(fokusz); if (el) el.focus(); }
+  }
+  // az áthelyezés célja nem ütközhet a sorozat többi, még el nem mentett alkalmával
+  function serTerv() {
+    var l = [];
+    ser.elo.alkalmak.forEach(function (a) {
+      var d = ser.dontes[a.datum];
+      if (a.allapot === 'szabad') l.push({ datum: a.datum, kezd: a.kezd, forras: a.datum });
+      else if (d && d.tipus === 'athelyez') l.push({ datum: d.ujDatum, kezd: d.ujKezd, forras: a.datum });
+    });
+    return l;
+  }
+  function serMoveOpen(datum) {
+    ser.mvDatum = datum; ser.mvNap = datum; renderSerAlk();
+    serMoveSlots(); $('#ser-mv-d').focus();
+    $('#ser-mv').scrollIntoView({ block: 'nearest' });
+  }
+  function serMoveSlots(keep) {
+    var box = $('#ser-mv-slots'), d = $('#ser-mv-d').value, be = ser.be, req = ++ser.mvReq;
+    ser.mvNap = d;
+    if (!d) { box.innerHTML = '<p class="hint">Válassz napot.</p>'; return; }
+    box.setAttribute('aria-busy', 'true');
+    box.innerHTML = '<p class="hint">Szabad időpontok betöltése</p>';
+    api('/szabad?helyszin=' + encodeURIComponent(be.helyszin) + '&szolgaltatas=' + encodeURIComponent(be.szolgaltatas) + '&kollega=' + encodeURIComponent(be.kollega) + '&tol=' + d + '&ig=' + d).then(function (r) {
+      if (req !== ser.mvReq) return;
+      box.setAttribute('aria-busy', 'false');
+      var perc = szolg(be.szolgaltatas).perc + (szolg(be.szolgaltatas).puffer == null ? 10 : szolg(be.szolgaltatas).puffer);
+      var terv = serTerv().filter(function (x) { return x.datum === d && x.forras !== ser.mvDatum; });
+      var list = ((r && r.napok && r.napok[d]) || []).map(function (x) {
+        var m = F.perc(x.kezd), ut = terv.some(function (t) { var tm = F.perc(t.kezd); return m < tm + perc && tm < m + perc; });
+        return { kezd: x.kezd, ut: ut };
+      });
+      if (!list.length) { box.innerHTML = '<p class="hint">Ezen a napon nincs szabad időpont ennél a szakembernél. Válassz másik napot.</p>'; return; }
+      box.innerHTML = '<div class="pills">' + list.map(function (x) {
+        return '<label class="pill' + (x.ut ? ' is-now' : '') + '"><input type="radio" name="ser-mv-slot" value="' + esc(x.kezd) + '"' + (x.ut ? ' disabled' : '') + (keep === x.kezd ? ' checked' : '') + '>' +
+          '<span>' + esc(x.kezd) + '<small>' + (x.ut ? 'állandó alkalom' : 'szabad') + '</small></span></label>';
+      }).join('') + '</div>';
+    }).catch(function (e) { if (req === ser.mvReq) { box.setAttribute('aria-busy', 'false'); box.innerHTML = '<p class="form-err">' + esc(e.message) + '</p>'; } });
+  }
+  function serMoveOk() {
+    var sel = $('input[name="ser-mv-slot"]:checked'), d = $('#ser-mv-d').value, datum = ser.mvDatum;
+    if (!sel) { var b = $('#ser-mv-slots'); if (!$('.ser-mv__err', b.parentNode)) b.insertAdjacentHTML('afterend', '<p class="form-err ser-mv__err" role="alert">Válassz egy szabad időpontot.</p>'); return; }
+    ser.dontes[datum] = { tipus: 'athelyez', ujDatum: d, ujKezd: sel.value };
+    ser.mvDatum = '';
+    serFrissit('[data-serundo="' + datum + '"]');
+  }
+  function serMent() {
+    var b = $('#ser-save'), kihagy = [], ath = [];
+    Object.keys(ser.dontes).forEach(function (d) {
+      var x = ser.dontes[d];
+      if (x.tipus === 'kihagy') kihagy.push(d); else ath.push({ datum: d, ujDatum: x.ujDatum, ujKezd: x.ujKezd });
+    });
+    b.disabled = true; b.textContent = 'Mentés folyamatban';
+    api('/sorozatok', { method: 'POST', json: Object.assign({}, ser.be, { vendeg: ser.vendeg, kihagy: kihagy, athelyez: ath }) }).then(function (r) {
+      ser.eredmeny = r;
+      serStep('kesz'); renderSerKesz();
+      $('#ser-kesz-h').focus();
+      if (sr.lista) loadSrLista();
+      renderFg();
+    }).catch(function (e) {
+      b.disabled = false; b.textContent = 'Mentés';
+      var p = $('#ser-alk .ser-err');
+      if (!p) $('#ser-alk').insertAdjacentHTML('afterbegin', '<p class="form-err ser-err" role="alert"></p>');
+      $('#ser-alk .ser-err').textContent = e.message;
+      if (e.status === 409) serEllenoriz();
+    });
+  }
+  function renderSerKesz() {
+    var r = ser.eredmeny, s = r.sorozat, l = r.letrejott.slice().sort(function (a, b) { return a.datum.localeCompare(b.datum); }), km = r.kimaradt || [];
+    var athelyezve = l.filter(function (a) { return a.athelyezve; }).length;
+    $('#ser-kesz').innerHTML = '<div class="ser-done"><p class="ser-done__n" id="ser-kesz-h" tabindex="-1"><b>' + l.length + '</b> alkalom került a naptárba</p>' +
+      '<p class="ser-done__r">' + esc(s.vendeg.nev) + ', ' + esc(ritmus(s)) + ', ' + esc(s.kollega.nev) + '. ' +
+      (l.length ? 'Első alkalom: ' + esc(F.datumNap(l[0].datum) + ', ' + l[0].kezd) + '. ' : '') + (athelyezve ? athelyezve + ' alkalom áthelyezve. ' : '') +
+      (s.vendeg.email ? 'A vendég egy levelet kap az összes alkalommal.' : 'A vendégnek nincs e-mail-címe, ezért levelet nem kap.') + '</p></div>' +
+      (km.length ? '<div class="ser-km"><p class="ser-km__h">Kimaradt ' + km.length + ' alkalom</p><ul>' + km.map(function (x) {
+        return '<li><b>' + esc(F.datumNap(x.datum)) + '</b> · ' + esc(okSz(x.ok)) + '</li>';
+      }).join('') + '</ul></div>' : '<p class="hint">Egy alkalom sem maradt ki.</p>');
+  }
+
+  /* ---------- lista: Állandó időpontok ---------- */
+  var sr = { lista: 'aktiv', adat: [], req: 0, nyitott: '', reszlet: null, dReq: 0 };
+  function openAllando(id) {
+    document.title = 'Állandó időpontok · Admin · Studio F360';
+    fgMode('allando');
+    loadTorzs().then(function () { loadSrLista(); if (id) openSr(id); else if ($('#dlg-sr').open) $('#dlg-sr').close(); })
+      .catch(function (e) { hibaDoboz($('#sr-board'), e, function () { openAllando(id); }); });
+  }
+  function fgMode(m) {
+    $('#fg-naptar').hidden = m !== 'naptar'; $('#fg-allando').hidden = m !== 'allando';
+    $$('[data-fgmode]').forEach(function (a) { if (a.getAttribute('data-fgmode') === m) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+  }
+  function loadSrLista() {
+    var box = $('#sr-board'), req = ++sr.req;
+    box.setAttribute('aria-busy', 'true');
+    if (!box.children.length) box.innerHTML = '<div class="skel-board skel-board--sm"></div>';
+    $$('[data-srlista]').forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-srlista') === sr.lista ? 'true' : 'false'); });
+    api('/sorozatok?allapot=' + sr.lista).then(function (r) {
+      if (req !== sr.req) return;
+      sr.adat = (r && r.sorozatok) || [];
+      box.setAttribute('aria-busy', 'false');
+      $('#fg-sum').textContent = sr.adat.length + ' ' + { aktiv: 'aktív', leallitva: 'leállított', mind: '' }[sr.lista] + (sr.lista === 'mind' ? '' : ' ') + 'állandó időpont' +
+        (sr.lista !== 'leallitva' ? ', ' + sr.adat.reduce(function (n, s) { return n + (s.status === 'aktiv' ? s.jovobeli : 0); }, 0) + ' jövőbeli alkalom' : '');
+      renderSrLista();
+    }).catch(function (e) { if (req === sr.req) hibaDoboz(box, e, loadSrLista); });
+    srSzamlalo();
+  }
+  function srSzamlalo() {
+    api('/sorozatok?allapot=aktiv').then(function (r) { var n = ((r && r.sorozatok) || []).length; $('#fg-ser-n').textContent = n ? String(n) : ''; }).catch(function () { /* a szám nem kritikus */ });
+  }
+  function renderSrLista() {
+    var box = $('#sr-board'), l = sr.adat;
+    if (!l.length) {
+      box.innerHTML = '<div class="empty-state"><p>' + (sr.lista === 'leallitva' ? 'Nincs leállított állandó időpont.' : 'Még nincs állandó időpont. Ha egy vendég minden héten ugyanakkor jön, rögzítsd egyszerre az összes alkalmát.') + '</p>' +
+        (sr.lista === 'leallitva' ? '' : '<button type="button" class="btn btn--primary" data-sernew>Állandó időpont felvétele</button>') + '</div>';
+      return;
+    }
+    // napok szerint csoportosítva: a hét rendje, mint egy órarend
+    var napok = {};
+    l.forEach(function (s) { (napok[s.nap] = napok[s.nap] || []).push(s); });
+    box.innerHTML = '<div class="sr-week">' + Object.keys(napok).map(Number).sort().map(function (n) {
+      return '<section class="sr-day" aria-labelledby="sr-d-' + n + '"><h2 class="sr-day__h" id="sr-d-' + n + '">' + NAP_HOSSZU[n - 1] + '<small>' + napok[n].length + '</small></h2><ul class="sr-list">' +
+        napok[n].map(srSor).join('') + '</ul></section>';
+    }).join('') + '</div>';
+  }
+  function srSor(s) {
+    var le = s.status === 'leallitva', km = (s.kimaradt || []).length;
+    var ido = (F.honapNap(s.kezdoDatum)) + ' - ' + (s.vege.tipus === 'nyitott' ? 'visszavonásig' : s.vege.tipus === 'datum' ? F.honapNap(s.vege.datum) : s.vege.db + ' alkalom');
+    return '<li><a class="sr-row' + (le ? ' is-off' : '') + '" href="#/foglalasok/allando/' + esc(s.id) + '"' + kcStyle(s.kollega) + '>' +
+      '<span class="sr-row__t"><b>' + esc(s.kezd) + '</b><small>' + (Number(s.ismetles) === 2 ? 'kéthetente' : 'hetente') + '</small></span>' +
+      '<span class="sr-row__w"><b>' + esc(s.vendeg.nev) + '</b><span class="sr-row__k"><span class="pl__dot" aria-hidden="true"></span>' + esc(s.kollega.nev) + ' · ' + esc(s.szolgaltatas.nev) + '</span>' +
+        '<span class="sr-row__m">' + esc(ido) + '</span></span>' +
+      '<span class="sr-row__n">' + (le ? '<span class="ko-st ko-st--archiv">Leállítva</span>' : s.kovetkezo ? '<small>Következő</small><b>' + esc(F.datumNap(s.kovetkezo.datum)) + '</b>' : '<small>Nincs több alkalom</small>') +
+        (km && !le ? '<span class="sr-warn">' + km + ' alkalom kimaradt</span>' : '') + '</span>' +
+      '<span class="sr-row__go" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18"><path d="m8 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a></li>';
+  }
+
+  /* ---------- részletek + leállítás ---------- */
+  function openSr(id) {
+    var d = $('#dlg-sr'), req = ++sr.dReq;
+    sr.nyitott = id;
+    $('#dlg-sr-h').textContent = 'Állandó időpont';
+    $('#sr-body').innerHTML = '<div class="skel-board skel-board--sm"></div>'; $('#sr-act').innerHTML = '';
+    if (!d.open) d.showModal();
+    api('/sorozatok/' + encodeURIComponent(id)).then(function (s) {
+      if (req !== sr.dReq) return;
+      sr.reszlet = s; renderSr();
+    }).catch(function (e) { if (req === sr.dReq) $('#sr-body').innerHTML = '<p class="form-err">' + esc(e.message) + '</p>'; $('#sr-act').innerHTML = '<button type="button" class="btn btn--primary" id="sr-close">Bezárás</button>'; });
+  }
+  function renderSr(uzenet) {
+    var s = sr.reszlet, le = s.status === 'leallitva';
+    $('#dlg-sr-h').textContent = s.vendeg.nev;
+    var kap = [s.vendeg.telefon ? '<a href="tel:' + esc(String(s.vendeg.telefon).replace(/[^\d+]/g, '')) + '">' + esc(s.vendeg.telefon) + '</a>' : '', s.vendeg.email ? '<a href="mailto:' + esc(s.vendeg.email) + '">' + esc(s.vendeg.email) + '</a>' : ''].filter(Boolean).join(' · ');
+    var html = (uzenet ? '<p class="note oc-note" role="status">' + esc(uzenet) + '</p>' : '') +
+      '<div class="ser-sum"' + kcStyle(s.kollega) + '><p class="ser-sum__r">' + esc(nagyKezd(ritmus(s))) + '</p><p class="ser-sum__m">' + esc([s.kollega.nev, s.szolgaltatas.nev + (s.szolgaltatas.perc ? ' ' + s.szolgaltatas.perc + ' perc' : ''), s.helyszin.nev].join(' · ')) + '</p>' +
+      '<p class="ser-sum__n">' + (le ? '<span class="ko-st ko-st--archiv">Leállítva</span>' + (s.lemondott ? ' ' + s.lemondott + ' alkalom lemondva' : '') : '<b>' + s.jovobeli + '</b> jövőbeli alkalom' + (s.lemondott ? ', ' + s.lemondott + ' lemondva' : '')) + '</p></div>' +
+      '<dl class="dl"><div><dt>Időszak</dt><dd>' + esc(F.honapNap(s.kezdoDatum)) + ' - ' + esc(s.vege.tipus === 'nyitott' ? 'visszavonásig' : s.vege.tipus === 'datum' ? F.honapNap(s.vege.datum) : s.vege.db + ' alkalom') + '</dd></div>' +
+      '<div><dt>Elérhetőség</dt><dd>' + (kap || 'nincs megadva') + '</dd></div>' +
+      (s.vendeg.megjegyzes ? '<div><dt>Megjegyzés</dt><dd>' + esc(s.vendeg.megjegyzes) + '</dd></div>' : '') +
+      '<div><dt>Azonosító</dt><dd class="mono">' + esc(s.id) + '</dd></div></dl>' +
+      ((s.kimaradt || []).length ? '<div class="ser-km"><p class="ser-km__h">Kimaradt ' + s.kimaradt.length + ' alkalom</p><ul>' + s.kimaradt.map(function (x) {
+        return '<li><b>' + esc(F.datumNap(x.datum)) + '</b> · ' + esc(okSz(x.ok)) + ' · <a href="#/foglalasok/nap/' + esc(x.datum) + '">Megnézem a naptárban</a></li>';
+      }).join('') + '</ul><p class="hint">Ha mégis kell, ezekre a napokra az Új foglalás gombbal vehetsz fel időpontot.</p></div>' : '') +
+      '<h3 class="oc-h">Alkalmak</h3><ol class="sr-alk">' + s.alkalmak.map(function (a) {
+        var mult = F.percIg(a.datum, F.perc(a.kezd)) <= 0, lem = a.allapot === 'lemondva';
+        return '<li class="' + (lem ? 'is-cx' : mult ? 'is-past' : '') + '"><a href="#/foglalasok/nap/' + esc(a.datum) + '" aria-label="' + esc(F.datumNap(a.datum) + ', ' + a.kezd + (lem ? ', lemondva' : mult ? ', elmúlt' : '') + ', megnyitás a naptárban') + '">' +
+          '<b>' + esc(F.honapNap(a.datum)) + '</b><span>' + esc(F.NAPOK[F.hetNapja(a.datum)]) + ', ' + esc(a.kezd) + '</span><small>' + (lem ? 'lemondva' : mult ? 'elmúlt' : 'megerősítve') + '</small></a></li>';
+      }).join('') + '</ol>' +
+      (!le ? '<div class="oc-elm sr-stop" id="sr-stop" hidden><h3 class="oc-h">Állandó időpont leállítása</h3>' +
+        '<div class="field"><label for="sr-tol">Ettől a naptól nincs több alkalom</label><input type="date" id="sr-tol" value="' + F.most().datum + '" min="' + F.most().datum + '" aria-describedby="sr-tol-h"></div>' +
+        '<p class="hint" id="sr-tol-h" aria-live="polite"></p>' +
+        '<div class="oc-add__act"><button type="button" class="btn btn--ghost" id="sr-stop-no">Mégse</button><button type="button" class="btn btn--danger" id="sr-stop-yes">Leállítás</button></div></div>' : '');
+    $('#sr-body').innerHTML = html;
+    $('#sr-act').innerHTML = (!le ? '<button type="button" class="linkbtn linkbtn--danger" id="sr-stop-open">Állandó időpont leállítása</button>' : '') +
+      '<button type="button" class="btn btn--primary" id="sr-close">Bezárás</button>';
+    if (!le) srStopSz();
+  }
+  function srStopSz() {
+    var s = sr.reszlet, tol = ($('#sr-tol') || {}).value, p = $('#sr-tol-h');
+    if (!p) return;
+    if (!tol) { p.textContent = 'Válassz napot.'; return; }
+    var torol = s.alkalmak.filter(function (a) { return a.allapot === 'megerositett' && a.datum >= tol && F.percIg(a.datum, F.perc(a.kezd)) > 0; });
+    var marad = s.alkalmak.filter(function (a) { return a.allapot === 'megerositett' && a.datum < tol && F.percIg(a.datum, F.perc(a.kezd)) > 0; });
+    p.textContent = (torol.length ? torol.length + ' alkalom lemondva lesz' : 'Ettől a naptól nincs több alkalom, csak a sorozat áll le') + (marad.length ? ', ' + marad.length + ' megmarad' : '') + '. ' +
+      (s.vendeg.email ? 'A vendég és a szakember egy-egy összefoglaló levelet kap.' : 'A szakember összefoglaló levelet kap.');
+  }
+  function srLeallit() {
+    var s = sr.reszlet, tol = $('#sr-tol').value, d = $('#dlg-sr');
+    if (!tol) { srStopSz(); return; }
+    var n = s.alkalmak.filter(function (a) { return a.allapot === 'megerositett' && a.datum >= tol && F.percIg(a.datum, F.perc(a.kezd)) > 0; }).length;
+    d.close();
+    confirmDlg('Leállítod az állandó időpontot?', s.vendeg.nev + ', ' + ritmus(s) + '. ' + F.datumNap(tol) + '-tól ' + (n ? n + ' alkalom törlődik a naptárból.' : 'nincs több alkalom.') + ' Ezt nem lehet visszavonni, utána új állandó időpontot kell felvenni.', 'Leállítás').then(function (ok) {
+      d.showModal();
+      if (!ok) { $('#sr-stop-yes').focus(); return; }
+      var b = $('#sr-stop-yes'); b.disabled = true; b.textContent = 'Leállítás folyamatban';
+      api('/sorozatok/' + encodeURIComponent(s.id) + '/leallitas', { method: 'POST', json: { tol: tol } }).then(function (r) {
+        toast('Leállítva: ' + s.vendeg.nev + ', ' + ritmus(s) + '. ' + r.lemondott.length + ' alkalom lemondva.');
+        loadSrLista(); renderFg();
+        return api('/sorozatok/' + encodeURIComponent(s.id)).then(function (x) { sr.reszlet = x; renderSr('Leállítva. ' + (r.lemondott.length ? r.lemondott.length + ' alkalmat lemondtunk.' : 'Nem volt lemondandó alkalom.')); $('#sr-close').focus(); });
+      }).catch(function (e) { b.disabled = false; b.textContent = 'Leállítás'; toast(e.message, 'error'); });
+    });
+  }
 
   /* =====================================================================
      CSOPORTOS ÓRA RÉSZLETEI (a Foglalások naptárából): résztvevők, kézi felvétel,
@@ -1483,18 +1896,21 @@
     visszaigazolas: 'Visszaigazolás a vendégnek', modositas: 'Módosítás a vendégnek', lemondas: 'Lemondás a vendégnek', emlekezteto: 'Emlékeztető a vendégnek',
     'studio-ertesito': 'Új foglalás a stúdiónak', 'studio-modositas': 'Módosítás a stúdiónak',
     'kollega-uj': 'Új foglalás a kollégának', 'kollega-modositas': 'Módosítás a kollégának', 'kollega-lemondas': 'Lemondás, kollégának vagy stúdiónak',
-    'ora-elmarad': 'Az óra elmarad, a résztvevőnek'
+    'ora-elmarad': 'Az óra elmarad, a résztvevőnek',
+    'sorozat-visszaigazolas': 'Állandó időpont a vendégnek', 'sorozat-leallitva': 'Állandó időpont leállt, a vendégnek',
+    'sorozat-kollega': 'Állandó időpont a kollégának'
   };
   // a csoportos óráknál ugyanaz a típus mást jelent (jelentkezés, oktató)
   // csoportos levél: a backend csoportos: true jelzője, vagy a jelentkezés „C” előtagú azonosítója (az outbox-lista ezt adja)
+  function sorLevel(l) { return l.sorozat === true || /^sorozat-/.test(String(l.tipus || '')) || /^R[0-9A-Z]{10}$/.test(String(l.azonosito || '')); }
   function csopLevel(l) { return l.csoportos === true || /^C[0-9A-Z]{10}$/.test(String(l.azonosito || '')); }
   var TIPUS_CS = { visszaigazolas: 'Jelentkezés visszaigazolása', modositas: 'Áthelyezés másik órára', lemondas: 'Jelentkezés lemondva', 'kollega-uj': 'Új jelentkező az oktatónak', 'kollega-lemondas': 'Lemondott jelentkezés az oktatónak' };
   // szűrők: címzett szerint, a vendégnél az emlékeztető külön is
   var SZURO = [
     { id: 'mind', nev: 'Mind', t: null },
-    { id: 'vendeg', nev: 'Vendégnek', t: ['visszaigazolas', 'modositas', 'lemondas', 'ora-elmarad'] },
+    { id: 'vendeg', nev: 'Vendégnek', t: ['visszaigazolas', 'modositas', 'lemondas', 'ora-elmarad', 'sorozat-visszaigazolas', 'sorozat-leallitva'] },
     { id: 'emlekezteto', nev: 'Emlékeztetők', t: ['emlekezteto'] },
-    { id: 'kollega', nev: 'Kollégáknak', t: ['kollega-uj', 'kollega-modositas', 'kollega-lemondas'] },
+    { id: 'kollega', nev: 'Kollégáknak', t: ['kollega-uj', 'kollega-modositas', 'kollega-lemondas', 'sorozat-kollega'] },
     { id: 'studio', nev: 'Stúdiónak', t: ['studio-ertesito', 'studio-modositas'] }
   ];
   function leSzurt() {
@@ -1537,7 +1953,7 @@
     $('#le-list').innerHTML = leSzurt().map(function (l) {
       var d = new Date(l.letrehozva);
       return '<li><a class="le-item' + (String(l.id) === id ? ' is-on' : '') + '" href="#/levelek/' + esc(l.id) + '"' + (String(l.id) === id ? ' aria-current="true"' : '') + '>' +
-        '<span class="le-item__k" data-t="' + esc(l.tipus) + '">' + esc((csopLevel(l) && TIPUS_CS[l.tipus]) || TIPUS[l.tipus] || l.tipus) + (csopLevel(l) ? '<span class="le-cs">csoportos óra</span>' : '') + '</span>' +
+        '<span class="le-item__k" data-t="' + esc(l.tipus) + '">' + esc((csopLevel(l) && TIPUS_CS[l.tipus]) || (l.tipus === 'sorozat-kollega' && (l.esemeny === 'leallitva' || /^Leállt/.test(l.targy || '')) ? 'Állandó időpont leállt, a kollégának' : '') || TIPUS[l.tipus] || l.tipus) + (csopLevel(l) ? '<span class="le-cs">csoportos óra</span>' : '') + (sorLevel(l) ? '<span class="le-cs le-cs--sr">' + ISM_IKON + 'állandó időpont</span>' : '') + '</span>' +
         '<span class="le-item__s">' + esc(l.targy) + '</span>' +
         '<span class="le-item__m">' + esc(l.cimzett) + ' · ' + esc(d.toLocaleString('hu-HU', { timeZone: 'Europe/Budapest', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })) + '</span></a></li>';
     }).join('');
@@ -1690,6 +2106,26 @@
     if (t.closest('#fg-next')) return fgMozgat(1);
     if (t.closest('#fg-today')) { fg.datum = F.most().datum; location.hash = fgHash(); return; }
     if (t.closest('#fg-new')) return openNew();
+    // állandó időpont
+    if (t.closest('#fg-ser-new') || t.closest('[data-sernew]')) return openSer();
+    if (t.closest('#ser-cancel')) return $('#dlg-ser').close();
+    if (t.closest('#ser-back')) { ser.mvDatum = ''; serStep('adat'); $('#s-nev').focus(); return; }
+    if (t.closest('#ser-open')) { $('#dlg-ser').close(); return; }
+    var ssk = t.closest('[data-serskip]');
+    if (ssk) { var sd = ssk.getAttribute('data-serskip'); ser.dontes[sd] = { tipus: 'kihagy' }; if (ser.mvDatum === sd) ser.mvDatum = ''; return serFrissit('[data-serundo="' + sd + '"]'); }
+    var smv = t.closest('[data-sermove]');
+    if (smv) return serMoveOpen(smv.getAttribute('data-sermove'));
+    var sun = t.closest('[data-serundo]');
+    if (sun) { var ud = sun.getAttribute('data-serundo'); delete ser.dontes[ud]; return serFrissit('[data-serskip="' + ud + '"]'); }
+    if (t.closest('#ser-mv-x')) { var xd = ser.mvDatum; ser.mvDatum = ''; return serFrissit('[data-sermove="' + xd + '"]'); }
+    if (t.closest('#ser-mv-ok')) return serMoveOk();
+    var srl = t.closest('[data-srlista]');
+    if (srl) { sr.lista = srl.getAttribute('data-srlista'); return loadSrLista(); }
+    if (t.closest('#sr-close')) { $('#dlg-sr').close(); return; }
+    if (t.closest('#sr-stop-open')) { var st = $('#sr-stop'); st.hidden = false; $('#sr-tol').focus(); st.scrollIntoView({ block: 'nearest' }); return; }
+    if (t.closest('#sr-stop-no')) { $('#sr-stop').hidden = true; $('#sr-stop-open').focus(); return; }
+    if (t.closest('#sr-stop-yes')) return srLeallit();
+    if (t.closest('#sr-body a[href^="#/foglalasok/nap/"]')) { $('#dlg-sr').close(); return; }
     if (t.closest('#n-cancel')) return $('#dlg-new').close();
     if (t.closest('#mv-cancel')) return $('#dlg-move').close();
     // beosztás
@@ -1793,6 +2229,14 @@
     if (t.id === 'n-hely') return newFill('hely');
     if (t.id === 'n-szolg') return newFill('szolg');
     if (t.id === 'n-koll' || t.id === 'n-datum') return newSlots();
+    if (t.id === 's-hely') return serFill('hely');
+    if (t.id === 's-szolg') return serFill('szolg');
+    if (t.id === 's-koll') return serFill('koll');
+    if (t.id === 's-nap') return serFill('nap');
+    if (t.id === 's-kezd' || t.name === 's-ism' || t.id === 's-tol') return serRitmus();
+    if (t.name === 's-vege' || t.id === 's-db' || t.id === 's-ig') { var vr = $('input[name="s-vege"][value="' + (t.id === 's-db' ? 'alkalom' : t.id === 's-ig' ? 'datum' : t.value) + '"]'); if (vr) vr.checked = true; return; }
+    if (t.id === 'ser-mv-d') { var hb = $('.ser-mv__err'); if (hb) hb.remove(); return serMoveSlots(); }
+    if (t.id === 'sr-tol') return srStopSz();
     if (t.id === 'mv-koll' || t.id === 'mv-datum') { $('#mv-err').hidden = true; return moveSlots(); }
     if (t.matches('#bo-main select[data-f]')) {
       var s = bo.sorok[+t.getAttribute('data-i')]; s[t.getAttribute('data-f')] = t.value; boChanged();
@@ -1834,6 +2278,7 @@
   });
   document.addEventListener('submit', function (e) {
     if (e.target.id === 'new-form') return submitNew(e);
+    if (e.target.id === 'ser-form') { e.preventDefault(); if (ser.step === 'adat') return serEllenoriz(); if (ser.step === 'alk') return serMent(); return; }
     if (e.target.id === 'move-form') return submitMove(e);
     if (e.target.id === 'ex-form') return submitEx(e);
     if (e.target.id === 'be-form') return saveBe(e);
@@ -1843,6 +2288,8 @@
     if (e.target.id === 'ot-form') return submitTipus(e);
     if (e.target.id === 'os-form') return submitSablon(e);
   });
+  // a részletek bezárásakor a cím a listára áll vissza (vissza gomb, frissítés helyes marad)
+  $('#dlg-sr').addEventListener('close', function () { if (/^#\/foglalasok\/allando\/R/.test(location.hash)) history.replaceState(null, '', '#/foglalasok/allando'); });
   narrow.addEventListener('change', function () { if (document.body.dataset.view === 'view-foglalasok' && fg.nezet === 'nap') renderNap($('#fg-board')); });
   window.addEventListener('beforeunload', function (e) { if (bo.dirty || be.dirty || ko.dirty) { e.preventDefault(); e.returnValue = ''; } });
 

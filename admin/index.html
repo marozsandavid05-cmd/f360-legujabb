@@ -199,11 +199,22 @@
         <h1 id="fg-h">Foglalások</h1>
         <p class="fv-sub" id="fg-sum" aria-live="polite"></p>
       </div>
-      <button type="button" class="btn btn--primary" id="fg-new">
-        <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-        Új foglalás
-      </button>
+      <div class="fv-act">
+        <button type="button" class="btn btn--ghost" id="fg-ser-new">
+          <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          Állandó időpont
+        </button>
+        <button type="button" class="btn btn--primary" id="fg-new">
+          <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          Új foglalás
+        </button>
+      </div>
     </div>
+    <nav class="fg-mode" aria-label="Foglalások nézete">
+      <a class="fg-mode__a" href="#/foglalasok" data-fgmode="naptar">Naptár</a>
+      <a class="fg-mode__a" href="#/foglalasok/allando" data-fgmode="allando">Állandó időpontok<span class="fg-mode__n" id="fg-ser-n"></span></a>
+    </nav>
+    <div id="fg-naptar">
     <div class="fg-tools">
       <div class="seg" role="group" aria-label="Nézet">
         <button type="button" class="seg__b" data-nezet="nap" aria-pressed="true">Nap</button>
@@ -223,6 +234,18 @@
     </div>
     <div class="pl" id="fg-people"></div>
     <div class="fg-board" id="fg-board" aria-busy="true"></div>
+    </div>
+    <div class="sr-view" id="fg-allando" hidden>
+      <div class="sr-tools">
+        <p class="sr-tools__t">Vendégek, akik minden héten vagy minden második héten ugyanakkor jönnek. Az alkalmak a naptárban is látszanak, egyenként áthelyezhetők és lemondhatók.</p>
+        <div class="seg seg--sm" role="group" aria-label="Melyik állandó időpontok látszódjanak">
+          <button type="button" class="seg__b" data-srlista="aktiv" aria-pressed="true">Aktív</button>
+          <button type="button" class="seg__b" data-srlista="leallitva" aria-pressed="false">Leállított</button>
+          <button type="button" class="seg__b" data-srlista="mind" aria-pressed="false">Mind</button>
+        </div>
+      </div>
+      <div class="sr-board" id="sr-board" aria-busy="true"></div>
+    </div>
   </section>
 
   <section class="view fv" id="view-kollegak" hidden aria-labelledby="ko-h">
@@ -453,6 +476,82 @@
       <button type="submit" class="btn btn--primary" id="mv-ok">Áthelyezés</button>
     </div>
   </form>
+</dialog>
+
+<!-- állandó időpont: létrehozás (adatok, alkalmak ellenőrzése, összegzés) -->
+<dialog class="dlg dlg--wide dlg--ser" id="dlg-ser" aria-labelledby="dlg-ser-h">
+  <form class="dlg__in" id="ser-form" novalidate>
+    <div class="ser-head">
+      <p class="dlg__h" id="dlg-ser-h">Állandó időpont</p>
+      <ol class="ser-steps" aria-label="Lépések">
+        <li data-serstep="adat">Adatok</li>
+        <li data-serstep="alk">Alkalmak ellenőrzése</li>
+        <li data-serstep="kesz">Kész</li>
+      </ol>
+    </div>
+    <div class="ser-panel" id="ser-adat">
+      <p class="dlg__t dlg__t--sub">Ugyanaz a vendég, ugyanaz a szakember, minden héten vagy minden második héten ugyanakkor. Mentés előtt minden alkalmat ellenőrzünk.</p>
+      <fieldset class="ser-sec">
+        <legend>Vendég</legend>
+        <div class="grid2">
+          <div class="field"><label for="s-nev">Vendég neve</label><input type="text" id="s-nev" required maxlength="100" autocomplete="off"></div>
+          <div class="field"><label for="s-tel">Telefonszám <span class="opt">(nem kötelező)</span></label><input type="tel" id="s-tel" maxlength="24" autocomplete="off" inputmode="tel"></div>
+          <div class="field"><label for="s-email">E-mail-cím <span class="opt">(nem kötelező)</span></label><input type="email" id="s-email" maxlength="254" autocomplete="off" inputmode="email" aria-describedby="s-email-h"><p class="hint" id="s-email-h">Ha megadod, egy levelet kap az összes alkalommal, mindegyik mellett saját lemondó linkkel.</p></div>
+          <div class="field"><label for="s-megj">Megjegyzés <span class="opt">(nem kötelező)</span></label><input type="text" id="s-megj" maxlength="1000" autocomplete="off"></div>
+        </div>
+      </fieldset>
+      <fieldset class="ser-sec">
+        <legend>Kezelés és szakember</legend>
+        <div class="grid3">
+          <div class="field"><label for="s-hely">Helyszín</label><select id="s-hely" required></select></div>
+          <div class="field"><label for="s-szolg">Kezelés</label><select id="s-szolg" required></select></div>
+          <div class="field"><label for="s-koll">Szakember</label><select id="s-koll" required></select></div>
+        </div>
+      </fieldset>
+      <fieldset class="ser-sec">
+        <legend>Mikor</legend>
+        <div class="ser-when">
+          <div class="field"><label for="s-nap">Melyik napon</label><select id="s-nap" required></select></div>
+          <div class="field"><label for="s-kezd">Kezdés</label><select id="s-kezd" required aria-describedby="s-bo"></select></div>
+          <div class="field ser-rep"><span class="ser-lbl" id="s-ism-l">Milyen gyakran</span>
+            <div class="seg seg--sm" role="radiogroup" aria-labelledby="s-ism-l">
+              <label class="seg__r"><input type="radio" name="s-ism" value="1" checked><span>Hetente</span></label>
+              <label class="seg__r"><input type="radio" name="s-ism" value="2"><span>Kéthetente</span></label>
+            </div>
+          </div>
+        </div>
+        <p class="ser-bo" id="s-bo" aria-live="polite"></p>
+        <p class="ser-ritmus" id="s-ritmus" aria-live="polite"></p>
+      </fieldset>
+      <fieldset class="ser-sec">
+        <legend>Meddig</legend>
+        <div class="ser-span">
+          <div class="field"><label for="s-tol">Első alkalom ettől a naptól</label><input type="date" id="s-tol" required aria-describedby="s-tol-h"><p class="hint" id="s-tol-h"></p></div>
+          <div class="ser-vege" role="radiogroup" aria-label="A sorozat vége">
+            <label class="ser-v"><input type="radio" name="s-vege" value="alkalom" checked><span class="ser-v__t">Adott számú alkalom</span>
+              <span class="unit ser-v__in"><input type="number" id="s-db" inputmode="numeric" min="1" max="104" value="10" aria-label="Alkalmak száma"><span>alkalom</span></span></label>
+            <label class="ser-v"><input type="radio" name="s-vege" value="datum"><span class="ser-v__t">Egy napig</span>
+              <span class="ser-v__in"><input type="date" id="s-ig" aria-label="Utolsó nap"></span></label>
+            <label class="ser-v"><input type="radio" name="s-vege" value="nyitott"><span class="ser-v__t">Visszavonásig</span>
+              <span class="ser-v__h">A rendszer mindig a következő két hónapra rögzíti előre.</span></label>
+          </div>
+        </div>
+      </fieldset>
+      <p class="form-err" id="s-err" role="alert" hidden></p>
+    </div>
+    <div class="ser-panel" id="ser-alk" hidden></div>
+    <div class="ser-panel" id="ser-kesz" hidden></div>
+    <div class="dlg__act" id="ser-act"></div>
+  </form>
+</dialog>
+
+<!-- állandó időpont: részletek, leállítás -->
+<dialog class="dlg dlg--wide" id="dlg-sr" aria-labelledby="dlg-sr-h">
+  <div class="dlg__in">
+    <p class="dlg__h" id="dlg-sr-h">Állandó időpont</p>
+    <div id="sr-body"></div>
+    <div class="dlg__act" id="sr-act"></div>
+  </div>
 </dialog>
 
 <!-- csoportos óra: résztvevők, felvétel, elmarad -->
