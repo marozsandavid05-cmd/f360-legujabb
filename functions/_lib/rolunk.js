@@ -7,7 +7,9 @@
 // CSAK olvasva: nincs séma-létrehozás és nincs adat-migráció, egy oldalletöltés nem ír az adatbázisba.
 //
 // Ki jelenik meg: nem archivált, és a kilépés napja (aktiv_ig) nem múlt el (a jövőbeli aktiv_tol is
-// megjelenik). Az alapítók (ALAPITOK azonosító vagy név) nem: ők a fenti alapítói blokkban vannak.
+// megjelenik). Tringer Lilla nem kolléga a törzsben, ha mégis felkerülne, kimarad (a fenti alapítói blokkban
+// van). Kovács Anna (alapító) a névsorban MARAD, mert a mai statikus oldalon is ott van, és ő foglalható
+// kolléga (táplálkozás, InBody); David 2026-10-03: a névsor a mostanit kövesse, ne vegyen el senkit.
 // Helyszín-csoportok: Mexikói út, Reitter; a mindkét helyen dolgozó kolléga mindkét listában, a
 // „Reitter is” / „Mexikói is” jelölővel. Sorrend: a statikus oldal sorrendje (az adminban nincs
 // kolléga-sorrend), az új kolléga a helyszíne végére, a törzs sorrendjében.
@@ -24,8 +26,8 @@ import { SEED_TORZS } from './booking/seed.js';
 import { budapestMost } from './booking/ido.js';
 
 export const CACHE_CONTROL = 'public, max-age=60, s-maxage=300';
-const ALAPITO_ID = new Set(['kovacs-anna', 'tringer-lilla']);
-const ALAPITO_NEV = new Set(['tringer lilla', 'kovács anna']);
+const ALAPITO_ID = new Set(['tringer-lilla']);
+const ALAPITO_NEV = new Set(['tringer lilla']);
 const HELYSZINEK = [
   { id: 'mexikoi', loc: 'mex', cim: 'Mexikói út · XIV. kerület', sec: 'roster__sec', mas: 'Reitter is' },
   { id: 'reitter', loc: 'reit', cim: 'Reitter Ferenc utca · XIII. kerület', sec: 'roster__sec roster__sec--reit', mas: 'Mexikói is' },

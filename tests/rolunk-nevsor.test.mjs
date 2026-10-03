@@ -32,15 +32,15 @@ const letszam = (html) => html.match(/<p class="team__count">([\s\S]*?)<\/p>/)[1
 
 // ---------------------------------------------------------------- generálás (tiszta függvény)
 
-test('seed-törzs: az alapító (Kovács Anna) nincs a névsorban, a többi kártya bájtra azonos a statikussal, a számok 8 / 5 / 4', () => {
+test('seed-törzs: minden kártya (Kovács Anna is) bájtra azonos a statikussal, a számok 9 / 6 / 4 (mint ma)', () => {
   const ki = rolunkHtml(HTML, torzs(), MA);
   assert.ok(ki);
-  const elotte = kartyak(HTML).filter((k) => k.id !== 'kovacs-anna');
+  const elotte = kartyak(HTML);
   const utana = kartyak(ki);
   assert.deepEqual(utana.map((k) => `${k.id}|${k.loc}`), elotte.map((k) => `${k.id}|${k.loc}`));
   for (let i = 0; i < elotte.length; i++) assert.equal(utana[i].html, elotte[i].html, elotte[i].id);
   assert.deepEqual(szekciok(ki), ['Mexikói út · XIV. kerület', 'Reitter Ferenc utca · XIII. kerület']);
-  assert.equal(letszam(ki), '<b data-n="team">8</b> szakember · <b data-n="mex">5</b> a Mexikói úton · <b data-n="reit">4</b> a Reitter Ferenc utcában · egy kolléga mindkét helyszínen');
+  assert.equal(letszam(ki), '<b data-n="team">9</b> szakember · <b data-n="mex">6</b> a Mexikói úton · <b data-n="reit">4</b> a Reitter Ferenc utcában · egy kolléga mindkét helyszínen');
   // a blokkon kívül semmi nem változik
   const ki2 = ki.replace(/<div class="roster" data-roster>[\s\S]*?<p class="roster__note"/, '').replace(/<p class="team__count">[\s\S]*?<\/p>/, '');
   const be2 = HTML.replace(/<div class="roster" data-roster>[\s\S]*?<p class="roster__note"/, '').replace(/<p class="team__count">[\s\S]*?<\/p>/, '');
@@ -48,7 +48,7 @@ test('seed-törzs: az alapító (Kovács Anna) nincs a névsorban, a többi kár
   assert.ok(ki.includes('<section class="team" id="csapat"'), 'a #csapat horgony megvan');
 });
 
-test('ha az alapító nincs a törzsben, a teljes statikus blokk (Anna nélkül) bájtra azonos: a sorköz és a behúzás is', () => {
+test('ha egy kolléga (itt Kovács Anna) nincs a törzsben, csak az ő kártyája tűnik el, a többi blokk bájtra azonos: a sorköz és a behúzás is', () => {
   const ki = rolunkHtml(HTML, torzs((k) => (k.id === 'kovacs-anna' ? null : k)), MA);
   const blokk = (h) => h.replace(/\r\n/g, '\n').match(/<div class="roster" data-roster>[\s\S]*?<p class="roster__note"/)[0];
   const anna = kartyak(HTML.replace(/\r\n/g, '\n')).find((k) => k.id === 'kovacs-anna').html;
@@ -65,7 +65,7 @@ test('új kolléga („David teszt”) a Reitterbe bemutatkozással: a Reitter v
   assert.match(d, /<span class="rl">gyógytornász · sportrehabilitáció<\/span>/);
   assert.match(d, /<div class="cv">\s*<p>Első bekezdés\.<\/p>\s*<p>Második bekezdés\.<\/p>\s*<\/div>/);
   assert.ok(!d.includes('class="skills"'));
-  assert.match(letszam(ki), /<b data-n="team">9<\/b> szakember · <b data-n="mex">5<\/b> a Mexikói úton · <b data-n="reit">5<\/b>/);
+  assert.match(letszam(ki), /<b data-n="team">10<\/b> szakember · <b data-n="mex">6<\/b> a Mexikói úton · <b data-n="reit">5<\/b>/);
 });
 
 test('archivált kolléga eltűnik, lejárt aktiv_ig eltűnik; a mai aktiv_ig és a jövőbeli aktiv_tol marad', () => {
@@ -83,10 +83,10 @@ test('archivált kolléga eltűnik, lejárt aktiv_ig eltűnik; a mai aktiv_ig é
   assert.ok(ids.includes('kovacs-sebestyen'));
 });
 
-test('alapítók: sem a kovacs-anna azonosító, sem a Tringer Lilla nevű kolléga nem kerül a névsorba', () => {
+test('alapítók: Kovács Anna a névsorban marad (mint ma), a Tringer Lilla nevű bejegyzés nem kerül be', () => {
   const ki = rolunkHtml(HTML, plusz({ id: 'lilla', nev: 'Tringer Lilla', szerep: 'gyógytornász', helyszinek: ['mexikoi'], szolgaltatasok: [] }), MA);
   const nevek = kartyak(ki).map((k) => k.nev);
-  assert.ok(!nevek.includes('Kovács Anna'));
+  assert.ok(nevek.includes('Kovács Anna'));
   assert.ok(!nevek.includes('Tringer Lilla'));
 });
 
@@ -172,7 +172,7 @@ test('Function: friss névsor a D1-ből, 200, Cache-Control s-maxage=300, a bizt
   assert.equal(r.headers.get('ETag'), null);
   const t = await r.text();
   assert.ok(kartyak(t).some((k) => k.id === 'david-teszt'));
-  assert.ok(!kartyak(t).some((k) => k.id === 'kovacs-anna'));
+  assert.ok(kartyak(t).some((k) => k.id === 'kovacs-anna'));
 });
 
 test('Function: a D1 csak olvasva (egyetlen SELECT, semmi írás és séma-létrehozás)', async () => {
@@ -226,7 +226,7 @@ test('Function: nem HTML, nem 200 (pl. 304) és HEAD esetén változatlanul tov�
 test('functions/rolunk.js: a Pages belépési pont a rolunkValasz-t hívja; a _routes.json-ban /rolunk szerepel, a /rolunk.html nem', async () => {
   const r = await onRequest(ctx({ env: { BOOKING_DB: dbTorzzsel(torzs()) } }).context);
   assert.equal(r.status, 200);
-  assert.ok(!kartyak(await r.text()).some((k) => k.id === 'kovacs-anna'));
+  assert.ok(kartyak(await r.text()).some((k) => k.id === 'kovacs-anna'));
   const routes = JSON.parse(readFileSync(join(GY, '_routes.json'), 'utf8'));
   assert.ok(routes.include.includes('/rolunk'));
   assert.ok(!routes.include.some((x) => x.startsWith('/rolunk.')), 'a /rolunk.html átirányítását a statikus kiszolgálás végzi');
