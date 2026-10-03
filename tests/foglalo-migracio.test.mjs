@@ -42,6 +42,7 @@ test('migráció: a friss séma már tartalmazza az oszlopokat (nincs ALTER)', a
 });
 
 test('a kézi migrációs SQL ugyanazokat az ALTER-eket tartalmazza', () => {
-  const sql = fs.readFileSync(path.join(ROOT, 'functions/_lib/booking/migracio-2026-10-01.sql'), 'utf8');
+  const sql = ['migracio-2026-10-01.sql', 'migracio-sorozat.sql']
+    .map((f) => fs.readFileSync(path.join(ROOT, 'functions/_lib/booking', f), 'utf8')).join(' ');
   for (const [, , alter] of MIGRACIO) assert.ok(sql.includes(`${alter};`), alter);
 });

@@ -29,6 +29,8 @@ export function fakeD1() {
     },
     run: async () => exec(sql, args),
     _exec: () => exec(sql, args),
+    _sql: sql,
+    _args: args,
   });
   let inTx = false;
   return {
@@ -37,6 +39,8 @@ export function fakeD1() {
     batch: async (list) => {
       // a valódi D1 is sorba állítja a batch-eket; itt a szinkron SQLite ugyanezt adja
       if (inTx) throw new Error('beágyazott batch');
+      // a valódi D1 az üres batch-et elutasítja (workerd-ben mérve, 2026-10-03)
+      if (!list.length) throw new Error('D1_ERROR: No SQL statements detected.');
       inTx = true;
       db.exec('BEGIN');
       try {

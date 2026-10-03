@@ -32,6 +32,7 @@ import {
 } from '../_lib/booking/orak.js';
 import { hatterKuldes, outboxKuld } from '../_lib/booking/mailer.js';
 import { naptarHatter, naptarSzinkron } from '../_lib/booking/naptar.js';
+import { sorozatGordit } from '../_lib/booking/sorozat.js';
 
 const MAX_BODY = 8 * 1024;
 
@@ -78,17 +79,22 @@ const UTAK = {
       // csoportos órák: a napi generálás (8 hét) és az emlékeztetők ugyanitt
       const orak = await oraGeneralHaKell(db);
       const oraEmlek = await oraEmlekeztetoFuttat(env, db, { origin });
+      // állandó időpont: a „visszavonásig” sorozatok gördítése a maxEloreNap ablakig (idempotens)
+      const sorozat = await sorozatGordit(env, db, { origin });
       // ugyanez a futás küldi el (ha van szolgáltató) az új és a korábban sikertelen leveleket
       const levelek = await outboxKuld(env, db);
       // és próbálja újra a Google Naptárba el nem jutott tételeket (kulcs nélkül no-op)
       let naptar;
       try {
-        naptar = await naptarSzinkron(env, db, { sorbol: true, csakRegi: true, origin });
+        naptar = await naptarSzinkron(env, db, { ids: sorozat.ids, sorbol: true, csakRegi: true, origin });
       } catch (e) {
         console.error('[naptar] cron-szinkron hiba:', e && e.message);
         naptar = { hiba: 'A naptár-szinkron most nem futott le, a következő futás újrapróbálja.' };
       }
-      return json({ mod: levelek.mod, ...emlek, csoportos: { generalva: orak.letrehozva, emlekeztetve: oraEmlek.emlekeztetve }, levelek, naptar });
+      return json({
+        mod: levelek.mod, ...emlek, csoportos: { generalva: orak.letrehozva, emlekeztetve: oraEmlek.emlekeztetve },
+        sorozat: { letrejott: sorozat.letrejott, kimaradt: sorozat.kimaradt }, levelek, naptar,
+      });
     },
   },
 

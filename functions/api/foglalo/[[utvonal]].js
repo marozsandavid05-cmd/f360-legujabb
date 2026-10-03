@@ -37,6 +37,12 @@
 //   PATCH    /api/foglalo/naptar                       { studioNaptarId: '' | '<calendarId>' }
 //   POST     /api/foglalo/naptar/ujraszinkron          { mind?: true }  a sor újrapróbálása (mind: minden jövőbeli tétel); kulcs nélkül 409
 //   A foglalást, órát vagy naptárat érintő minden sikeres művelet után a szinkron a háttérben fut (ctx.waitUntil).
+//
+//   Állandó időpont (sorozat.js; szerződés: Claude tesztelés360-allando-idopont-2026-10-01\SZERZODES.md):
+//   POST     /api/foglalo/sorozatok/elonezet           SorozatBe → { alkalmak, osszes, utkozik, horizontVege } (nem ír)
+//   GET|POST /api/foglalo/sorozatok?allapot=aktiv|leallitva|mind   lista; létrehozás (201) SorozatBe + {vendeg, kihagy, athelyez}
+//   GET      /api/foglalo/sorozatok/:id                részletek + alkalmak
+//   POST     /api/foglalo/sorozatok/:id/leallitas      { tol? }  a tol napon vagy utána lévő alkalmak lemondva
 
 import { HttpError, errorResponse, json, readJson } from '../../_lib/http.js';
 import { adminLemond, adminModosit, dbVagy503, foglal, foglalasBemenet, foglalasLista, szabad } from '../../_lib/booking/foglalas.js';
@@ -49,6 +55,7 @@ import { bekotve, naptarAllapot, naptarHatter, naptarHatterUjra, naptarUjraszink
 import { torzsBetolt } from '../../_lib/booking/schema.js';
 import { hatterKuldes, mailMod, outboxKuld, outboxLista } from '../../_lib/booking/mailer.js';
 import { emlekeztetoFuttat } from '../../_lib/booking/emlekezteto.js';
+import { sorozatElonezet, sorozatLeallit, sorozatLetrehoz, sorozatLista, sorozatReszletek } from '../../_lib/booking/sorozat.js';
 import { forrasRiport } from '../../_lib/booking/forras.js';
 import { ugyfelBemenet } from '../../_lib/booking/foglalas.js';
 import {
@@ -144,6 +151,34 @@ async function csoportos(context, request, env, url, reszek) {
   return null;
 }
 
+const SOROZAT_MAX_BODY = 8 * 1024;
+
+// állandó időpont: sorozatok, sorozatok/elonezet, sorozatok/:id, sorozatok/:id/leallitas
+async function sorozatUtak(request, env, url, reszek) {
+  if (reszek[0] !== 'sorozatok') return null;
+  const m = request.method;
+  const [, b, c] = reszek;
+  if (reszek.length === 1) {
+    if (m === 'GET') return json(await sorozatLista(dbVagy503(env), url.searchParams));
+    if (m === 'POST') return json(await sorozatLetrehoz(env, dbVagy503(env), await readJson(request, SOROZAT_MAX_BODY), { origin: url.origin }), 201);
+    return tiltott('GET, POST');
+  }
+  if (reszek.length === 2 && b === 'elonezet') {
+    if (m !== 'POST') return tiltott('POST');
+    return json(await sorozatElonezet(dbVagy503(env), await readJson(request, SOROZAT_MAX_BODY)));
+  }
+  if (reszek.length === 2) {
+    if (m !== 'GET') return tiltott('GET');
+    return json(await sorozatReszletek(dbVagy503(env), b));
+  }
+  if (reszek.length === 3 && c === 'leallitas') {
+    if (m !== 'POST') return tiltott('POST');
+    const d = (request.headers.get('Content-Type') || '').includes('application/json') ? await readJson(request, 1024) : {};
+    return json(await sorozatLeallit(env, dbVagy503(env), b, d, { origin: url.origin }));
+  }
+  throw new HttpError(404, 'Ismeretlen API-végpont.');
+}
+
 // /api/foglalo/emlekezteto/futtat: az emlékeztetők kézi indítása az adminból (és ha van szolgáltató,
 // a küldendő levelek elküldése, ugyanúgy, mint a cron)
 async function emlekeztetoKezi({ env, db, url }) {
@@ -168,6 +203,13 @@ async function naptarElemek(env, request, reszek, valasz, torzsElotte) {
     try { return [(await valasz.clone().json()).azonosito]; } catch { return []; }
   }
   if (a === 'foglalasok' && b) return [b];
+  // állandó időpont: a létrejött, illetve a leállításkor lemondott alkalmak
+  if (a === 'sorozatok' && reszek.length === 1 && m === 'POST') {
+    try { return (await valasz.clone().json()).letrejott.map((x) => x.id); } catch { return []; }
+  }
+  if (a === 'sorozatok' && c === 'leallitas') {
+    try { return (await valasz.clone().json()).lemondott.map((x) => x.id); } catch { return []; }
+  }
   if (a === 'orak' && b && b !== 'general') return [b];
   if (a === 'ora-foglalasok' && b && c === 'lemondas') {
     const s = await db.prepare(`SELECT session_id FROM class_bookings WHERE id = ?`).bind(b).first('session_id');
@@ -192,10 +234,10 @@ export async function onRequest(context) {
       // ha ez az olvasás hibázik, a módosítás ettől még lefut (a naptárat a kézi újraszinkron pótolja)
       try { torzsElotte = await torzsBetolt(env.BOOKING_DB); } catch (e) { console.error('[naptar] törzsadat-olvasás:', e && e.message); }
     }
-    const valasz = (await csoportos(context, request, env, url, reszek)) || await kezel(context, request, env, url, reszek);
+    const valasz = (await sorozatUtak(request, env, url, reszek)) || (await csoportos(context, request, env, url, reszek)) || await kezel(context, request, env, url, reszek);
     // foglalás felvétele, lemondása vagy áthelyezése (és a csoportos jelentkezések, elmaradás) után a friss
     // levelek a háttérben mennek ki (ha van beállított szolgáltató; outbox-módban semmi nem történik)
-    if (valasz.ok && ['foglalasok', 'orak', 'ora-foglalasok'].includes(reszek[0]) && request.method !== 'GET') hatterKuldes(context, env, env.BOOKING_DB);
+    if (valasz.ok && ['foglalasok', 'orak', 'ora-foglalasok', 'sorozatok'].includes(reszek[0]) && request.method !== 'GET') hatterKuldes(context, env, env.BOOKING_DB);
     // Google Naptár: a módosított elemek a háttérben, megnyitáskor az elakadt tételek (kulcs nélkül no-op)
     // (a módosítás ekkor már megtörtént: egy itteni hiba a választ nem ronthatja el)
     if (naptarBe) {

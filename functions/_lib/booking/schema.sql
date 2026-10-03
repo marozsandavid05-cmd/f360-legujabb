@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS schedule (staff_id TEXT NOT NULL, weekday INTEGER NOT
 CREATE TABLE IF NOT EXISTS exceptions (id TEXT PRIMARY KEY, staff_id TEXT, location_id TEXT, date_from TEXT NOT NULL, date_to TEXT NOT NULL, start_min INTEGER, end_min INTEGER, note TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL);
 
 -- emlekeztetve_at: mikor ment ki (outboxba) a páciens emlékeztetője; forras: kampány-adatok JSON-ban (UTM).
-CREATE TABLE IF NOT EXISTS bookings (id TEXT PRIMARY KEY, location_id TEXT NOT NULL, service_id TEXT NOT NULL, staff_id TEXT NOT NULL, date TEXT NOT NULL, start_min INTEGER NOT NULL, dur_min INTEGER NOT NULL, buffer_min INTEGER NOT NULL, price INTEGER, name TEXT NOT NULL, email TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'megerositett' CHECK (status IN ('megerositett', 'lemondva')), source TEXT NOT NULL DEFAULT 'web', token_salt TEXT NOT NULL, created_at INTEGER NOT NULL, cancelled_at INTEGER, emlekeztetve_at INTEGER, forras TEXT);
+CREATE TABLE IF NOT EXISTS bookings (id TEXT PRIMARY KEY, location_id TEXT NOT NULL, service_id TEXT NOT NULL, staff_id TEXT NOT NULL, date TEXT NOT NULL, start_min INTEGER NOT NULL, dur_min INTEGER NOT NULL, buffer_min INTEGER NOT NULL, price INTEGER, name TEXT NOT NULL, email TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'megerositett' CHECK (status IN ('megerositett', 'lemondva')), source TEXT NOT NULL DEFAULT 'web', token_salt TEXT NOT NULL, created_at INTEGER NOT NULL, cancelled_at INTEGER, emlekeztetve_at INTEGER, forras TEXT, sorozat_id TEXT);
 
 CREATE INDEX IF NOT EXISTS bookings_date ON bookings (date, start_min);
 
@@ -64,3 +64,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS class_bookings_egy ON class_bookings (session_
 CREATE TABLE IF NOT EXISTS gcal_esemeny (elem_id TEXT NOT NULL, cel TEXT NOT NULL CHECK (cel IN ('kollega', 'studio')), naptar_id TEXT NOT NULL, esemeny_id TEXT NOT NULL, frissitve INTEGER NOT NULL, PRIMARY KEY (elem_id, cel, naptar_id));
 
 CREATE TABLE IF NOT EXISTS gcal_sor (elem_id TEXT PRIMARY KEY, verzio INTEGER NOT NULL DEFAULT 1, probalkozas INTEGER NOT NULL DEFAULT 0, hiba TEXT, zarolva_at INTEGER, letrehozva INTEGER NOT NULL, frissitve INTEGER NOT NULL);
+
+-- Állandó időpont (sorozat.js): a sorozat és a kimaradt alkalmai
+CREATE TABLE IF NOT EXISTS sorozatok (id TEXT PRIMARY KEY, location_id TEXT NOT NULL, service_id TEXT NOT NULL, staff_id TEXT NOT NULL, weekday INTEGER NOT NULL CHECK (weekday BETWEEN 1 AND 7), start_min INTEGER NOT NULL, interval_het INTEGER NOT NULL CHECK (interval_het IN (1, 2)), kezdo_datum TEXT NOT NULL, vege_tipus TEXT NOT NULL CHECK (vege_tipus IN ('datum', 'alkalom', 'nyitott')), vege_datum TEXT, alkalmak_szama INTEGER, name TEXT NOT NULL, email TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'aktiv' CHECK (status IN ('aktiv', 'leallitva')), created_at INTEGER NOT NULL, leallitva_at INTEGER, leallitva_tol TEXT, gorditve_ig TEXT NOT NULL DEFAULT '', gordit_zar INTEGER);
+
+CREATE INDEX IF NOT EXISTS sorozatok_allapot ON sorozatok (status, vege_tipus);
+
+CREATE TABLE IF NOT EXISTS sorozat_kimaradt (sorozat_id TEXT NOT NULL, datum TEXT NOT NULL, ok TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (sorozat_id, datum));
+
+-- a migráció után (régi adatbázisban a sorozat_id oszlopot az ALTER hozza létre)
+CREATE INDEX IF NOT EXISTS bookings_sorozat ON bookings (sorozat_id, date);

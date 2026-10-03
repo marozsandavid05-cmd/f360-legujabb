@@ -10,7 +10,7 @@ export const SEMA = [
   `CREATE TABLE IF NOT EXISTS settings (kulcs TEXT PRIMARY KEY, ertek TEXT NOT NULL, modositva INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS schedule (staff_id TEXT NOT NULL, weekday INTEGER NOT NULL CHECK (weekday BETWEEN 1 AND 7), location_id TEXT NOT NULL, start_min INTEGER NOT NULL, end_min INTEGER NOT NULL, CHECK (start_min < end_min), PRIMARY KEY (staff_id, weekday, location_id, start_min))`,
   `CREATE TABLE IF NOT EXISTS exceptions (id TEXT PRIMARY KEY, staff_id TEXT, location_id TEXT, date_from TEXT NOT NULL, date_to TEXT NOT NULL, start_min INTEGER, end_min INTEGER, note TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL)`,
-  `CREATE TABLE IF NOT EXISTS bookings (id TEXT PRIMARY KEY, location_id TEXT NOT NULL, service_id TEXT NOT NULL, staff_id TEXT NOT NULL, date TEXT NOT NULL, start_min INTEGER NOT NULL, dur_min INTEGER NOT NULL, buffer_min INTEGER NOT NULL, price INTEGER, name TEXT NOT NULL, email TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'megerositett' CHECK (status IN ('megerositett', 'lemondva')), source TEXT NOT NULL DEFAULT 'web', token_salt TEXT NOT NULL, created_at INTEGER NOT NULL, cancelled_at INTEGER, emlekeztetve_at INTEGER, forras TEXT)`,
+  `CREATE TABLE IF NOT EXISTS bookings (id TEXT PRIMARY KEY, location_id TEXT NOT NULL, service_id TEXT NOT NULL, staff_id TEXT NOT NULL, date TEXT NOT NULL, start_min INTEGER NOT NULL, dur_min INTEGER NOT NULL, buffer_min INTEGER NOT NULL, price INTEGER, name TEXT NOT NULL, email TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'megerositett' CHECK (status IN ('megerositett', 'lemondva')), source TEXT NOT NULL DEFAULT 'web', token_salt TEXT NOT NULL, created_at INTEGER NOT NULL, cancelled_at INTEGER, emlekeztetve_at INTEGER, forras TEXT, sorozat_id TEXT)`,
   `CREATE INDEX IF NOT EXISTS bookings_date ON bookings (date, start_min)`,
   `CREATE TABLE IF NOT EXISTS slot_locks (staff_id TEXT NOT NULL, date TEXT NOT NULL, slot_min INTEGER NOT NULL, booking_id TEXT NOT NULL, PRIMARY KEY (staff_id, date, slot_min))`,
   `CREATE INDEX IF NOT EXISTS slot_locks_booking ON slot_locks (booking_id)`,
@@ -29,6 +29,20 @@ export const SEMA = [
   // Google Naptár szinkron (naptar.js): elem (F... foglalás, S... óra) + cél → a Google-esemény, és a várakozó sor
   `CREATE TABLE IF NOT EXISTS gcal_esemeny (elem_id TEXT NOT NULL, cel TEXT NOT NULL CHECK (cel IN ('kollega', 'studio')), naptar_id TEXT NOT NULL, esemeny_id TEXT NOT NULL, frissitve INTEGER NOT NULL, PRIMARY KEY (elem_id, cel, naptar_id))`,
   `CREATE TABLE IF NOT EXISTS gcal_sor (elem_id TEXT PRIMARY KEY, verzio INTEGER NOT NULL DEFAULT 1, probalkozas INTEGER NOT NULL DEFAULT 0, hiba TEXT, zarolva_at INTEGER, letrehozva INTEGER NOT NULL, frissitve INTEGER NOT NULL)`,
+  // Állandó időpont (sorozat.js): a sorozat, és a gördítéskor vagy mentéskor ütköző, kimaradt alkalmai.
+  // gorditve_ig: az utolsó már feldolgozott alkalom napja; gordit_zar: a gördítés zárja (ms), párhuzamos cron ellen;
+  // leallitva_tol: a leállítás napja (egy félbeszakadt leállítás ugyanezzel folytatódik)
+  `CREATE TABLE IF NOT EXISTS sorozatok (id TEXT PRIMARY KEY, location_id TEXT NOT NULL, service_id TEXT NOT NULL, staff_id TEXT NOT NULL, weekday INTEGER NOT NULL CHECK (weekday BETWEEN 1 AND 7), start_min INTEGER NOT NULL, interval_het INTEGER NOT NULL CHECK (interval_het IN (1, 2)), kezdo_datum TEXT NOT NULL, vege_tipus TEXT NOT NULL CHECK (vege_tipus IN ('datum', 'alkalom', 'nyitott')), vege_datum TEXT, alkalmak_szama INTEGER, name TEXT NOT NULL, email TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'aktiv' CHECK (status IN ('aktiv', 'leallitva')), created_at INTEGER NOT NULL, leallitva_at INTEGER, leallitva_tol TEXT, gorditve_ig TEXT NOT NULL DEFAULT '', gordit_zar INTEGER)`,
+  `CREATE INDEX IF NOT EXISTS sorozatok_allapot ON sorozatok (status, vege_tipus)`,
+  `CREATE TABLE IF NOT EXISTS sorozat_kimaradt (sorozat_id TEXT NOT NULL, datum TEXT NOT NULL, ok TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (sorozat_id, datum))`,
+];
+
+/**
+ * A migráció UTÁN futó utasítások: index olyan oszlopra, amit a régi adatbázisban csak az ALTER hoz
+ * létre (a SEMA batch-ében a régi táblán még hiányzó oszlop miatt elbukna).
+ */
+export const SEMA_UTAN = [
+  `CREATE INDEX IF NOT EXISTS bookings_sorozat ON bookings (sorozat_id, date)`,
 ];
 
 /**
@@ -45,6 +59,8 @@ export const MIGRACIO = [
   ['outbox', 'zarolva_at', `ALTER TABLE outbox ADD COLUMN zarolva_at INTEGER`],
   ['outbox', 'kuldve_at', `ALTER TABLE outbox ADD COLUMN kuldve_at INTEGER`],
   ['outbox', 'provider_id', `ALTER TABLE outbox ADD COLUMN provider_id TEXT`],
+  // Állandó időpont (2026-10-03): kézi futtatásra functions/_lib/booking/migracio-sorozat.sql
+  ['bookings', 'sorozat_id', `ALTER TABLE bookings ADD COLUMN sorozat_id TEXT`],
 ];
 
 // A kész sémájú adatbázisok (isolate-on belül, kötés-objektumonként)
@@ -54,6 +70,7 @@ export async function sema(db) {
   if (kesz.has(db)) return;
   await db.batch(SEMA.map((s) => db.prepare(s)));
   await migral(db);
+  await db.batch(SEMA_UTAN.map((s) => db.prepare(s)));
   kesz.add(db);
 }
 

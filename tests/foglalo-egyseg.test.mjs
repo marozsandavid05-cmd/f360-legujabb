@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fakeD1 } from './_d1.mjs';
-import { SEMA, torzsBetolt, titok } from '../functions/_lib/booking/schema.js';
+import { SEMA, SEMA_UTAN, torzsBetolt, titok } from '../functions/_lib/booking/schema.js';
 import { SEED_TORZS, SEED_BEOSZTAS } from '../functions/_lib/booking/seed.js';
 import { torzsEllenoriz } from '../functions/_lib/booking/admin.js';
 import { icsKeszit } from '../functions/_lib/booking/ics.js';
@@ -20,7 +20,7 @@ test('schema.sql és a kódbeli SEMA ugyanaz', () => {
   const sql = fs.readFileSync(path.join(BOOK, 'schema.sql'), 'utf8')
     .split('\n').filter((l) => !l.trim().startsWith('--')).join('\n')
     .split(';').map(norm).filter(Boolean);
-  assert.deepEqual(sql, SEMA.map(norm));
+  assert.deepEqual(sql, [...SEMA, ...SEMA_UTAN].map(norm));
 });
 
 test('a séma kétszer lefuttatva sem hibázik, a seed egyszer kerül be, a szerkesztettet nem írja felül', async () => {

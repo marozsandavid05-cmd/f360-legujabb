@@ -43,7 +43,7 @@ export async function kivetelekBetolt(db, tol, ig) {
   }));
 }
 
-async function foglaltBetolt(db, tol, ig, kiveveFoglalas = null) {
+export async function foglaltBetolt(db, tol, ig, kiveveFoglalas = null) {
   const { results } = await db.prepare(
     `SELECT staff_id, date, slot_min FROM slot_locks WHERE date >= ? AND date <= ? AND booking_id != ?`,
   ).bind(tol, ig, kiveveFoglalas || '').all();
@@ -78,7 +78,7 @@ export async function katalogus(db) {
   };
 }
 
-function hivatkozasok(torzs, { helyszin, szolgaltatas, kollega }) {
+export function hivatkozasok(torzs, { helyszin, szolgaltatas, kollega }) {
   const hely = torzs.helyszinek.find((h) => h.id === helyszin);
   if (!hely) throw new HttpError(400, 'Ismeretlen helyszín.');
   const szolg = torzs.szolgaltatasok.find((s) => s.id === szolgaltatas);
@@ -129,7 +129,7 @@ export async function szabad(db, q, { env = {}, most = Date.now(), admin = false
  * rácspontra vehet fel (a kínálás-beállítás rá nem vonatkozik); módosításnál a szolgáltatás a foglaláskor
  * rögzített időtartammal és pufferrel számít (ha azóta átírták is).
  */
-function szamitasra(torzs, { admin = false, row = null } = {}) {
+export function szamitasra(torzs, { admin = false, row = null } = {}) {
   let t = admin ? {
     ...torzs,
     szabalyok: { ...torzs.szabalyok, minEloreOra: 0, maxEloreNap: 3660 },
@@ -259,8 +259,10 @@ const linkek = (origin, token) => ({
  * slot_locks sor (PRIMARY KEY staff_id, date, slot_min), és a foglalás, a zárak és a levelek egy
  * batch-ben (egy tranzakcióban) kerülnek be. Ütközéskor az egész batch visszagörgetődik.
  * „Bárki” választásnál a jelöltek sorban próbálkoznak, az elsőként sikerülő kapja.
+ * `sorozatId` (állandó időpont, csak admin): a foglalás a sorozathoz kötődik, alkalmanként NEM megy levél
+ * (a sorozat egy összefoglalót küld), és csak akkor kerül be, ha a sorozat a batch lefutásakor még aktív.
  */
-export async function foglal(env, db, be, { origin, admin = false, most = Date.now() }) {
+export async function foglal(env, db, be, { origin, admin = false, most = Date.now(), sorozatId = null }) {
   const torzs = await torzsBetolt(db);
   const { hely, szolg } = hivatkozasok(torzs, be);
   const szTorzs = szamitasiTorzs(szamitasra(torzs, { admin }));
@@ -284,18 +286,22 @@ export async function foglal(env, db, be, { origin, admin = false, most = Date.n
       dur_min: szolg.perc, buffer_min: puffer, price: szolg.ar ?? null, name: be.nev, email: be.email, phone: be.telefon,
       note: be.megjegyzes, status: 'megerositett', source: admin ? 'admin' : 'web', token_salt: so, created_at: most,
       forras: be.forras ? JSON.stringify(be.forras) : null,
+      ...(sorozatId ? { sorozat_id: sorozatId } : {}),
     };
     const f = nezet(row, torzs);
     const ics = icsKeszit(f, { host: new URL(origin).host, most, lemondasUrl });
     const levelek = [visszaigazolas(f, { lemondasUrl, icsUrl, szabalyok: torzs.szabalyok, ics })];
     if (!admin) levelek.push(studioErtesito(f, { szabalyok: torzs.szabalyok }));
     levelek.push(kollegaUj(f, kollegaCim(torzs, kollega), { admin })); // üres címzettnél kimarad
+    const elsoLevel = levelek[0];
+    if (sorozatId) levelek.length = 0; // a sorozat egy összefoglaló levelet küld (sorozat.js)
+    const sorozatOr = sorozatId ? ` AND EXISTS (SELECT 1 FROM sorozatok WHERE id = ? AND status = 'aktiv')` : '';
     const cols = Object.keys(row);
     const stmts = [
       // a kolléga a batch lefutásakor is aktív legyen (nem archiválták és nem léptették ki közben);
       // ha nem, a sor nem kerül be, és a zárak booking_id-ja NULL lesz: a NOT NULL eldobja a batch-et
-      db.prepare(`INSERT INTO bookings (${cols.join(', ')}) SELECT ${cols.map(() => '?').join(', ')} WHERE ${AKTIV_KOLLEGA_SQL}`)
-        .bind(...cols.map((c) => row[c] ?? null), kollega, be.datum, be.datum),
+      db.prepare(`INSERT INTO bookings (${cols.join(', ')}) SELECT ${cols.map(() => '?').join(', ')} WHERE ${AKTIV_KOLLEGA_SQL}${sorozatOr}`)
+        .bind(...cols.map((c) => row[c] ?? null), kollega, be.datum, be.datum, ...(sorozatId ? [sorozatId] : [])),
       ...foglalasSlotjai({ kollega, datum: be.datum, kezd: be.kezdPerc, perc: szolg.perc, puffer }).map((s) => db.prepare(
         `INSERT INTO slot_locks (staff_id, date, slot_min, booking_id) VALUES (?, ?, ?, (SELECT id FROM bookings WHERE id = ?))`,
       ).bind(kollega, s.datum, s.slot, id)),
@@ -310,7 +316,7 @@ export async function foglal(env, db, be, { origin, admin = false, most = Date.n
       if (/NOT NULL constraint failed: slot_locks\.booking_id/.test(uzenet)) continue; // a kollégát közben archiválták vagy kiléptették
       throw e;
     }
-    return { azonosito: id, lemondasUrl, ics: icsUrl, level: { targy: levelek[0].targy, html: levelek[0].html, szoveg: levelek[0].szoveg }, foglalas: publikusNezet(f) };
+    return { azonosito: id, lemondasUrl, ics: icsUrl, level: { targy: elsoLevel.targy, html: elsoLevel.html, szoveg: elsoLevel.szoveg }, foglalas: publikusNezet(f) };
   }
   throw new HttpError(409, UTKOZES);
 }
@@ -360,7 +366,7 @@ export async function lemondasInfo(env, db, token, most = Date.now()) {
  * A levél csak akkor kerül be, ha ez a kérés váltotta át az állapotot (changes() = 1), így két
  * párhuzamos lemondásból sem lesz két levél.
  */
-export async function lemond(env, db, row, { admin = false, most = Date.now() } = {}) {
+export async function lemond(env, db, row, { admin = false, most = Date.now(), levelNelkul = false } = {}) {
   const torzs = await torzsBetolt(db);
   const a = lemondasAllapot(row, torzs, most);
   if (row.status !== 'megerositett') throw new HttpError(410, 'Ezt a foglalást már lemondták.');
@@ -372,7 +378,8 @@ export async function lemond(env, db, row, { admin = false, most = Date.now() } 
   }
   const f = nezet({ ...row, status: 'lemondva' }, torzs);
   // a páciens visszaigazolása, a kolléga (ha van címe és be van kapcsolva) és a stúdió értesítője
-  const levelek = [
+  // levelNelkul: a sorozat leállítása egy összefoglalót küld (sorozat.js), alkalmanként nincs levél
+  const levelek = levelNelkul ? [] : [
     lemondasLevel(f, { szabalyok: torzs.szabalyok }),
     kollegaLemondas(f, kollegaCim(torzs, row.staff_id), { admin }),
     kollegaLemondas(f, torzs.szabalyok.studioEmail, { admin }),
@@ -562,12 +569,17 @@ export async function foglalasLista(db, q) {
   const { results } = await db.prepare(
     `SELECT * FROM bookings WHERE ${felt.join(' AND ')} ORDER BY date, start_min, staff_id LIMIT 2000`,
   ).bind(...args).all();
+  // az állandó időpont jelölése (sorozat: { id, nap, kezd, ismetles } vagy null)
+  const { results: sorozatok } = await db.prepare(
+    `SELECT id, weekday, start_min, interval_het FROM sorozatok WHERE id IN (SELECT DISTINCT sorozat_id FROM bookings WHERE ${felt.join(' AND ')} AND sorozat_id IS NOT NULL)`,
+  ).bind(...args).all();
+  const sorozatMap = new Map((sorozatok || []).map((x) => [x.id, { id: x.id, nap: x.weekday, kezd: percToHHMM(x.start_min), ismetles: x.interval_het }]));
   return {
     tol, ig,
     foglalasok: (results || []).map((r) => {
       const { kezdPerc: _k, ...f } = nezet(r, torzs);
       return {
-        ...f, kampany: forrasOlvas(r.forras),
+        ...f, kampany: forrasOlvas(r.forras), sorozat: (r.sorozat_id && sorozatMap.get(r.sorozat_id)) || null,
         letrehozva: new Date(r.created_at).toISOString(), lemondva: r.cancelled_at ? new Date(r.cancelled_at).toISOString() : null,
       };
     }),
