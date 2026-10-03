@@ -95,6 +95,17 @@
   function nemArchiv(k) { return !k.archivalt; }
   function monogram(n) { return String(n || '').split(/\s+/).filter(Boolean).slice(-2).map(function (w) { return w.charAt(0); }).join('').toUpperCase(); }
   function rovidNev(n) { var p = String(n || '').split(/\s+/); return p.length > 1 ? p[p.length - 1] + ' ' + p[0].charAt(0) + '.' : n; }
+  // dátum toldalékkal, szóközös kötőjel helyett (az gondolatjelnek hat): „október 7-étől”, „december 16-áig”, „október 1-jéig”
+  function napRag(iso, mi) {
+    var alap = F.honapNapRagos(iso).replace(/n$/, ''); // „október 7-é”, „december 16-á”, „október 1-jé”
+    return mi === 'ig' ? alap + 'ig' : alap + (/á$/.test(alap) ? 'tól' : 'től');
+  }
+  // időszak: egy hónapon belül „október 5-11.”, hónapokon át „szeptember 28-ától október 4-éig”
+  function tartomany(tol, ig) {
+    if (tol === ig) return F.honapNap(tol);
+    if (tol.slice(0, 7) === ig.slice(0, 7)) return F.HONAPOK[Number(tol.slice(5, 7)) - 1] + ' ' + Number(tol.slice(8)) + '-' + Number(ig.slice(8)) + '.';
+    return napRag(tol, 'tol') + ' ' + napRag(ig, 'ig');
+  }
   function optionList(list, sel, extra) {
     return (extra || '') + list.map(function (x) { return '<option value="' + esc(x.id) + '"' + (x.id === sel ? ' selected' : '') + '>' + esc(x.nev) + '</option>'; }).join('');
   }
@@ -163,7 +174,7 @@
     var ma = F.most().datum;
     $('#fg-label').textContent = fg.nezet === 'nap'
       ? F.datumHosszu(fg.datum).replace(/(\d+\. )([a-zá-ű]+)/, '$1$2') + (fg.datum === ma ? ' · ma' : '')
-      : r.tol.slice(0, 4) + '. ' + F.honapNap(r.tol) + ' - ' + F.honapNap(r.ig);
+      : r.tol.slice(0, 4) + '. ' + tartomany(r.tol, r.ig);
     $('#fg-today').disabled = fg.datum === ma && fg.nezet === 'nap';
     board.setAttribute('aria-busy', 'true');
     if (!board.children.length) board.innerHTML = '<div class="skel-board"></div>';
@@ -516,8 +527,15 @@
     return Number(s.ismetles) === 2 ? 'minden második ' + NAPON_R[nap] + ' ' + s.kezd + '-kor' : NAPOKON[nap] + ' ' + s.kezd + '-kor';
   }
   function nagyKezd(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+  // a sorozat időszaka toldalékkal: „október 7-étől, 10 alkalom”, „október 7-étől visszavonásig”, „október 7-étől december 16-áig”
+  function serIdoszak(s) {
+    var tol = napRag(s.kezdoDatum, 'tol');
+    if (s.vege.tipus === 'nyitott') return tol + ' visszavonásig';
+    if (s.vege.tipus === 'datum') return tol + ' ' + napRag(s.vege.datum, 'ig');
+    return tol + ', ' + s.vege.db + ' alkalom';
+  }
   var SER_OK = {
-    foglalt: 'Foglalt: ekkor már van foglalása vagy csoportos órája',
+    foglalt: 'Foglalt: van már foglalása vagy órája',
     szabadsag: 'Szabadság vagy kiesés',
     nincs_beosztas: 'Ekkor nincs beosztva ezen a helyszínen',
     zarva: 'A helyszín zárva',
@@ -541,6 +559,7 @@
       $('input[name="s-ism"][value="1"]').checked = true;
       $('input[name="s-vege"][value="alkalom"]').checked = true;
       $('#s-db').value = 10; $('#s-ig').value = '';
+      serVege();
       var ma = F.most().datum;
       $('#s-tol').min = F.addDays(ma, -366); $('#s-tol').max = F.addDays(ma, 366);
       $('#s-tol').value = kovNap(3, F.addDays(ma, 1));
@@ -601,6 +620,13 @@
     $('#s-ritmus').innerHTML = kezd && k ? '<b>' + esc(nagyKezd(ritmus({ nap: nap, kezd: kezd, ismetles: ism }))) + '</b>, ' + esc(k.nev) + (sz ? ', ' + esc(sz.nev) : '') : '';
     var t = $('#s-tol').value;
     $('#s-tol-h').textContent = t ? 'Az első alkalom: ' + F.datumNap(kovNap(nap, t)) + '.' : '';
+  }
+  // a „Meddig” blokk: csak a kiválasztott vége-opció mezője aktív, a többi halvány és tiltott
+  function serVege(fokusz) {
+    var vt = ($('input[name="s-vege"]:checked') || {}).value;
+    $('#s-db').disabled = vt !== 'alkalom';
+    $('#s-ig').disabled = vt !== 'datum';
+    if (fokusz) { var m = vt === 'alkalom' ? $('#s-db') : vt === 'datum' ? $('#s-ig') : null; if (m) m.focus(); }
   }
   function serBemenet() {
     var vt = $('input[name="s-vege"]:checked').value;
@@ -827,7 +853,7 @@
   }
   function srSor(s) {
     var le = s.status === 'leallitva', km = (s.kimaradt || []).length;
-    var ido = (F.honapNap(s.kezdoDatum)) + ' - ' + (s.vege.tipus === 'nyitott' ? 'visszavonásig' : s.vege.tipus === 'datum' ? F.honapNap(s.vege.datum) : s.vege.db + ' alkalom');
+    var ido = serIdoszak(s);
     return '<li><a class="sr-row' + (le ? ' is-off' : '') + '" href="#/foglalasok/allando/' + esc(s.id) + '"' + kcStyle(s.kollega) + '>' +
       '<span class="sr-row__t"><b>' + esc(s.kezd) + '</b><small>' + (Number(s.ismetles) === 2 ? 'kéthetente' : 'hetente') + '</small></span>' +
       '<span class="sr-row__w"><b>' + esc(s.vendeg.nev) + '</b><span class="sr-row__k"><span class="pl__dot" aria-hidden="true"></span>' + esc(s.kollega.nev) + ' · ' + esc(s.szolgaltatas.nev) + '</span>' +
@@ -856,7 +882,7 @@
     var html = (uzenet ? '<p class="note oc-note" role="status">' + esc(uzenet) + '</p>' : '') +
       '<div class="ser-sum"' + kcStyle(s.kollega) + '><p class="ser-sum__r">' + esc(nagyKezd(ritmus(s))) + '</p><p class="ser-sum__m">' + esc([s.kollega.nev, s.szolgaltatas.nev + (s.szolgaltatas.perc ? ' ' + s.szolgaltatas.perc + ' perc' : ''), s.helyszin.nev].join(' · ')) + '</p>' +
       '<p class="ser-sum__n">' + (le ? '<span class="ko-st ko-st--archiv">Leállítva</span>' + (s.lemondott ? ' ' + s.lemondott + ' alkalom lemondva' : '') : '<b>' + s.jovobeli + '</b> jövőbeli alkalom' + (s.lemondott ? ', ' + s.lemondott + ' lemondva' : '')) + '</p></div>' +
-      '<dl class="dl"><div><dt>Időszak</dt><dd>' + esc(F.honapNap(s.kezdoDatum)) + ' - ' + esc(s.vege.tipus === 'nyitott' ? 'visszavonásig' : s.vege.tipus === 'datum' ? F.honapNap(s.vege.datum) : s.vege.db + ' alkalom') + '</dd></div>' +
+      '<dl class="dl"><div><dt>Időszak</dt><dd>' + esc(serIdoszak(s)) + '</dd></div>' +
       '<div><dt>Elérhetőség</dt><dd>' + (kap || 'nincs megadva') + '</dd></div>' +
       (s.vendeg.megjegyzes ? '<div><dt>Megjegyzés</dt><dd>' + esc(s.vendeg.megjegyzes) + '</dd></div>' : '') +
       '<div><dt>Azonosító</dt><dd class="mono">' + esc(s.id) + '</dd></div></dl>' +
@@ -1022,7 +1048,8 @@
   function tipusOf(id) { return or.tipusok.filter(function (t) { return t.id === id; })[0]; }
   function ervSz(s) {
     if (!s.ervenyes_tol && !s.ervenyes_ig) return 'folyamatosan';
-    return (s.ervenyes_tol ? F.honapNap(s.ervenyes_tol) : '') + ' - ' + (s.ervenyes_ig ? F.honapNap(s.ervenyes_ig) : '');
+    if (s.ervenyes_tol && s.ervenyes_ig) return tartomany(s.ervenyes_tol, s.ervenyes_ig);
+    return s.ervenyes_tol ? napRag(s.ervenyes_tol, 'tol') : napRag(s.ervenyes_ig, 'ig');
   }
   function renderOrarend() {
     var html = '<section class="be-sec or-sec" aria-labelledby="or-s-h"><div class="be-sec__head or-head"><div><h2 id="or-s-h">Heti órarend</h2>' +
@@ -1603,7 +1630,7 @@
     var list = bo.kivetelek.slice().sort(function (a, b) { return a.tol.localeCompare(b.tol); });
     function kinek(x) { return x.kollega ? (koll(x.kollega) || {}).nev || x.kollega : 'Az egész ' + ((hely(x.helyszin) || {}).nev || '') + ' zárva'; }
     function mikor(x) {
-      var d = x.tol === x.ig ? F.datumNap(x.tol) : F.honapNap(x.tol) + ' - ' + F.honapNap(x.ig);
+      var d = x.tol === x.ig ? F.datumNap(x.tol) : tartomany(x.tol, x.ig);
       return d + (x.kezd ? ', ' + x.kezd + '-' + x.veg : ', egész nap');
     }
     var ma = F.most().datum;
@@ -1633,7 +1660,7 @@
     if (msg) { err.textContent = msg; err.hidden = false; return; }
     err.hidden = true;
     api('/kivetelek', { method: 'POST', json: body }).then(function () {
-      toast('Felvéve: ' + (body.kollega ? koll(body.kollega).nev : hely(body.helyszin).nev + ' zárva') + ', ' + (body.tol === body.ig ? F.datumNap(body.tol) : F.honapNap(body.tol) + ' - ' + F.honapNap(body.ig)));
+      toast('Felvéve: ' + (body.kollega ? koll(body.kollega).nev : hely(body.helyszin).nev + ' zárva') + ', ' + (body.tol === body.ig ? F.datumNap(body.tol) : tartomany(body.tol, body.ig)));
       return api('/kivetelek?tol=' + F.most().datum);
     }).then(function (r) {
       bo.kivetelek = r.kivetelek || [];
@@ -2012,7 +2039,7 @@
       if (req !== ka.req) return;
       box.setAttribute('aria-busy', 'false');
       var sorok = (r && r.sorok) || [], o = (r && r.osszesen) || { foglalasok: 0, lemondva: 0 };
-      var idoszak = F.honapNap(r.tol) + ' - ' + F.honapNap(r.ig);
+      var idoszak = tartomany(r.tol, r.ig);
       if (!sorok.length) { box.innerHTML = '<div class="empty-state"><p>Ebben az időszakban (' + esc(idoszak) + ') nincs foglalás.</p></div>'; return; }
       // forrásonkénti összesítő: melyik csatorna hoz a legtöbbet
       var cs = {};
@@ -2109,6 +2136,14 @@
     // állandó időpont
     if (t.closest('#fg-ser-new') || t.closest('[data-sernew]')) return openSer();
     if (t.closest('#ser-cancel')) return $('#dlg-ser').close();
+    // a halvány (tiltott) vége-mezőre kattintott: kiválasztjuk a sor rádióját, és a mezőbe kerül a fókusz
+    var svin = t.closest('#dlg-ser .ser-v__in');
+    if (svin && $('input', svin).disabled) {
+      e.preventDefault();
+      $('input[name="s-vege"]', svin.closest('.ser-v')).checked = true;
+      serVege(true);
+      return;
+    }
     if (t.closest('#ser-back')) { ser.mvDatum = ''; serStep('adat'); $('#s-nev').focus(); return; }
     if (t.closest('#ser-open')) { $('#dlg-ser').close(); return; }
     var ssk = t.closest('[data-serskip]');
@@ -2234,7 +2269,7 @@
     if (t.id === 's-koll') return serFill('koll');
     if (t.id === 's-nap') return serFill('nap');
     if (t.id === 's-kezd' || t.name === 's-ism' || t.id === 's-tol') return serRitmus();
-    if (t.name === 's-vege' || t.id === 's-db' || t.id === 's-ig') { var vr = $('input[name="s-vege"][value="' + (t.id === 's-db' ? 'alkalom' : t.id === 's-ig' ? 'datum' : t.value) + '"]'); if (vr) vr.checked = true; return; }
+    if (t.name === 's-vege' || t.id === 's-db' || t.id === 's-ig') { var vr = $('input[name="s-vege"][value="' + (t.id === 's-db' ? 'alkalom' : t.id === 's-ig' ? 'datum' : t.value) + '"]'); if (vr) vr.checked = true; serVege(); return; }
     if (t.id === 'ser-mv-d') { var hb = $('.ser-mv__err'); if (hb) hb.remove(); return serMoveSlots(); }
     if (t.id === 'sr-tol') return srStopSz();
     if (t.id === 'mv-koll' || t.id === 'mv-datum') { $('#mv-err').hidden = true; return moveSlots(); }

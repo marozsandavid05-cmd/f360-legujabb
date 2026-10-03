@@ -746,7 +746,12 @@
   function hetCimke(tol) {
     var ig = F.addDays(tol, 6);
     return tol.slice(5, 7) === ig.slice(5, 7) ? F.HONAPOK[Number(tol.slice(5, 7)) - 1] + ' ' + Number(tol.slice(8)) + '-' + Number(ig.slice(8)) + '.'
-      : F.honapNap(tol) + ' - ' + F.honapNap(ig);
+      : napTol(tol) + ' ' + F.honapNapRagos(ig).replace(/n$/, '') + 'ig';
+  }
+  // „szeptember 28-ától” (szóközös kötőjel helyett, mert az gondolatjelnek hat)
+  function napTol(iso) {
+    var a = F.honapNapRagos(iso).replace(/n$/, '');
+    return a + (/á$/.test(a) ? 'tól' : 'től');
   }
   // miért nem választható (az API ok mezője), a cellában rövid, felolvasva teljes
   var OK_SZ = { betelt: 'Betelt', hatarido: 'Jelentkezés lezárult', elmarad: 'Elmarad', mult: 'Lezajlott' };

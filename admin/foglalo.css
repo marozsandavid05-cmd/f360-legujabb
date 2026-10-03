@@ -760,6 +760,9 @@ body[data-view="view-edit"] .tabs{display:none}
 .ser-v__t{font-size:.9375rem;font-weight:500}
 .ser-v__in{justify-self:end}
 .ser-v__in input[type="number"]{width:5.2rem}
+/* a nem választott vége-opció mezője halvány és tiltott; a rá kattintás a sor címkéjére esik, az kiválasztja a rádiót, és a mező megnyílik */
+.ser-v__in:has(input:disabled){opacity:.45}
+.ser-v__in input:disabled{pointer-events:none;cursor:pointer}
 .ser-v__h{grid-column:2 / -1;font-size:.8125rem}
 /* 2. lépés: alkalmak */
 .ser-sum{--kc:#303030;--kcl:rgba(48,48,48,.4);display:grid;gap:.15rem;padding:.9rem 1.1rem .9rem 1.3rem;border-radius:var(--r);background:var(--base);box-shadow:inset 5px 0 0 var(--kc)}
@@ -768,7 +771,7 @@ body[data-view="view-edit"] .tabs{display:none}
 .ser-sum__n{font-size:.9375rem;margin-top:.35rem}
 .ser-note{margin:0}
 .ser-list{list-style:none;margin:0;padding:0;display:block;max-height:min(46vh,30rem);overflow:auto;overscroll-behavior:contain;border-top:1px solid var(--rice)}
-.ser-a{display:grid;grid-template-columns:8.5rem 3.5rem minmax(0,1fr) auto;align-items:center;gap:.4rem 1rem;padding:.55rem .6rem;border-bottom:1px solid var(--rice);min-height:52px}
+.ser-a{display:grid;grid-template-columns:8.5rem 3.5rem minmax(0,1fr) auto;align-items:center;gap:.4rem 1rem;padding:.55rem .6rem;border-bottom:1px solid var(--rice);min-height:60px}
 .ser-a__d{display:grid}
 .ser-a__d b{font-size:.9375rem;font-weight:600}
 .ser-a__d small{font-size:.75rem}
@@ -822,9 +825,16 @@ body[data-view="view-edit"] .tabs{display:none}
   .sr-row__n{grid-column:2;grid-row:2;justify-items:start;text-align:left;display:flex;flex-wrap:wrap;align-items:baseline;gap:.15rem .45rem}
   .sr-row__go{grid-column:3;grid-row:1 / span 2}
   .grid3,.ser-when,.ser-span,.ser-mv__h{grid-template-columns:1fr}
+  /* „Meddig”: rádió, címke és mező egy sorban; az „alkalom” utótag itt elmarad (a címke és a mező neve mondja) */
+  .ser-v{gap:.35rem .5rem;padding:.45rem .6rem}
+  .ser-v__t{white-space:nowrap}
+  .ser-v__in input[type="number"]{width:3.75rem}
+  .ser-v__in.unit > span{display:none}
+  .ser-v__in input[type="date"]{width:9.5rem;min-width:0}
   .ser-steps{gap:.6rem;font-size:.75rem}
   .ser-steps li:not([aria-current="step"]) span{display:none}
-  .ser-a{grid-template-columns:6.5rem minmax(0,1fr);gap:.2rem .6rem}
+  .ser-a{grid-template-columns:7.5rem minmax(0,1fr);gap:.2rem .6rem}
+  .ser-a__d b{white-space:nowrap}
   .ser-a__t{grid-column:2;grid-row:1}
   .ser-a__s{grid-column:1 / -1}
   .ser-a__act{grid-column:1 / -1;justify-content:flex-start}
