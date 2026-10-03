@@ -147,9 +147,9 @@ test('létrehozás részleges ütközéssel: 201, a szabad alkalmak a sorozathoz
   assert.ok(b.every((x) => x.source === 'admin' && x.status === 'megerositett' && x.name === 'David teszt' && x.staff_id === 'szegedi-botond'));
   // zárak: alkalmanként (50 + 10) / 15 = 4
   for (const x of b) assert.equal(sorok(e, 'SELECT * FROM slot_locks WHERE booking_id = ?', x.id).length, 4);
-  // levelek: egy összefoglaló a vendégnek, egy a kollégának, alkalmanként semmi
+  // levelek: egy összefoglaló a vendégnek, egy a kollégának, egy a stúdiónak, alkalmanként semmi
   const uj = outbox(e).slice(elotte);
-  assert.deepEqual(uj.map((l) => l.tipus).sort(), ['sorozat-kollega', 'sorozat-visszaigazolas']);
+  assert.deepEqual(uj.map((l) => l.tipus).sort(), ['sorozat-kollega', 'sorozat-studio', 'sorozat-visszaigazolas']);
   const v = uj.find((l) => l.tipus === 'sorozat-visszaigazolas');
   assert.equal(v.cimzett, 'david.teszt@example.com');
   assert.equal(v.booking_id, d.sorozat.id);
@@ -284,12 +284,12 @@ test('leállítás a tol naptól: a későbbi alkalmak lemondva, a korábbiak ma
   // a lemondott alkalmak zárai felszabadultak
   for (const x of v.lemondott) assert.equal(sorok(e, 'SELECT * FROM slot_locks WHERE booking_id = ?', x.id).length, 0);
   const uj = outbox(e).slice(elotte);
-  assert.deepEqual(uj.map((l) => l.tipus).sort(), ['sorozat-kollega', 'sorozat-leallitva']);
+  assert.deepEqual(uj.map((l) => l.tipus).sort(), ['sorozat-kollega', 'sorozat-leallitva', 'sorozat-studio']);
   // a megmaradt alkalmak linkje a vendég levelében
   const lev = uj.find((l) => l.tipus === 'sorozat-leallitva');
   assert.equal([...lev.szoveg.matchAll(/lemondas\?t=/g)].length, 2);
-  // másodszor: már le van állítva
-  assert.equal((await admin(e, 'POST', `/api/foglalo/sorozatok/${d.sorozat.id}/leallitas`, { tol: het(0) })).status, 409);
+  // másodszor, nem korábbi nappal: már le van állítva (a korábbi nap kiterjeszt: foglalo-sorozat-studio.test.mjs)
+  assert.equal((await admin(e, 'POST', `/api/foglalo/sorozatok/${d.sorozat.id}/leallitas`, { tol: het(3) })).status, 409);
   const lista = await (await admin(e, 'GET', '/api/foglalo/sorozatok?allapot=leallitva')).json();
   assert.equal(lista.sorozatok.length, 1);
   assert.equal((await (await admin(e, 'GET', '/api/foglalo/sorozatok')).json()).sorozatok.length, 0, 'az alap szűrő: aktív');
@@ -465,8 +465,9 @@ test('gördítés félbeszakadt futás után: a már létrejött alkalmat nem fo
   assert.equal(sorok(e, 'SELECT COUNT(*) AS n FROM sorozat_kimaradt')[0].n, 0);
 });
 
-test('létrehozás e-mail nélküli vendéggel, kolléga-cím nélkül, ütközés nélkül: 201 (nincs üres D1-batch)', async () => {
+test('létrehozás e-mail nélküli vendéggel, kolléga-cím nélkül, stúdió-cím nélkül, ütközés nélkül: 201 (nincs üres D1-batch)', async () => {
   const e = ujEnv();
+  await szabalyAtir(e, { studioEmail: '' });
   const r = await letrehoz(e, { vege: { tipus: 'alkalom', db: 2 } }, { vendeg: vendeg({ email: '', telefon: '' }) });
   assert.equal(r.status, 201, await r.clone().text());
   assert.equal(sorok(e, `SELECT COUNT(*) AS n FROM outbox`)[0].n, 0);

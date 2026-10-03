@@ -334,9 +334,12 @@ export async function sorozatLetrehoz(env, db, d, { origin, most = Date.now() })
   const s = sorozatNezet(sor, torzs);
   const alkalmak = [...letrejott].sort((a, b) => (a.datum < b.datum ? -1 : a.datum > b.datum ? 1 : 0))
     .map(({ datum, kezd, lemondasUrl }) => ({ datum, kezd, lemondasUrl }));
+  const rovid = alkalmak.map(({ datum, kezd }) => ({ datum, kezd }));
   const levelek = [
     sorozatVisszaigazolas(s, { alkalmak, szabalyok: torzs.szabalyok }),
-    sorozatKollegaErtesito(s, kollegaCim(torzs, be.kollega), { alkalmak: alkalmak.map(({ datum, kezd }) => ({ datum, kezd })), esemeny: 'uj' }),
+    sorozatKollegaErtesito(s, kollegaCim(torzs, be.kollega), { alkalmak: rovid, esemeny: 'uj' }),
+    // a stúdió címére (üres cím: levelSorok kihagyja)
+    sorozatKollegaErtesito(s, torzs.szabalyok.studioEmail || '', { alkalmak: rovid, esemeny: 'uj', studio: true }),
   ];
   mailMod(env);
   const vegso = [
@@ -376,28 +379,45 @@ async function sorozatTorol(db, id) {
  * (csak aktív sorozathoz köt) azonnal megáll. Ha a lemondások közben hiba jön, az újrapróbálás FOLYTATJA
  * (a tárolt tol szerint), nem 409: 409 csak akkor, ha nincs több lemondandó alkalom és az összefoglaló
  * már kiment. Az összefoglaló a leállításkor lemondott összes alkalmat felsorolja, és sorozatonként egyszer
- * kerül az outboxba (feltételes beszúrás).
+ * kerül az outboxba (feltételes beszúrás). A stúdió is kap egy összefoglalót (sorozat-studio), ha van címe.
+ *
+ * Utólag korábbi naptól: ha a sorozat már le van állítva, és a kérésben MEGADOTT tol korábbi a tárolt
+ * leallitva_tol-nál (Lilla túl késői napot adott meg), a leállítás kiterjed: a leallitva_tol és a
+ * leallitva_at frissül (feltételes UPDATE), a tol és a régi nap közötti megerősített, jövőbeli alkalmak is
+ * lemondva, és az összefoglalók újra kimennek, csak az újonnan lemondott alkalmakkal (üres listánál nem).
+ * A tol nélküli hívás (ma) ilyenkor sem terjeszt ki, az csak folytat. Nem korábbi tol: a szokásos 409.
  */
 export async function sorozatLeallit(env, db, id, d, { origin, most = Date.now() }) {
   const torzs = await torzsBetolt(db);
   let s0 = await sorozatAzonositoval(db, id);
   const ma = budapestMost(most).datum;
-  const kertTol = d && d.tol != null && d.tol !== '' ? d.tol : ma;
+  const megadott = d && d.tol != null && d.tol !== '';
+  const kertTol = megadott ? d.tol : ma;
   if (!ervenyesDatum(kertTol)) throw hiba('Hibás dátum: tol (ÉÉÉÉ-HH-NN).');
   if (kertTol < ma) throw hiba('A leállítás napja nem lehet a múltban.');
   const r = await db.prepare(`UPDATE sorozatok SET status = 'leallitva', leallitva_at = ?, leallitva_tol = ? WHERE id = ? AND status = 'aktiv'`)
     .bind(most, kertTol, s0.id).run();
   const elso = Number(r.meta && r.meta.changes) === 1;
-  if (!elso) s0 = await sorozatSor(db, s0.id); // már leállították: a tárolt tol és időpont szerint folytatjuk
-  const tol = elso ? kertTol : (s0.leallitva_tol || kertTol);
-  const leallitvaAt = elso ? most : Number(s0.leallitva_at || most);
+  let kiterjesztes = false;
+  if (!elso && megadott) {
+    // már leállították: ha a megadott nap korábbi a tároltnál, a leállítás kiterjed (új leállítási időpont)
+    const k = await db.prepare(`UPDATE sorozatok SET leallitva_at = ?, leallitva_tol = ? WHERE id = ? AND status = 'leallitva' AND leallitva_tol > ?`)
+      .bind(most, kertTol, s0.id, kertTol).run();
+    kiterjesztes = Number(k.meta && k.meta.changes) === 1;
+  }
+  const uj = elso || kiterjesztes;
+  if (!uj) s0 = await sorozatSor(db, s0.id); // már leállították: a tárolt tol és időpont szerint folytatjuk
+  const tol = uj ? kertTol : (s0.leallitva_tol || kertTol);
+  const leallitvaAt = uj ? most : Number(s0.leallitva_at || most);
 
   const { results } = await db.prepare(`SELECT * FROM bookings WHERE sorozat_id = ? AND status = 'megerositett' ORDER BY date, start_min`).bind(s0.id).all();
   const jovobeli = (results || []).filter((b) => helyiToUtc(b.date, b.start_min) > most);
   const hatra = jovobeli.filter((x) => x.date >= tol);
-  const levelVan = !elso && await db.prepare(`SELECT 1 AS x FROM outbox WHERE booking_id = ? AND tipus IN ('sorozat-leallitva', 'sorozat-kollega') AND created_at >= ? LIMIT 1`)
+  // a létrehozáskori kolléga- és stúdió-levél típusa ugyanaz, a tárgya „Új állandó időpont”-tal kezdődik
+  const levelVan = !uj && await db.prepare(`SELECT 1 AS x FROM outbox WHERE booking_id = ? AND tipus IN ('sorozat-leallitva', 'sorozat-kollega', 'sorozat-studio')
+      AND targy NOT LIKE 'Új állandó időpont%' AND created_at >= ? LIMIT 1`)
     .bind(s0.id, leallitvaAt).first('x');
-  if (!elso && !hatra.length && levelVan) throw new HttpError(409, 'Ez az állandó időpont már le van állítva.');
+  if (!uj && !hatra.length && levelVan) throw new HttpError(409, 'Ez az állandó időpont már le van állítva.');
 
   for (const b of hatra) {
     try {
@@ -420,17 +440,20 @@ export async function sorozatLeallit(env, db, id, d, { origin, most = Date.now()
   }
   const s = sorozatNezet({ ...s0, status: 'leallitva', leallitva_at: leallitvaAt }, torzs);
   const lem = lemondott.map((b) => ({ datum: b.date, kezd: percToHHMM(b.start_min) }));
-  const levelek = [
+  // kiterjesztésnél csak akkor megy levél, ha tényleg lett újonnan lemondott alkalom
+  const levelek = kiterjesztes && !lem.length ? [] : [
     sorozatLeallitva(s, { lemondott: lem, maradt, szabalyok: torzs.szabalyok }),
     sorozatKollegaErtesito(s, kollegaCim(torzs, s0.staff_id), { alkalmak: lem, esemeny: 'leallitva' }),
+    sorozatKollegaErtesito(s, torzs.szabalyok.studioEmail || '', { alkalmak: lem, esemeny: 'leallitva', studio: true }),
   ].filter((l) => l.cimzett);
   mailMod(env);
   if (levelek.length) {
-    // sorozatonként egyszer: csak ha erről a leállításról még nincs ilyen típusú levél
+    // leállításonként egyszer: csak ha erről a leállításról még nincs ugyanilyen levél (a létrehozáskori,
+    // azonos típusú kolléga- és stúdió-levelet a tárgy különbözteti meg)
     await db.batch(levelek.map((l) => db.prepare(
       `INSERT INTO outbox (booking_id, tipus, cimzett, targy, html, szoveg, ics, sent, created_at)
-       SELECT ?, ?, ?, ?, ?, ?, NULL, 0, ? WHERE NOT EXISTS (SELECT 1 FROM outbox WHERE booking_id = ? AND tipus = ? AND cimzett = ? AND created_at >= ?)`,
-    ).bind(s0.id, l.tipus, l.cimzett, l.targy, l.html, l.szoveg, most, s0.id, l.tipus, l.cimzett, leallitvaAt)));
+       SELECT ?, ?, ?, ?, ?, ?, NULL, 0, ? WHERE NOT EXISTS (SELECT 1 FROM outbox WHERE booking_id = ? AND tipus = ? AND cimzett = ? AND targy = ? AND created_at >= ?)`,
+    ).bind(s0.id, l.tipus, l.cimzett, l.targy, l.html, l.szoveg, most, s0.id, l.tipus, l.cimzett, l.targy, leallitvaAt)));
   }
   return { sorozat: s, lemondott: lemondott.map((b) => ({ id: b.id, datum: b.date })) };
 }
