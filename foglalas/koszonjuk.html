@@ -146,14 +146,15 @@
     </div>
   </section>
 
-  <!-- ha a foglalás adatai ebben a böngészőben már nincsenek meg (másik lap, másik eszköz) -->
+  <!-- ha a foglalás adatai ebben a böngészőben nincsenek meg (másik lap, másik eszköz), vagy a cím azonosító nélküli, hibás:
+       semleges szöveg, NEM „Foglalás rögzítve”, mert az azonosítót token nélkül nem tudjuk ellenőrizni -->
   <section class="bk-done wrap ty-empty" id="ty-empty" aria-labelledby="h-empty" hidden>
     <div class="ty-empty__in">
-      <p class="done__k">Foglalás rögzítve</p>
-      <h1 id="h-empty" tabindex="-1">Köszönjük a foglalásod</h1>
-      <p class="cx__lead" id="empty-lead">A visszaigazolást e-mailben küldjük, abban megtalálod az időpontot, a naptárfájlt és az Időpont lemondása / módosítása linket.</p>
+      <p class="done__k done__k--semleges" id="empty-k">Időpontfoglalás</p>
+      <h1 id="h-empty" tabindex="-1">A foglalás részletei itt nem láthatók</h1>
+      <p class="cx__lead" id="empty-lead">Ha most foglaltál, a visszaigazolást e-mailben elküldtük. Abban megtalálod az időpontot, a naptárfájlt és az Időpont lemondása / módosítása linket. Ha nem érkezett meg, nézd meg a levélszemét mappát is, vagy hívj minket.</p>
       <div class="done__act">
-        <a class="btn bk-next" href="../foglalas.html" id="empty-new">Újabb időpontot foglalok</a>
+        <a class="btn bk-next" href="../foglalas.html" id="empty-new">Időpontot foglalok</a>
         <a class="btn" href="tel:+36305030578" id="empty-tel">Kérdésed van? +36 30 503 0578</a>
       </div>
     </div>

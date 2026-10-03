@@ -158,11 +158,14 @@
   var meretIdo = null;
   window.addEventListener('resize', function () { clearTimeout(meretIdo); meretIdo = setTimeout(levelMagassag, 150); });
 
+  // nincs ellenőrizhető foglalás (nincs azonosító, hibás azonosító, vagy másik lap/eszköz): semleges szöveg,
+  // nem írjuk ki, hogy „Foglalás rögzítve”, mert token nélkül nem tudjuk, létezik-e
   function ures() {
     $('#ty-empty').hidden = false;
     $('#empty-new').href = href('foglalas.html');
     var tel = F.TELEFON;
     $('#empty-tel').textContent = 'Kérdésed van? ' + tel; $('#empty-tel').href = 'tel:' + tel.replace(/[^\d+]/g, '');
+    document.title = 'Időpontfoglalás · Studio F360';
     $('#fo').setAttribute('data-state', 'kesz');
     setTimeout(function () { $('#h-empty').focus({ preventScroll: true }); }, 60);
   }

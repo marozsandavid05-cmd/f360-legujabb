@@ -97,8 +97,8 @@
     seed();
   }
   /* ---------------- torzs-alap.js: a kolléga Lilla-kör mezői és az új szabályok ---------------- */
-  var KOLLEGA_UJ_MEZOK = ['email', 'aktiv_tol', 'aktiv_ig', 'foto', 'bemutatkozas', 'archivalt'];
-  var SZABALY_UJ_ALAP = { ertesitKollega: true, emlekeztetoBe: true, emlekeztetoOra: 30, reggeliHatarOra: 22, reggeliKezdesElott: 10, kinalas: 'igazitott' };
+  var KOLLEGA_UJ_MEZOK = ['email', 'aktiv_tol', 'aktiv_ig', 'foto', 'bemutatkozas', 'archivalt', 'naptar_id'];
+  var SZABALY_UJ_ALAP = { ertesitKollega: true, emlekeztetoBe: true, emlekeztetoOra: 30, reggeliHatarOra: 22, reggeliKezdesElott: 10, kinalas: 'igazitott', studioNaptarId: '' };
   /* torzs-alap.js: a felkínált kezdések lépése (a belső 15 perces rács ettől nem változik)
      globálisan (szabalyok.kinalas): 'igazitott' | 15 | 30 | 60; szolgáltatásonként (kinalas): null | 'igazitott' | 15 többszöröse 15 és 240 között */
   var KINALAS_GLOBALIS = ['igazitott', 15, 30, 60];
@@ -112,7 +112,8 @@
     return Object.assign({}, k, {
       email: typeof k.email === 'string' ? k.email : '', aktiv_tol: typeof k.aktiv_tol === 'string' ? k.aktiv_tol : '',
       aktiv_ig: typeof k.aktiv_ig === 'string' ? k.aktiv_ig : '', foto: typeof k.foto === 'string' ? k.foto : '',
-      bemutatkozas: typeof k.bemutatkozas === 'string' ? k.bemutatkozas : '', archivalt: k.archivalt === true
+      bemutatkozas: typeof k.bemutatkozas === 'string' ? k.bemutatkozas : '', archivalt: k.archivalt === true,
+      naptar_id: typeof k.naptar_id === 'string' ? k.naptar_id : ''
     });
   }
   function torzsAlap(t) {
@@ -132,6 +133,15 @@
     if (s.length > max) throw hiba('Túl hosszú: ' + mezo + ' (legfeljebb ' + max + ' karakter).');
     return s;
   }
+  /* torzs-alap.js naptarAzonosito: Google Naptár azonosító (calendarId) vagy üres */
+  var NAPTAR_RE = /^[A-Za-z0-9._%+#-]{1,200}@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/;
+  function naptarAzonosito(v, mezo) {
+    if (v == null || v === '') return '';
+    if (typeof v !== 'string') throw hiba('Hibás mező: ' + (mezo || 'naptár-azonosító') + '.');
+    var s = v.trim();
+    if (s && (s.length > 254 || !NAPTAR_RE.test(s))) throw hiba('Hibás ' + (mezo || 'naptár-azonosító') + ': a Google Naptár beállításaiban, a „Naptár integrálása” résznél látható azonosító kell, például valami@group.calendar.google.com.');
+    return s;
+  }
   function kollegaUjMezok(d) {
     var ki = {};
     if ('email' in d) { var e = szovegK(d.email, 'e-mail', 254).toLowerCase(); if (e && !EMAIL_RE_K.test(e)) throw hiba('Hibás e-mail-cím.'); ki.email = e; }
@@ -148,6 +158,7 @@
     }
     if ('bemutatkozas' in d) ki.bemutatkozas = szovegK(d.bemutatkozas, 'bemutatkozás', 2000);
     if ('archivalt' in d) { if (typeof d.archivalt !== 'boolean') throw hiba('Hibás mező: archivalt (true vagy false).'); ki.archivalt = d.archivalt; }
+    if ('naptar_id' in d) ki.naptar_id = naptarAzonosito(d.naptar_id, 'naptár-azonosító (kolléga)');
     return ki;
   }
   function aktivSorrend(k) { if (k.aktiv_tol && k.aktiv_ig && k.aktiv_tol > k.aktiv_ig) throw hiba('A belépés napja nem lehet a kilépés után.'); }
@@ -163,6 +174,7 @@
       ki.emlekeztetoOra = sz.emlekeztetoOra;
     }
     if ('kinalas' in sz) ki.kinalas = kinalasGlobalis(sz.kinalas);
+    if ('studioNaptarId' in sz) ki.studioNaptarId = naptarAzonosito(sz.studioNaptarId, 'stúdiónaptár-azonosító');
     return ki;
   }
   // a régi és az új kolléga: mely jövőbeli, megerősített foglalások válnának foglalhatatlanná (szukitoFeltetel)
@@ -828,6 +840,48 @@
   /* ---------------- admin.js ---------------- */
   var ID_RE = /^[a-z0-9][a-z0-9-]{0,59}$/;
   function hiba(m) { return HttpErr(400, m); }
+  /* ---------------- Google Naptár (naptar.js naptarAllapot, naptarUjraszinkron) ----------------
+     A böngészőben nincs valódi Google-hívás. A kulcs állapota tesztkapcsoló (a munkamenetben megmarad):
+       ?gcal=0       nincs kulcs (alap, ez az élő állapot)        ?gcal=1       be van kötve
+       ?gcal=hibas   hibás kulcs (kulcsHiba)                      ?gcal=elakadt be van kötve, 3 tétel vár, 2 elakadt */
+  var GCAL_KEY = 'f360-foglalo-mock-gcal', GCAL_FIOK = 'f360-naptar@f360-foglalo.iam.gserviceaccount.com';
+  var GCAL_KULCS_HIBA = 'A Google szolgáltatásfiók kulcsa hibás (GOOGLE_SA_KEY): a Google Cloudból letöltött teljes JSON-fájl tartalma kell.';
+  (function () {
+    var m = /[?&]gcal=(0|1|hibas|elakadt)(&|$)/.exec(location.search);
+    if (m) { try { if (m[1] === '0') sessionStorage.removeItem(GCAL_KEY); else sessionStorage.setItem(GCAL_KEY, m[1]); } catch (e) { /* nincs */ } }
+  })();
+  function gcalMod() { try { return sessionStorage.getItem(GCAL_KEY) || 'nincs'; } catch (e) { return 'nincs'; } }
+  function gcalSor() { try { return JSON.parse(sessionStorage.getItem(GCAL_KEY + '-sor') || 'null'); } catch (e) { return null; } }
+  function naptarAllapot() {
+    var mod = gcalMod(), be = mod === '1' || mod === 'elakadt', t = T();
+    var sor = mod === 'elakadt' ? (gcalSor() || { varakozik: 3, elakadt: 2 }) : { varakozik: 0, elakadt: 0 };
+    var elsoF = db.bookings.filter(function (b) { return b.status === 'megerositett' && b.date >= F.most().datum; })[0];
+    return {
+      bekotve: be,
+      kulcsHiba: mod === 'hibas' ? GCAL_KULCS_HIBA : null,
+      szolgaltatasFiok: be ? GCAL_FIOK : null,
+      studioNaptarId: t.szabalyok.studioNaptarId || '',
+      kollegak: t.kollegak.filter(function (k) { return k.archivalt !== true; }).map(function (k) { return { id: k.id, nev: k.nev, szin: k.szin, naptar_id: k.naptar_id || '' }; }),
+      varakozik: sor.varakozik, elakadt: sor.elakadt,
+      utolsoHiba: sor.elakadt ? { azonosito: elsoF ? elsoF.id : 'F0000000001', uzenet: 'A Google Naptár 403-at adott: a naptár nincs megosztva a szolgáltatásfiókkal.', probalkozas: 2, ido: new Date(Date.now() - 18 * 60e3).toISOString() } : null
+    };
+  }
+  function naptarUjraszinkron(d) {
+    if (!d || typeof d !== 'object' || Array.isArray(d)) throw hiba('Hibás kérés.');
+    Object.keys(d).forEach(function (k) { if (k !== 'mind') throw hiba('Ismeretlen mező: ' + k + '.'); });
+    if ('mind' in d && typeof d.mind !== 'boolean') throw hiba('Hibás mező: mind (true vagy false).');
+    var mod = gcalMod();
+    if (mod === 'hibas') throw HttpErr(409, 'A Google Naptár nincs bekötve: ' + GCAL_KULCS_HIBA);
+    if (mod !== '1' && mod !== 'elakadt') throw HttpErr(409, 'A Google Naptár nincs bekötve (hiányzik a GOOGLE_SA_KEY titok).');
+    var t = T(), van = {};
+    t.kollegak.forEach(function (k) { if (k.naptar_id) van[k.id] = 1; });
+    var ma = F.most().datum, n = 0;
+    if (d.mind) n = db.bookings.filter(function (b) { return b.status === 'megerositett' && b.date >= ma && (t.szabalyok.studioNaptarId || van[b.staff_id]); }).length;
+    var sor = mod === 'elakadt' ? (gcalSor() || { varakozik: 3, elakadt: 2 }) : { varakozik: 0, elakadt: 0 };
+    var siker = Math.min(n, 25) + sor.varakozik;
+    try { sessionStorage.setItem(GCAL_KEY + '-sor', JSON.stringify({ varakozik: 0, elakadt: 0 })); } catch (e) { /* nincs */ }
+    return { bekotve: true, sikeres: siker, hibas: 0, maradt: Math.max(0, n - 25) };
+  }
   function str(v, mezo, max, kotelezo) {
     if (v == null || v === '') { if (kotelezo !== false) throw hiba('Hiányzó mező: ' + mezo + '.'); return ''; }
     if (typeof v !== 'string' || v.length > (max || 200)) throw hiba('Hibás mező: ' + mezo + '.');
@@ -1789,6 +1843,21 @@
     if (reszek.length === 2 && reszek[0] === 'riport' && reszek[1] === 'forrasok') {
       if (method !== 'GET') return json(405, { error: 'Ez a művelet itt nem engedélyezett.' });
       return json(200, forrasRiport(q));
+    }
+    // Google Naptár (naptar.js naptarAllapot / studioNaptarMent / naptarUjraszinkron)
+    if (reszek[0] === 'naptar') {
+      if (reszek.length === 2 && reszek[1] === 'allapot') return method === 'GET' ? json(200, naptarAllapot()) : json(405, { error: 'Ez a művelet itt nem engedélyezett.' });
+      if (reszek.length === 2 && reszek[1] === 'ujraszinkron') return method === 'POST' ? json(200, naptarUjraszinkron(body || {})) : json(405, { error: 'Ez a művelet itt nem engedélyezett.' });
+      if (reszek.length === 1) {
+        if (method !== 'PATCH') return json(405, { error: 'Ez a művelet itt nem engedélyezett.' });
+        if (!body || typeof body !== 'object' || Array.isArray(body)) throw hiba('Hibás kérés.');
+        var nk = Object.keys(body);
+        if (nk.length !== 1 || nk[0] !== 'studioNaptarId') throw hiba('Itt csak a studioNaptarId mező módosítható.');
+        var sn = naptarAzonosito(body.studioNaptarId, 'stúdiónaptár-azonosító');
+        db.torzs = Object.assign({}, T(), { szabalyok: Object.assign({}, T().szabalyok, { studioNaptarId: sn }) }); save();
+        return json(200, { studioNaptarId: sn });
+      }
+      return json(404, { error: 'Ismeretlen API-végpont.' });
     }
     if (reszek.length === 2 && reszek[0] === 'emlekezteto' && reszek[1] === 'futtat') {
       if (method !== 'POST') return json(405, { error: 'Ez a művelet itt nem engedélyezett.' });

@@ -1225,7 +1225,7 @@
     }).join('');
   }
   function koUres() {
-    return { id: '', nev: '', szerep: '', helyszinek: [torzs.helyszinek[0].id], szolgaltatasok: [], szin: '', email: '', aktiv_tol: F.most().datum, aktiv_ig: '', foto: '', bemutatkozas: '', archivalt: false };
+    return { id: '', nev: '', szerep: '', helyszinek: [torzs.helyszinek[0].id], szolgaltatasok: [], szin: '', email: '', aktiv_tol: F.most().datum, aktiv_ig: '', foto: '', bemutatkozas: '', archivalt: false, naptar_id: '' };
   }
   function renderKoForm() {
     var main = $('#ko-main');
@@ -1256,6 +1256,11 @@
       // értesítés
       '<fieldset class="ko-sec"><legend>Értesítés</legend>' +
         '<div class="field ko-email"><label for="ko-email">Privát e-mail-cím <span class="opt">(nem kötelező)</span></label><input type="email" id="ko-email" data-ko="email" maxlength="254" inputmode="email" autocomplete="off" value="' + esc(f.email || '') + '" aria-describedby="ko-email-h"><p class="hint" id="ko-email-h">Ide kap levelet új foglalásról, módosításról és lemondásról' + (torzs.szabalyok && torzs.szabalyok.ertesitKollega === false ? '. A kollégák értesítése most ki van kapcsolva a Beállításokban.' : '.') + ' A weboldalon nem jelenik meg.</p></div>' +
+      '</fieldset>' +
+      // google naptár: a foglalásai ide kerülnek (a Beállítások Google Naptár blokkja mutatja az állapotot)
+      '<fieldset class="ko-sec"><legend>Google Naptár</legend>' +
+        '<div class="field ko-email"><label for="ko-gcal">Google Naptár azonosító <span class="opt">(nem kötelező)</span></label><input type="text" id="ko-gcal" data-ko="naptar_id" maxlength="254" inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false" value="' + esc(f.naptar_id || '') + '" placeholder="pl. abc123…@group.calendar.google.com" aria-describedby="ko-gcal-h">' +
+        '<p class="hint" id="ko-gcal-h">A Google Naptárban a naptár neve melletti három pont, Beállítások és megosztás, majd a Naptár integrálása résznél a Naptárazonosító sor. Ide kerülnek a foglalásai, a kolléga színével. <a href="#/beallitasok">A bekötés állapota a Beállításokban</a></p></div>' +
       '</fieldset>' +
       // szín
       '<fieldset class="ko-sec kc-pick kc-pick--form"><legend>Szín a naptárban</legend>' +
@@ -1421,11 +1426,12 @@
     if (f.aktiv_tol && f.aktiv_ig && f.aktiv_tol > f.aktiv_ig) return { mezo: 'ko-ig', uzenet: 'A „Meddig foglalható” nap nem lehet korábbi a „Mettől foglalható” napnál.' };
     var fo = String(f.foto || '').trim();
     if (fo && !/^https:\/\/[^\s"'<>\\]+$/.test(fo) && !/^\/(?![/\\])[^\s"'<>\\]*$/.test(fo)) return { mezo: 'ko-foto', uzenet: 'A fotó címe https://-sel vagy /-rel kezdődjön.' };
+    var gh = gcAzonHiba(f.naptar_id); if (gh) return { mezo: 'ko-gcal', uzenet: 'Google Naptár: ' + gh };
     return null;
   }
   function koMezok(f) {
     var ki = { nev: String(f.nev).trim(), szerep: String(f.szerep || '').trim(), helyszinek: f.helyszinek.slice(), szolgaltatasok: f.szolgaltatasok.slice(),
-      email: String(f.email || '').trim(), aktiv_tol: f.aktiv_tol || '', aktiv_ig: f.aktiv_ig || '', foto: String(f.foto || '').trim(), bemutatkozas: String(f.bemutatkozas || '').trim() };
+      email: String(f.email || '').trim(), aktiv_tol: f.aktiv_tol || '', aktiv_ig: f.aktiv_ig || '', foto: String(f.foto || '').trim(), bemutatkozas: String(f.bemutatkozas || '').trim(), naptar_id: String(f.naptar_id || '').trim() };
     if (f.szin) ki.szin = f.szin;
     return ki;
   }
@@ -1684,9 +1690,9 @@
   function openBeallitasok() {
     document.title = 'Beállítások · Admin · Studio F360';
     var form = $('#be-form');
-    if (be.dirty && be.t) return renderBe();
+    if (be.dirty && be.t) { renderBe(); return loadGcal(); }
     form.innerHTML = '<div class="skel-board"></div>';
-    loadTorzs(true).then(function (t) { be.t = JSON.parse(JSON.stringify(t)); be.dirty = false; renderBe(); })
+    loadTorzs(true).then(function (t) { be.t = JSON.parse(JSON.stringify(t)); be.dirty = false; renderBe(); loadGcal(); })
       .catch(function (e) { hibaDoboz(form, e, openBeallitasok); });
   }
   function chk(name, val, on, label, extra) {
@@ -1908,11 +1914,131 @@
       var regiSz = {}; friss.szolgaltatasok.forEach(function (x) { regiSz[x.id] = 1; });
       var ujSz = {}; be.t.szolgaltatasok.forEach(function (x) { ujSz[x.id] = 1; });
       var kl = friss.kollegak.map(function (k) { return Object.assign({}, k, { szolgaltatasok: k.szolgaltatasok.filter(function (sid) { return ujSz[sid]; }) }); });
-      return api('/beallitasok', { method: 'PUT', json: Object.assign({}, be.t, { kollegak: kl }) });
+      // a stúdiónaptár a saját blokkjában változik: itt mindig a friss érték megy vissza
+      var szab = Object.assign({}, be.t.szabalyok, { studioNaptarId: (friss.szabalyok || {}).studioNaptarId || '' });
+      return api('/beallitasok', { method: 'PUT', json: Object.assign({}, be.t, { kollegak: kl, szabalyok: szab }) });
     }).then(function (t) {
       torzs = t; torzsP = Promise.resolve(t); be.t = JSON.parse(JSON.stringify(t)); be.dirty = false; renderBe();
       toast('A beállítások mentve, a foglaló már ezeket használja.');
     }).catch(function (e) { b.disabled = false; b.textContent = 'Beállítások mentése'; toast(e.message, 'error'); });
+  }
+
+  /* ---------- Google Naptár (naptar.js: GET naptar/allapot, PATCH naptar, POST naptar/ujraszinkron) ----------
+     A kulcs (GOOGLE_SA_KEY) nélkül a blokk nyugodt tájékoztatás a bekötés lépéseivel, nem hiba.
+     A stúdiónaptár és a kollégák naptár-azonosítója kulcs nélkül is menthető, a szinkron a bekötés után indul. */
+  var gc = { a: null, msg: '', kind: '' };
+  var GC_RE = /^[A-Za-z0-9._%+#-]{1,200}@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/;
+  function gcAzonHiba(v) {
+    var s = String(v || '').trim();
+    return s && (s.length > 254 || !GC_RE.test(s)) ? 'Ez nem naptár-azonosító. A naptár beállításaiban, a „Naptár integrálása” résznél a „Naptárazonosító” sort másold ki, például abc123@group.calendar.google.com.' : '';
+  }
+  function gcIdo(iso) { return new Date(iso).toLocaleString('hu-HU', { timeZone: 'Europe/Budapest', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+  function loadGcal() {
+    var box = $('#be-gcal'); if (!box) return;
+    box.setAttribute('aria-busy', 'true');
+    if (!gc.a) box.innerHTML = '<div class="gc__skel"></div>';
+    return api('/naptar/allapot').then(function (a) { gc.a = a; renderGcal(); })
+      .catch(function (e) { box.setAttribute('aria-busy', 'false'); hibaDoboz(box, e, loadGcal); });
+  }
+  function gcLepesek(fiok) {
+    return '<ol class="gc-steps">' +
+      '<li><span><b>A Google-kapcsolat beállítása.</b> Ezt mi végezzük: a Google Cloudban egy szolgáltatásfiókot hozunk létre, és a kulcsát a foglalóba tesszük.</span></li>' +
+      '<li><span><b>Naptárak a stúdió Google-fiókjában.</b> A calendar.google.com oldalon az Egyéb naptárak melletti + jellel kollégánként egy naptár, és egy közös a stúdiónak.</span></li>' +
+      '<li><span><b>Megosztás.</b> Mindegyik naptár Beállítások és megosztás oldalán oszd meg ' + (fiok ? 'a <span class="gc-mail">' + esc(fiok) + '</span> címmel' : 'a szolgáltatásfiók e-mail-címével') + ', „Módosítások végrehajtása és az esemény részleteinek megtekintése” joggal.</span></li>' +
+      '<li><span><b>Azonosító beírása.</b> Ugyanott, a Naptár integrálása résznél másold ki a Naptárazonosítót. A kollégáét a Kollégák fülön az adatlapjára, a közöset ide, lent.</span></li></ol>';
+  }
+  function renderGcal() {
+    var a = gc.a, box = $('#be-gcal'); if (!box || !a) return;
+    var allapot = a.kulcsHiba ? 'hibas' : a.bekotve ? 'be' : 'nincs';
+    var cimke = { be: 'Bekötve', nincs: 'Még nincs bekötve', hibas: 'A kulcs hibás' }[allapot];
+    var vanK = a.kollegak.filter(function (k) { return k.naptar_id; }).length;
+    var html = '<div class="be-sec__head gc__head"><div><h2 id="gc-h">Google Naptár</h2>' +
+      '<p>A foglalások maguktól bekerülnek a kolléga saját Google-naptárába és a stúdió közös naptárába, a kolléga színével. Módosításkor az esemény frissül, lemondáskor kikerül.</p></div>' +
+      '<span class="gc-st gc-st--' + allapot + '" id="gc-st">' + esc(cimke) + '</span></div>';
+    // állapot
+    if (allapot === 'nincs') {
+      html += '<div class="gc-info" id="gc-info"><p class="gc-info__h">A Google Naptár még nincs bekötve. A bekötés lépései:</p>' + gcLepesek('') +
+        '<dl class="gc-dl"><div><dt>Szolgáltatásfiók e-mail-címe</dt><dd class="gc-dl__ph">A bekötés után itt jelenik meg. Ezzel a címmel kell megosztani a naptárakat.</dd></div></dl>' +
+        '<p class="hint gc-info__fn">A naptár-azonosítókat már most beírhatod, a foglalások a bekötés után kerülnek át. A foglaló addig is rendben működik.</p></div>';
+    } else if (allapot === 'hibas') {
+      html += '<div class="gc-info gc-info--hibas" id="gc-info"><p class="gc-info__h">A Google-kapcsolat kulcsa hibás, ezért a naptárba most nem kerül át semmi.</p>' +
+        '<p>A javítást mi végezzük. A foglaló ettől függetlenül működik, a vendégek foglalhatnak, a levelek kimennek. A kulcs javítása után az Újraszinkron gombbal minden jövőbeli foglalás átkerül.</p></div>';
+    } else {
+      var sor = a.varakozik ? a.varakozik + ' tétel vár a naptárba' + (a.elakadt ? ', ebből ' + a.elakadt + ' többszöri próbálkozás után is elakadt' : '') + '.' : 'Minden foglalás a naptárban van.';
+      html += '<div class="gc-info gc-info--be" id="gc-info"><dl class="gc-dl">' +
+        '<div><dt>Szolgáltatásfiók e-mail-címe</dt><dd><span class="gc-mail" id="gc-fiok">' + esc(a.szolgaltatasFiok) + '</span>' +
+          '<button type="button" class="linkbtn gc-copy" id="gc-copy">Cím másolása</button></dd></div>' +
+        '<div><dt>Szinkron</dt><dd id="gc-sor">' + esc(sor) + '</dd></div>' +
+        (a.utolsoHiba ? '<div><dt>Utolsó hiba</dt><dd id="gc-hiba">' + esc(a.utolsoHiba.uzenet) + '<small>' + esc(a.utolsoHiba.azonosito) + ', ' + esc(gcIdo(a.utolsoHiba.ido)) + ', ' + esc(a.utolsoHiba.probalkozas) + '. próbálkozás</small></dd></div>' : '') +
+        '</dl><p class="hint">Ezzel a címmel kell megosztani minden F360-naptárat. Ha egy kolléga naptára hiányzik a listából, nincs megosztva vagy nincs beírva az azonosítója.</p></div>';
+    }
+    // stúdiónaptár + kollégák
+    html += '<div class="gc-grid">' +
+      '<form class="gc-studio" id="gc-form" novalidate><h3 class="gc-sub">Közös stúdiónaptár</h3>' +
+        '<div class="field"><label for="gc-studio">A stúdió közös naptárának azonosítója <span class="opt">(nem kötelező)</span></label>' +
+        '<input type="text" id="gc-studio" value="' + esc(a.studioNaptarId) + '" maxlength="254" inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="pl. stúdió…@group.calendar.google.com" aria-describedby="gc-studio-h gc-studio-e">' +
+        '<p class="hint" id="gc-studio-h">Ebbe a naptárba minden foglalás bekerül, így ránézésre látszik, ki kihez tartozik. Üresen hagyva nincs közös naptár.</p>' +
+        '<p class="field-err" id="gc-studio-e" role="alert" hidden></p></div>' +
+        '<div class="gc-studio__act"><button type="submit" class="btn btn--primary" id="gc-save" disabled>Stúdiónaptár mentése</button></div></form>' +
+      '<div class="gc-koll"><h3 class="gc-sub">Kollégák naptára</h3>' +
+        '<p class="gc-koll__n">' + (a.kollegak.length ? vanK + ' / ' + a.kollegak.length + ' kollégának van saját naptára.' : 'Még nincs kolléga.') + '</p>' +
+        '<ul class="gc-kl" id="gc-kl">' + a.kollegak.map(function (k) {
+          return '<li><a class="gc-k" href="#/kollegak/' + esc(k.id) + '">' + koAvatar(k) +
+            '<span class="gc-k__t"><b>' + esc(k.nev) + '</b><small>' + (k.naptar_id ? esc(k.naptar_id) : 'Nincs naptár megadva') + '</small></span>' +
+            '<span class="gc-k__st' + (k.naptar_id ? ' is-on' : '') + '">' + (k.naptar_id ? 'Beállítva' : 'Megadás') + '</span></a></li>';
+        }).join('') + '</ul></div></div>';
+    // újraszinkron
+    html += '<div class="gc-sync"><button type="button" class="btn btn--ghost" id="gc-sync">Újraszinkron</button>' +
+      '<p class="gc-sync__t" id="gc-sync-t">Minden jövőbeli foglalást újra elküld a naptárba, és az elakadt tételeket is újrapróbálja. Akkor kell, ha a naptárban valami hiányzik vagy eltér.</p>' +
+      '<p class="gc-sync__msg" id="gc-msg" role="status" aria-live="polite"' + (gc.kind ? ' data-kind="' + gc.kind + '"' : '') + '>' + esc(gc.msg) + '</p></div>';
+    box.innerHTML = html;
+    box.setAttribute('aria-busy', 'false');
+  }
+  function gcStudioInput() {
+    var el = $('#gc-studio'), b = $('#gc-save'); if (!el || !gc.a) return;
+    b.disabled = el.value.trim() === (gc.a.studioNaptarId || '');
+    var e = $('#gc-studio-e'); e.hidden = true; el.removeAttribute('aria-invalid');
+  }
+  function gcStudioMent(ev) {
+    ev.preventDefault();
+    var el = $('#gc-studio'), err = $('#gc-studio-e'), b = $('#gc-save'), v = el.value.trim();
+    var h = gcAzonHiba(v);
+    if (h) { err.textContent = h; err.hidden = false; el.setAttribute('aria-invalid', 'true'); el.focus(); return; }
+    b.disabled = true; b.textContent = 'Mentés folyamatban';
+    api('/naptar', { method: 'PATCH', json: { studioNaptarId: v } }).then(function (r) {
+      gc.a.studioNaptarId = r.studioNaptarId;
+      if (torzs && torzs.szabalyok) torzs.szabalyok.studioNaptarId = r.studioNaptarId;
+      if (be.t && be.t.szabalyok) be.t.szabalyok.studioNaptarId = r.studioNaptarId;
+      gc.msg = r.studioNaptarId ? (gc.a.bekotve ? 'A stúdiónaptár mentve. A jövőbeli foglalások pár percen belül megjelennek benne.' : 'A stúdiónaptár mentve. A foglalások a bekötés után kerülnek bele.') : 'A közös stúdiónaptár kikapcsolva.' + (gc.a.bekotve ? ' Az események a háttérben kikerülnek belőle.' : '');
+      gc.kind = 'ok';
+      renderGcal(); $('#gc-studio').focus();
+    }).catch(function (e) {
+      b.disabled = false; b.textContent = 'Stúdiónaptár mentése';
+      err.textContent = e.message; err.hidden = false; el.setAttribute('aria-invalid', 'true');
+    });
+  }
+  function gcSync() {
+    var b = $('#gc-sync'), m = $('#gc-msg');
+    b.disabled = true; b.textContent = 'Szinkron folyamatban'; m.textContent = ''; m.removeAttribute('data-kind');
+    api('/naptar/ujraszinkron', { method: 'POST', json: { mind: true } }).then(function (r) {
+      gc.kind = r.hibas ? 'error' : 'ok';
+      gc.msg = (r.sikeres ? r.sikeres + ' tétel frissítve a naptárban.' : 'Nem volt mit frissíteni.') +
+        (r.hibas ? ' ' + r.hibas + ' tétel nem sikerült, a rendszer később újrapróbálja.' : '') +
+        (r.maradt ? ' ' + r.maradt + ' tétel még sorra vár, a következő futás viszi.' : '');
+      return api('/naptar/allapot').then(function (a) { gc.a = a; renderGcal(); $('#gc-sync').focus(); });
+    }).catch(function (e) {
+      b.disabled = false; b.textContent = 'Újraszinkron';
+      // kulcs nélkül a backend 409-et ad: ez nem hiba, csak még nincs bekötve
+      if (e.status === 409) { gc.kind = 'info'; gc.msg = 'A szinkron még nem indítható, mert a Google Naptár nincs bekötve. A bekötés után ez a gomb minden jövőbeli foglalást átküld.'; }
+      else { gc.kind = 'error'; gc.msg = e.message; }
+      m.textContent = gc.msg; m.dataset.kind = gc.kind;
+    });
+  }
+  function gcCopy() {
+    var t = gc.a && gc.a.szolgaltatasFiok, m = $('#gc-msg'); if (!t) return;
+    var kesz = function () { gc.kind = 'ok'; gc.msg = 'A szolgáltatásfiók címe a vágólapon.'; m.textContent = gc.msg; m.dataset.kind = 'ok'; };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(kesz, function () { window.getSelection().selectAllChildren($('#gc-fiok')); });
+    else window.getSelection().selectAllChildren($('#gc-fiok'));
   }
 
   /* =====================================================================
@@ -2244,6 +2370,9 @@
     var lsz = t.closest('[data-leszuro]');
     if (lsz) { le.szuro = lsz.getAttribute('data-leszuro'); return openLevelek(''); }
     if (t.closest('#le-run')) return futtatEmlekezteto();
+    // google naptár
+    if (t.closest('#gc-sync')) return gcSync();
+    if (t.closest('#gc-copy')) return gcCopy();
     // kampányok
     var kp = t.closest('[data-kapre]');
     if (kp) return kaGyors(kp.getAttribute('data-kapre'));
@@ -2288,6 +2417,7 @@
   document.addEventListener('input', function (e) {
     if (e.target.closest('#be-form') && e.target.matches('input:not([type=checkbox])')) beInput(e);
     if (e.target.closest('#ko-form') && e.target.matches('input[type=text],input[type=email],input[type=url],textarea')) koInput(e);
+    if (e.target.id === 'gc-studio') gcStudioInput();
   });
   // a fotó-előnézet: ha a cím nem tölthető be, szöveges jelzés (inline onerror nélkül)
   document.addEventListener('error', function (e) {
@@ -2318,6 +2448,7 @@
     if (e.target.id === 'ex-form') return submitEx(e);
     if (e.target.id === 'be-form') return saveBe(e);
     if (e.target.id === 'ko-form') return submitKo(e);
+    if (e.target.id === 'gc-form') return gcStudioMent(e);
     if (e.target.id === 'ka-form') return submitKa(e);
     if (e.target.id === 'oc-add') return oraFelvesz(e);
     if (e.target.id === 'ot-form') return submitTipus(e);

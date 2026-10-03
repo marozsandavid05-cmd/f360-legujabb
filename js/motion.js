@@ -47,15 +47,6 @@ if(on('p-index')){
     gsap.to(words, {color:'var(--ink)', opacity:1, ease:'none', stagger:.06,
       scrollTrigger:{trigger:'.manifesto', start:'top 78%', end:'center 45%', scrub:1}});
   }
-  /* S16: fork két fele ellentétes irányból (desktop) */
-  mm.add('(min-width:900px)', function(){
-    gsap.fromTo('.fork__half--paper', {xPercent:-7, autoAlpha:0},
-      {xPercent:0, autoAlpha:1, ease:'none',
-       scrollTrigger:{trigger:'.fork', start:'top 88%', end:'top 42%', scrub:1}});
-    gsap.fromTo('.fork__half--ink', {xPercent:7, autoAlpha:0},
-      {xPercent:0, autoAlpha:1, ease:'none',
-       scrollTrigger:{trigger:'.fork', start:'top 88%', end:'top 42%', scrub:1}});
-  });
   /* TOC sor-vonalak rajzolása */
   gsap.utils.toArray('.toc__row').forEach(function(row,i){
     gsap.fromTo(row, {'--rule':'0%'}, {'--rule':'100%', ease:'none',
