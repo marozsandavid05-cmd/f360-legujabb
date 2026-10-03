@@ -1287,7 +1287,9 @@
             '<details class="ko-url"' + (f.foto && /^https:/.test(f.foto) ? ' open' : '') + '><summary>Vagy webcím</summary>' +
               '<div class="field"><label for="ko-foto">A fotó webcíme</label><input type="url" id="ko-foto" data-ko="foto" maxlength="500" inputmode="url" value="' + esc(f.foto || '') + '" placeholder="https://… vagy /media/brand/csapat/nev.jpg" aria-describedby="ko-foto-h"><p class="hint" id="ko-foto-h">https:// kezdetű cím, vagy a weboldalon belüli út, ami /-rel kezdődik.</p></div>' +
             '</details></div>' +
-          '<div class="field"><label for="ko-bem">Rövid bemutatkozás <span class="opt">(nem kötelező)</span></label><textarea id="ko-bem" data-ko="bemutatkozas" rows="5" maxlength="2000" aria-describedby="ko-bem-h">' + esc(f.bemutatkozas || '') + '</textarea><p class="hint" id="ko-bem-h"><span id="ko-bem-n">' + (f.bemutatkozas || '').length + '</span> / 2000 karakter.</p></div>' +
+          '<div class="field"><label for="ko-bem">Rövid bemutatkozás <span class="opt">(nem kötelező)</span></label><textarea id="ko-bem" data-ko="bemutatkozas" rows="5" maxlength="2000" aria-describedby="ko-bem-h ko-bem-r">' + esc(f.bemutatkozas || '') + '</textarea><p class="hint" id="ko-bem-h"><span id="ko-bem-n">' + (f.bemutatkozas || '').length + '</span> / 2000 karakter.</p>' +
+            '<p class="hint ko-rolunk" id="ko-bem-r">' + (f.archivalt ? 'Archivált kollégaként most nem szerepel a Rólunk oldalon.' : 'Ez jelenik meg a Rólunk oldalon is, pár percen belül.') +
+            ' <a href="/rolunk#csapat" target="_blank" rel="noopener">Megnézem a Rólunk oldalon<span class="sr"> (új lapon nyílik)</span></a></p></div>' +
         '</div></div></fieldset>' +
       '<p class="form-err" id="ko-err" role="alert" hidden></p>' +
       '<div class="savebar" id="ko-savebar"><p id="ko-state" aria-live="polite">' + (ko.uj ? 'Új kolléga, még nincs mentve' : 'Mentve') + '</p>' +
@@ -2051,7 +2053,7 @@
     'kollega-uj': 'Új foglalás a kollégának', 'kollega-modositas': 'Módosítás a kollégának', 'kollega-lemondas': 'Lemondás, kollégának vagy stúdiónak',
     'ora-elmarad': 'Az óra elmarad, a résztvevőnek',
     'sorozat-visszaigazolas': 'Állandó időpont a vendégnek', 'sorozat-leallitva': 'Állandó időpont leállt, a vendégnek',
-    'sorozat-kollega': 'Állandó időpont a kollégának'
+    'sorozat-kollega': 'Állandó időpont a kollégának', 'sorozat-studio': 'Állandó időpont a stúdiónak'
   };
   // a csoportos óráknál ugyanaz a típus mást jelent (jelentkezés, oktató)
   // csoportos levél: a backend csoportos: true jelzője, vagy a jelentkezés „C” előtagú azonosítója (az outbox-lista ezt adja)
@@ -2064,7 +2066,7 @@
     { id: 'vendeg', nev: 'Vendégnek', t: ['visszaigazolas', 'modositas', 'lemondas', 'ora-elmarad', 'sorozat-visszaigazolas', 'sorozat-leallitva'] },
     { id: 'emlekezteto', nev: 'Emlékeztetők', t: ['emlekezteto'] },
     { id: 'kollega', nev: 'Kollégáknak', t: ['kollega-uj', 'kollega-modositas', 'kollega-lemondas', 'sorozat-kollega'] },
-    { id: 'studio', nev: 'Stúdiónak', t: ['studio-ertesito', 'studio-modositas'] }
+    { id: 'studio', nev: 'Stúdiónak', t: ['studio-ertesito', 'studio-modositas', 'sorozat-studio'] }
   ];
   function leSzurt() {
     var sz = SZURO.filter(function (x) { return x.id === le.szuro; })[0] || SZURO[0];
@@ -2106,7 +2108,7 @@
     $('#le-list').innerHTML = leSzurt().map(function (l) {
       var d = new Date(l.letrehozva);
       return '<li><a class="le-item' + (String(l.id) === id ? ' is-on' : '') + '" href="#/levelek/' + esc(l.id) + '"' + (String(l.id) === id ? ' aria-current="true"' : '') + '>' +
-        '<span class="le-item__k" data-t="' + esc(l.tipus) + '">' + esc((csopLevel(l) && TIPUS_CS[l.tipus]) || (l.tipus === 'sorozat-kollega' && (l.esemeny === 'leallitva' || /^Leállt/.test(l.targy || '')) ? 'Állandó időpont leállt, a kollégának' : '') || TIPUS[l.tipus] || l.tipus) + (csopLevel(l) ? '<span class="le-cs">csoportos óra</span>' : '') + (sorLevel(l) ? '<span class="le-cs le-cs--sr">' + ISM_IKON + 'állandó időpont</span>' : '') + '</span>' +
+        '<span class="le-item__k" data-t="' + esc(l.tipus) + '">' + esc((csopLevel(l) && TIPUS_CS[l.tipus]) || ((l.tipus === 'sorozat-kollega' || l.tipus === 'sorozat-studio') && (l.esemeny === 'leallitva' || /^Leállt/.test(l.targy || '')) ? 'Állandó időpont leállt, a ' + (l.tipus === 'sorozat-studio' ? 'stúdiónak' : 'kollégának') : '') || TIPUS[l.tipus] || l.tipus) + (csopLevel(l) ? '<span class="le-cs">csoportos óra</span>' : '') + (sorLevel(l) ? '<span class="le-cs le-cs--sr">' + ISM_IKON + 'állandó időpont</span>' : '') + '</span>' +
         '<span class="le-item__s">' + esc(l.targy) + '</span>' +
         '<span class="le-item__m">' + esc(l.cimzett) + ' · ' + esc(d.toLocaleString('hu-HU', { timeZone: 'Europe/Budapest', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })) + '</span></a></li>';
     }).join('');

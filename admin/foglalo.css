@@ -383,6 +383,11 @@ body[data-view="view-edit"] .tabs{display:none}
 .ko-intro__f .field + .field{margin-top:0}
 .ko-intro textarea{width:100%;min-height:7.5rem;padding:.6rem .75rem;border-radius:var(--r-sm);border:1px solid rgba(0,0,0,.28);background:var(--paper);font:inherit;font-size:1rem;font-stretch:100%;line-height:1.5;resize:vertical}
 .ko-intro textarea:focus,.fv input[type="url"]:focus{outline:none;border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+/* a bemutatkozás a Rólunk oldalra is kikerül: súgó + link a nyilvános névsorra */
+.ko-rolunk{margin-top:.35rem;opacity:1}
+.ko-rolunk a{display:inline-block;min-height:24px;padding-block:.15rem;font-weight:600;text-underline-offset:3px;text-decoration-thickness:1px}
+.ko-rolunk a:hover{text-decoration-thickness:2px}
+.ko-rolunk a:focus-visible{outline:2px solid var(--ink);outline-offset:2px;border-radius:2px}
 .fv input[type="url"]{min-height:44px;padding:.5rem .75rem;border-radius:var(--r-sm);border:1px solid rgba(0,0,0,.28);background:var(--paper);font-size:1rem;font-stretch:100%;width:100%}
 .ko-card .form-err{margin-top:.5rem}
 /* hosszú adatlap: a mentés-sáv alul ragad, mint a Beállításoknál */
