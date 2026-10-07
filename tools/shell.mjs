@@ -70,7 +70,7 @@ export const PLACES = {
     name: 'Reitter Ferenc utca',
     district: 'XIII. kerület',
     street: 'Reitter Ferenc utca 48.',
-    hours: '8:00-20:00',
+    hours: '7:00-21:00',
     href: 'reitter.html',
     lead: 'Sport, rehab &amp; teljesítmény',
     items: [
@@ -208,7 +208,7 @@ export function footerBlock(prefix, cur, world) {
         <address>
           <a href="${prefix}${m.href}">${m.street} · ${m.district}</a>
           <a href="${prefix}${r.href}">${r.street} · ${r.district}</a>
-          <span class="footer__hours">H-P: 7:00-20:00</span>
+          <span class="footer__hours">H-P: 7:00-21:00</span>
         </address>
       </div>
       <div>

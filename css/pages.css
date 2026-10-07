@@ -6,14 +6,14 @@
 /* =====================================================================
    P-INDEX — Az atlasz címlapja (kézikönyv-nyelv, 2026-09-10)
    Kompozíció szekciónként, egyik sem ismétli az előzőt:
-   1 címlap: saját fotó a teljes hero mögött, balra a krém felé halványul, szöveg balra a fotón; alatta (hajtás alatt) fotó-triptichon + adatsor
+   1 címlap: saját fotó a teljes hero mögött, balra a krém felé halványul, szöveg balra a fotón; alatta adatsor
    2 hitvallás: fotó balra (5/12), szöveg jobbra (6/12), értéksor hajszálvonal fölött
-   3 két kötet: teljes széles tükrös spread, két színvilág, tartalom a gerinchez zárva
-   4 tartalomjegyzék: két hasáb, pontozott vezetővonal (könyv-TOC)
+   3 két helyszín: teljes széles tükrös spread, két színvilág; a szolgáltatás-sorok linkek az aloldalak szekcióira
+     (a tartalomjegyzék és a hero alatti fotó-triptichon Lilla 2026-10-07-i kérésére kikerült)
    5 széljegyzetek: számozott sorok balra (7/12), sticky fej jobbra (4/12)
    6 napló: kiemelt bejegyzés (7/12) + lista (4/12)
    7 zárás: teljes széles fotó, ráúszó krém panel jobbra (T4 overlap), réteg nélkül
-   Mozgás: S8 mask-line címek, lassú skála-belépő a címlap fotóján, S16 a két kötet ellentétes oldalról
+   Mozgás: S8 mask-line címek, lassú skála-belépő a címlap fotóján, S16 a két helyszín ellentétes oldalról
    záródik, S21 számláló. Reduce alatt minden végállapot.
    ===================================================================== */
 
@@ -59,37 +59,6 @@
   .p-index .cover__title{font-size:clamp(2rem,9vw,2.6rem)}
   .p-index .cover__lead{font-size:1.05rem}
 }
-/* 1b · TRIPTICHON (Lilla dicsérte, 2026-09-25 visszahozva a push-állapotból). Ugyanaz a megjelenés és belépő,
-   csak a helye új: a hero ALATT, a hajtás alatt kezdődik, és a magassága saját, definit (nem a hero maradéka).
-   Az adatsor ELÉ került, mert így a hajszálvonalas számsor választja el a triptichont a hitvallás fotójától,
-   és két fotó-blokk nem ér össze. A clip-wipe-ot a core.js [data-headin] figyelője kapcsolja (.is-in). */
-/* sor-magasság = az élő oldal (b074e45) képlete, mert ott a sor a hero maradék tere volt:
-   100vh - 80px nav - fejléc (3 × --lh + a cím 1.34 × betűmérete + 190.79px bevezető és gombok) - 2 × min(2.6vh, 28.8px) rés.
-   Élővel összemérve 8 képernyőméreten, alsó korlát 200px, mint élesben. */
-.p-index .cover__strip{max-width:var(--maxw);width:100%;margin:clamp(1.6rem,5vh,3rem) auto 0;padding-inline:var(--pad);
-  height:max(200px,calc(100vh - 270.79px - 3 * clamp(56px,7.5vh,96px) - 1.34 * clamp(2rem,4.2vw,3.4rem) - 2 * min(2.6vh,28.8px)));display:grid;grid-template-columns:1fr 1.85fr 1fr;gap:clamp(.8rem,1.6vw,1.4rem)}
-.p-index .cover__fig{position:relative;margin:0;overflow:hidden;border-radius:var(--r-lg);background:var(--surface);min-height:0}
-.p-index .cover__fig img{width:100%;height:100%;object-fit:cover}
-.p-index .cover__fig--a img{object-position:50% 30%}
-.p-index .cover__fig--c img{object-position:62% 50%}
-.p-index .cover__fig figcaption{
-  position:absolute;left:.9rem;bottom:.9rem;padding:.45rem .95rem;border-radius:100px;
-  font-family:var(--font-mono);font-stretch:125%;font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;
-  background:var(--base);color:var(--ink);
-}
-/* S2: clip-wipe belépő, lépcsőzve (ugyanaz, amit Lilla látott); a sor .is-in-je kapcsolja, safety net: core.js heroIn */
-.js .p-index .cover__fig{clip-path:inset(100% 0 0 0 round var(--r-lg));transition:clip-path 1.2s var(--ease)}
-.js .p-index .cover__strip.is-in .cover__fig{clip-path:inset(0 0 0 0 round var(--r-lg))}
-.js .p-index .cover__strip.is-in .cover__fig--b{transition-delay:.12s}
-.js .p-index .cover__strip.is-in .cover__fig--c{transition-delay:.24s}
-@media(max-width:900px){
-  .p-index .cover__strip{height:auto;grid-template-columns:1fr 1fr}
-  .p-index .cover__fig--a,.p-index .cover__fig--c{aspect-ratio:2/3}
-  .p-index .cover__fig--b{grid-column:1/-1;order:-1;aspect-ratio:3/2}
-}
-@media(max-width:560px){
-  .p-index .cover__fig--a,.p-index .cover__fig--c{aspect-ratio:4/5}
-}
 /* adatsor a borító ALATT (külön szekció, hogy a hero pontosan egy képernyő legyen) */
 .p-index .cover__stats{max-width:var(--maxw);margin:clamp(1rem,3vh,2rem) auto 0;padding-inline:var(--pad)}
 .p-index .cover__stats ul{display:grid;grid-template-columns:repeat(4,1fr);border-block:1px solid var(--line-strong)}
@@ -132,7 +101,7 @@
   .p-index .creed__fig{width:min(100%,440px);max-height:none}
 }
 
-/* 3 · KÉT KÖTET */
+/* 3 · KÉT HELYSZÍN */
 .p-index .spread{margin-top:clamp(2rem,5vh,4rem);overflow-x:clip}
 .p-index .spread__head{max-width:var(--maxw);margin-inline:auto;padding:0 var(--pad) clamp(2rem,5vh,3.2rem);text-align:center;display:grid;justify-items:center;gap:.8rem}
 .p-index .spread__head h2{font-size:var(--step-4)}
@@ -155,36 +124,36 @@
 .p-index .spread__list li:last-child{border-bottom:1px solid var(--line-strong)}
 .p-index .spread__list li span{font-family:var(--font-mono);font-stretch:125%;font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);flex:none}
 .p-index .spread .btn{justify-self:start;margin-top:.3rem}
-/* S16: a két kötet ellentétes oldalról záródik össze (CSS-only, .is-in a szekción) */
+/* a sorok linkek (Lilla 2026-10-07): az egész sor kattintható, a nyíl hoverre csúszik */
+.p-index .spread__list li{position:relative}
+.p-index .spread__list li>a:first-child{flex:1;color:inherit;text-decoration:none;display:grid;gap:.15rem}
+.p-index .spread__list li>a:first-child::after{content:'';position:absolute;inset:0}
+.p-index .spread__list li>a:first-child small{font-size:.8rem;font-weight:300;line-height:1.4}
+.p-index .spread__list li .ar{font-family:var(--font-body);font-size:.95rem;letter-spacing:0;text-transform:none;color:var(--ink);transition:transform .35s var(--ease)}
+.p-index .spread__list li:hover .ar{transform:translateX(.3rem)}
+.p-index .spread__list li:hover>a:first-child{text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--accent)}
+.p-index .spread__list li>a:first-child:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+/* hangsúlyos sor (Funkcionális tréning · csoportos órák) */
+.p-index .spread__list li.is-hi>a:first-child{font-weight:500}
+/* „Kattintható órarend” buborék a csoportos órák mellett: a saját linkje a sor-link fölött */
+.p-index .spread__pill{position:relative;z-index:1;flex:none;padding:.32rem .8rem;border-radius:100px;background:var(--accent);color:#FFFFFF;
+  font-family:var(--font-mono);font-stretch:125%;font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;text-decoration:none;white-space:nowrap;transition:background .25s}
+.p-index .spread__pill:hover{background:var(--ink)}
+.p-index .spread__pill:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+/* Faster Labor partnerség: egy mondat, kisebb betűvel a Belépés alatt */
+.p-index .spread__partner{font-size:.82rem;font-weight:300;margin-top:-.6rem}
+@media(max-width:560px){
+  .p-index .spread__list li:has(.spread__pill){flex-wrap:wrap;row-gap:.55rem}
+  .p-index .spread__list li:has(.spread__pill)>a:first-child{flex-basis:100%}
+}
+.p-index .spread__partner a{color:inherit;text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--line-strong)}
+/* S16: a két helyszín ellentétes oldalról záródik össze (CSS-only, .is-in a szekción) */
 .js .p-index .spread__vol{transition:transform 1.1s var(--ease),opacity .9s ease}
 .js .p-index .spread:not(.is-in) .spread__vol--i{transform:translateX(-4%);opacity:0}
 .js .p-index .spread:not(.is-in) .spread__vol--ii{transform:translateX(4%);opacity:0}
 @media(max-width:900px){
   .p-index .spread__grid{grid-template-columns:1fr}
   .p-index .spread__in{width:100%;padding:0 !important}
-}
-
-/* 4 · TARTALOMJEGYZÉK */
-.p-index .toc{max-width:var(--maxw);margin-inline:auto;padding:clamp(5rem,13vh,9rem) var(--pad) clamp(4rem,10vh,7rem)}
-.p-index .toc__head{display:flex;justify-content:space-between;align-items:baseline;gap:2rem;margin-bottom:2.2rem}
-.p-index .toc__head h2{font-size:var(--step-4)}
-.p-index .toc__cols{display:grid;grid-template-columns:1fr 1fr;grid-auto-flow:column;grid-template-rows:repeat(5,auto);column-gap:clamp(2rem,5vw,5rem)}
-.p-index .toc__row{display:flex;align-items:baseline;gap:.8rem;padding:1.05rem .1rem;border-top:1px solid var(--line-strong);transition:color .25s}
-.p-index .toc__cols .toc__row:nth-child(5),.p-index .toc__cols .toc__row:nth-child(10){border-bottom:1px solid var(--line-strong)}
-.p-index .toc__row .no{font-family:var(--font-mono);font-stretch:125%;font-size:.66rem;letter-spacing:.12em;color:var(--accent-text);flex:none;width:3.4rem}
-.p-index .toc__row .tt{font-family:var(--font-body);font-stretch:125%;font-weight:300;font-size:1.22rem;line-height:1.2;transition:transform .35s var(--ease)}
-.p-index .toc__row .ld{flex:1;min-width:1.4rem;border-bottom:1px dotted var(--line-strong);transform:translateY(-.32em)}
-.p-index .toc__row .nt{font-family:var(--font-mono);font-stretch:125%;font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);flex:none;text-align:right}
-.p-index .toc__row:hover{color:var(--accent-text)}
-.p-index .toc__row:hover .tt{transform:translateX(.35rem)}
-@media(max-width:900px){
-  .p-index .toc__cols{grid-template-columns:1fr;grid-auto-flow:row;grid-template-rows:none}
-  .p-index .toc__cols .toc__row:nth-child(5){border-bottom:0}
-  .p-index .toc__row .nt{display:none}
-  .p-index .toc__row .ld{display:none}
-}
-@media(max-width:640px){
-  .p-index .toc__head{flex-direction:column;align-items:flex-start;gap:.4rem}
 }
 
 /* 5 · SZÉLJEGYZETEK */
@@ -259,7 +228,6 @@
 /* reduce: komponált végállapotok */
 @media (prefers-reduced-motion:reduce){
   .js .p-index .cover__photo img{transform:none;transition:none}
-  .js .p-index .cover__strip .cover__fig,.js .p-index .cover__strip.is-in .cover__fig{clip-path:none;transition:none}
   .js .p-index .spread__vol{transform:none;opacity:1}
 }
 
@@ -336,7 +304,7 @@
 }
 
 /* =====================================================================
-   P-MEXIKOI — I. kötet
+   P-MEXIKOI — Mexikói út
    ===================================================================== */
 .p-mexikoi .chap-hd__t h1{font-size:var(--step-5);max-width:none}
 .p-mexikoi .chap-hd__side{display:grid;gap:2rem}
@@ -409,7 +377,7 @@
 @media(max-width:900px){.p-mexikoi .reach>div:first-child,.p-mexikoi .reach>div:last-child{grid-column:1/-1}}
 
 /* =====================================================================
-   P-REITTER — II. kötet (égkék)
+   P-REITTER — Reitter Ferenc utca (égkék)
    ===================================================================== */
 .p-reitter .lab-open{padding-top:var(--navh)}
 .p-reitter .lab-open .hd-band{height:clamp(340px,66vh,720px)}
@@ -1110,3 +1078,13 @@ body.p-arak{transition:background .6s ease,color .6s ease}
   .p-arak .lab-table--pass td:first-child{hyphens:auto;overflow-wrap:anywhere}
   .p-arak .lab-table--pass td:first-child{font-size:.8rem;padding-right:.3rem}
 }
+
+/* Lilla 2026-10-07: a nyitvatartás alatt kis betűvel „Előzetes időpontfoglalás szükséges.” */
+.note-book{display:block;margin-top:.25rem;font-size:.82rem;font-weight:300;letter-spacing:0;text-transform:none}
+/* Mexikói út cím: „Zugló · A stúdió”, a második rész is nagy kezdőbetűvel (a h1 kisbetűsít) */
+.loc-cover__panel h1 .cap{display:inline-block}
+.loc-cover__panel h1 .cap::first-letter{text-transform:uppercase}
+/* stúdiós fotó (fekvő forrás) a 4:5 keretben */
+.p-mexikoi .loc-intro__fig img{object-position:42% 50%}
+/* Kapcsolat: a Reitter profilblokk kikerült; 1440×900-on a cím, a nyitvatartás és a megközelítés egy képernyőn */
+.p-kapcsolat .half:has(.map){gap:1rem}
