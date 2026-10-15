@@ -206,6 +206,9 @@
 .p-index .finale{position:relative;margin-top:clamp(5rem,13vh,9rem)}
 .p-index .finale__media{position:relative;margin:0;height:clamp(380px,66vh,720px);overflow:clip}
 .p-index .finale__media img{width:100%;height:100%;object-fit:cover;object-position:center 42%}
+/* saját fotó (InBody-konzultáció): a fejek a kép tetején és jobb oldalán vannak, ezért felülre és jobbra horgonyzunk;
+   asztalin csak függőlegesen vág (a fejek fent maradnak), mobilon csak vízszintesen (a jobb oldali két alak marad bent) */
+.p-index .finale__media--fokusz img{object-position:100% 0%}
 .p-index .finale__media figcaption{
   position:absolute;left:var(--pad);bottom:1.1rem;padding:.45rem .95rem;border-radius:100px;
   font-family:var(--font-mono);font-stretch:125%;font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;
