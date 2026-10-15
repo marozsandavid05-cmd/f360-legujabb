@@ -68,6 +68,18 @@ export function percToHHMM(p) {
   return `${String(Math.floor(p / 60)).padStart(2, '0')}:${String(p % 60).padStart(2, '0')}`;
 }
 
+/**
+ * 'HH:MM' → perc a foglalás kezdéséhez: 5 perces pontosságú, napon belüli idő (például 08:50, a
+ * rögzített kezdési percű szolgáltatásnál), egyébként null. Hogy a kezdés valóban felkínált-e, azt a
+ * szabad időpontok számítása dönti el.
+ */
+export function kezdesPerc(s) {
+  const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(String(s));
+  if (!m) return null;
+  const p = Number(m[1]) * 60 + Number(m[2]);
+  return p % 5 === 0 ? p : null;
+}
+
 /** 'HH:MM' → perc; csak a 15 perces rácson lévő, napon belüli időt fogadja el, egyébként null. */
 export function hhmmToPerc(s) {
   const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(String(s));

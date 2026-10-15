@@ -17,8 +17,8 @@
 // azt a meglévő szabad-számítás (szabadIdopontok, admin-törzzsel) dönti el; az ok csak a magyarázat.
 
 import { HttpError } from '../http.js';
-import { budapestMost, datumPlusz, ervenyesDatum, hetNapja, helyiToUtc, hhmmToPerc, percToHHMM } from './ido.js';
-import { szabadIdopontok } from './szabad.js';
+import { budapestMost, datumPlusz, ervenyesDatum, hetNapja, helyiToUtc, hhmmToPerc, kezdesPerc, percToHHMM } from './ido.js';
+import { kezdesAlakja, szabadIdopontok } from './szabad.js';
 import { szamitasiTorzs, titok, torzsBetolt } from './schema.js';
 import { tokenKeszit, ujAzonosito } from './token.js';
 import { aktivANapon } from './torzs-alap.js';
@@ -43,8 +43,8 @@ export function sorozatBemenet(d, torzs, most = Date.now()) {
   if (d.kollega === 'barki') throw hiba('Állandó időponthoz válassz szakembert.');
   const { hely, szolg } = hivatkozasok(torzs, d);
   if (!Number.isInteger(d.nap) || d.nap < 1 || d.nap > 7) throw hiba('Hibás nap (1 = hétfő ... 7 = vasárnap).');
-  const kezdPerc = hhmmToPerc(d.kezd);
-  if (kezdPerc == null) throw hiba('Hibás kezdés (HH:MM, 15 perces lépésben).');
+  const kezdPerc = kezdesPerc(d.kezd); // 5 perces pontosság (InBody :50); a felkínáltságot az előnézet dönti el
+  if (kezdPerc == null || !kezdesAlakja(kezdPerc, szolg)) throw hiba('Hibás kezdés (HH:MM, 15 perces lépésben, vagy a kezelés rögzített kezdési percén).');
   const ismetles = d.ismetles == null ? 1 : d.ismetles;
   if (ismetles !== 1 && ismetles !== 2) throw hiba('Hibás ismétlés: 1 (hetente) vagy 2 (kéthetente).');
   if (!ervenyesDatum(d.kezdoDatum)) throw hiba('Hibás kezdő dátum (ÉÉÉÉ-HH-NN).');
@@ -280,8 +280,8 @@ export async function sorozatLetrehoz(env, db, d, { origin, most = Date.now() })
   const athelyez = new Map();
   for (const a of datumLista(d.athelyez, 'athelyez')) {
     if (!a || typeof a !== 'object' || !datumok.includes(a.datum)) throw hiba('Az áthelyezett dátum nem tartozik az állandó időponthoz.');
-    const kp = hhmmToPerc(a.ujKezd);
-    if (!ervenyesDatum(a.ujDatum) || kp == null) throw hiba('Hibás áthelyezés (ujDatum, ujKezd).');
+    const kp = kezdesPerc(a.ujKezd);
+    if (!ervenyesDatum(a.ujDatum) || kp == null || !kezdesAlakja(kp, be.szolg)) throw hiba('Hibás áthelyezés (ujDatum, ujKezd).');
     if (a.ujDatum < datumPlusz(budapestMost(most).datum, -1) || a.ujDatum > datumPlusz(budapestMost(most).datum, 366 * 2)) throw hiba('Hibás áthelyezés: ujDatum.');
     athelyez.set(a.datum, { datum: a.ujDatum, kezdPerc: kp });
   }

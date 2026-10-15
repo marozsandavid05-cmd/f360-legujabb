@@ -66,6 +66,13 @@ function szolgaltatasExtra(s) {
   }
   // a kínált kezdések felülírása: csak ha megadták (null = a globálisat követi, a mentés törli)
   if ('kinalas' in s) ki.kinalas = kinalasSzolgaltatas(s.kinalas, s.id);
+  // rögzített kezdési perc (például InBody óra :50-kor): 0-55, 5 többszöröse; null vagy hiányzó = nincs
+  if (s.kezdoPerc != null) {
+    if (!Number.isInteger(s.kezdoPerc) || s.kezdoPerc < 0 || s.kezdoPerc > 55 || s.kezdoPerc % 5 !== 0) {
+      throw hiba(`Hibás kezdési perc (${s.id}): 0 és 55 között, 5 perces lépésben (például 50 = minden óra 50. perce).`);
+    }
+    ki.kezdoPerc = s.kezdoPerc;
+  }
   return ki;
 }
 

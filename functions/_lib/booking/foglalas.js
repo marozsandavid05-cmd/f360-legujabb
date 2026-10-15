@@ -2,8 +2,8 @@
 // functions/foglalas-api és functions/api/foglalo alatti routerekben van.
 
 import { HttpError } from '../http.js';
-import { RACS, budapestMost, datumPlusz, ervenyesDatum, helyiToUtc, hhmmToPerc, napok, percToHHMM } from './ido.js';
-import { foglalasSlotjai, kinalasLepes, szabadIdopontok } from './szabad.js';
+import { RACS, budapestMost, datumPlusz, ervenyesDatum, helyiToUtc, kezdesPerc, napok, percToHHMM } from './ido.js';
+import { foglalasSlotjai, kezdesAlakja, kinalasLepes, szabadIdopontok } from './szabad.js';
 import { sema, szamitasiTorzs, titok, torzsBetolt } from './schema.js';
 import { tokenAzonosito, tokenEllenoriz, tokenKeszit, ujAzonosito, ujSo } from './token.js';
 import { icsKeszit } from './ics.js';
@@ -176,7 +176,7 @@ export function ugyfelBemenet(d, { admin = false } = {}) {
 export function foglalasBemenet(d, { admin = false } = {}) {
   const { nev, email, telefon, megjegyzes, forras } = ugyfelBemenet(d, { admin });
   if (!ervenyesDatum(d.datum)) throw new HttpError(400, 'Hibás dátum.');
-  const kezdPerc = hhmmToPerc(d.kezd);
+  const kezdPerc = kezdesPerc(d.kezd); // 5 perces pontosság (InBody :50); a felkínáltságot a szabad-számítás dönti el
   if (kezdPerc == null) throw new HttpError(400, 'Hibás időpont.');
   for (const k of ['helyszin', 'szolgaltatas']) if (typeof d[k] !== 'string') throw new HttpError(400, 'Hibás kérés.');
   const kollega = d.kollega == null || d.kollega === '' ? 'barki' : d.kollega;
@@ -265,6 +265,7 @@ const linkek = (origin, token) => ({
 export async function foglal(env, db, be, { origin, admin = false, most = Date.now(), sorozatId = null }) {
   const torzs = await torzsBetolt(db);
   const { hely, szolg } = hivatkozasok(torzs, be);
+  if (!kezdesAlakja(be.kezdPerc, szolg)) throw new HttpError(400, 'Hibás időpont.');
   const szTorzs = szamitasiTorzs(szamitasra(torzs, { admin }));
   const [beosztas, kivetelek, foglalt] = await Promise.all([
     beosztasBetolt(db), kivetelekBetolt(db, be.datum, be.datum), foglaltBetolt(db, be.datum, be.datum),
@@ -441,7 +442,7 @@ export function modosithatoAllapot(row, torzs, { admin = false, most = Date.now(
 /** A módosítás bemenete: új nap, kezdés, kolléga (vagy „barki”). Helyszín és szolgáltatás nem változik. */
 export function modositasBemenet(d) {
   if (!ervenyesDatum(d.datum)) throw new HttpError(400, 'Hibás dátum.');
-  const kezdPerc = hhmmToPerc(d.kezd);
+  const kezdPerc = kezdesPerc(d.kezd); // 5 perces pontosság (InBody :50); a felkínáltságot a szabad-számítás dönti el
   if (kezdPerc == null) throw new HttpError(400, 'Hibás időpont.');
   const kollega = d.kollega == null || d.kollega === '' ? 'barki' : d.kollega;
   if (typeof kollega !== 'string') throw new HttpError(400, 'Hibás kérés.');
@@ -459,7 +460,8 @@ export function modositasBemenet(d) {
 export async function modosit(env, db, row, be, { origin, admin = false, most = Date.now() }) {
   const torzs = await torzsBetolt(db);
   modosithatoAllapot(row, torzs, { admin, most });
-  hivatkozasok(torzs, { helyszin: row.location_id, szolgaltatas: row.service_id, kollega: be.kollega });
+  const { szolg } = hivatkozasok(torzs, { helyszin: row.location_id, szolgaltatas: row.service_id, kollega: be.kollega });
+  if (!kezdesAlakja(be.kezdPerc, szolg)) throw new HttpError(400, 'Hibás időpont.');
   if (be.datum === row.date && be.kezdPerc === row.start_min && (be.kollega === 'barki' || be.kollega === row.staff_id)) {
     throw new HttpError(400, 'Ez a jelenlegi időpontod. Válassz másikat.');
   }
