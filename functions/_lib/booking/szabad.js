@@ -11,10 +11,26 @@
 import { RACS, budapestMost, datumPlusz, hetNapja, helyiToUtc, napok, percToHHMM } from './ido.js';
 import { aktivANapon } from './torzs-alap.js';
 
-/** Egy foglalás által lefoglalt rácspontok (ezekből lesz a slot_locks sor). */
+/**
+ * Egy foglalás által lefoglalt rácspontok (ezekből lesz a slot_locks sor): minden 15 perces rácspont,
+ * amelybe a foglalás (kezelés + puffer) belelóg. Rácson lévő kezdésnél ez ceil((perc + puffer) / 15)
+ * darab a kezdéstől; rácson kívüli kezdésnél (például 8:50) az első zár a kezdést tartalmazó rácspont (8:45).
+ */
 export function foglalasSlotjai({ kollega, datum, kezd, perc, puffer = 0 }) {
-  const db = Math.ceil((perc + puffer) / RACS);
-  return Array.from({ length: db }, (_, i) => ({ kollega, datum, slot: kezd + i * RACS }));
+  const elso = Math.floor(kezd / RACS) * RACS;
+  const db = Math.ceil((kezd + perc + puffer - elso) / RACS);
+  return Array.from({ length: db }, (_, i) => ({ kollega, datum, slot: elso + i * RACS }));
+}
+
+/**
+ * Érvényes-e a kezdés alakja ennél a szolgáltatásnál: rögzített kezdési percnél (kezdoPerc) csak az
+ * óra ennyiedik perce, egyébként csak a 15 perces rács. (Hogy az időpont szabad és felkínált-e, azt a
+ * szabadIdopontok dönti el; ez csak a 400-as „Hibás időpont” határa.)
+ */
+export function kezdesAlakja(kezdPerc, szolg) {
+  if (!Number.isInteger(kezdPerc)) return false;
+  if (Number.isInteger(szolg && szolg.kezdoPerc)) return kezdPerc % 60 === szolg.kezdoPerc;
+  return kezdPerc % RACS === 0;
 }
 
 const atfed = (a1, a2, b1, b2) => a1 < b2 && b1 < a2;
@@ -41,6 +57,7 @@ function kivetelUtkozik(kivetelek, { kollega, helyszin, datum, kezd, veg }) {
  * zárak ettől függetlenül 15 percesek maradnak.
  */
 export function kinalasLepes(szolg, szabalyok = {}) {
+  if (Number.isInteger(szolg.kezdoPerc)) return 60; // rögzített kezdési perc: óránként egy kezdés
   const k = szolg.kinalas ?? szabalyok.kinalas ?? 'igazitott';
   if (Number.isInteger(k) && k >= RACS && k <= 240 && k % RACS === 0) return k;
   return Math.max(RACS, Math.ceil((szolg.perc + (szolg.puffer ?? 10)) / RACS) * RACS);
@@ -85,6 +102,7 @@ export function szabadIdopontok({ torzs, beosztas, kivetelek = [], foglalt = [],
   const foglaltSet = new Set(foglalt.map((f) => `${f.kollega}|${f.datum}|${f.slot}`));
   const puffer = szolg.puffer ?? 10;
   const lepes = kinalasLepes(szolg, szabalyok);
+  const rogzitett = Number.isInteger(szolg.kezdoPerc) && szolg.kezdoPerc >= 0 && szolg.kezdoPerc < 60;
 
   for (const datum of osszesNap) {
     if (datum > utolsoNap) continue;
@@ -102,11 +120,17 @@ export function szabadIdopontok({ torzs, beosztas, kivetelek = [], foglalt = [],
         if (b.kollega !== kid || b.nap !== nap || b.helyszin !== helyszin) continue;
         // a rács horgonya a beosztási blokk, illetve a részleges kivétel utáni szabad szakasz eleje
         for (const [tol0, ig0] of szabadSzakaszok(Math.max(b.kezd, hely.nyit), Math.min(b.veg, hely.zar), napiKiv)) {
-          const elso = Math.ceil(tol0 / RACS) * RACS;
           const jelolt = new Set();
-          for (let k = elso; k + szolg.perc <= ig0; k += lepes) jelolt.add(k);
-          // hézagkitöltés: a foglalás vége utáni első rácspont is, ha a kezelés belefér
-          for (const v of foglalasVegek) if (v >= elso && v + szolg.perc <= ig0) jelolt.add(v);
+          if (rogzitett) {
+            // rögzített kezdési perc (például InBody óra :50-kor): minden egész óra ennyiedik perce,
+            // ami a szakaszon belül van; hézagkitöltés nincs (a kezdés nem csúszhat el a percről)
+            for (let k = Math.ceil((tol0 - szolg.kezdoPerc) / 60) * 60 + szolg.kezdoPerc; k + szolg.perc <= ig0; k += 60) jelolt.add(k);
+          } else {
+            const elso = Math.ceil(tol0 / RACS) * RACS;
+            for (let k = elso; k + szolg.perc <= ig0; k += lepes) jelolt.add(k);
+            // hézagkitöltés: a foglalás vége utáni első rácspont is, ha a kezelés belefér
+            for (const v of foglalasVegek) if (v >= elso && v + szolg.perc <= ig0) jelolt.add(v);
+          }
           for (const k of jelolt) {
             if (helyiToUtc(datum, k) < legkorabbiMs) continue;
             if (kivetelUtkozik(kivetelek, { kollega: kid, helyszin, datum, kezd: k, veg: k + szolg.perc })) continue;
