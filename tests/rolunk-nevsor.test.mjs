@@ -32,15 +32,18 @@ const letszam = (html) => html.match(/<p class="team__count">([\s\S]*?)<\/p>/)[1
 
 // ---------------------------------------------------------------- generálás (tiszta függvény)
 
-test('seed-törzs: minden kártya (Kovács Anna is) bájtra azonos a statikussal, a számok 9 / 6 / 4 (mint ma)', () => {
-  const ki = rolunkHtml(HTML, torzs(), MA);
+// 2026-10-16 (Lilla): Kodácsiné Labancz Ágnes archiválva, a statikus oldalon sincs kártyája
+const AGNES_KI = (k) => (k.id === 'kodacsine-labancz-agnes' ? { ...k, archivalt: true } : k);
+
+test('seed-törzs (Ágnes archiválva): minden kártya (Kovács Anna is) bájtra azonos a statikussal, a számok 8 / 5 / 4', () => {
+  const ki = rolunkHtml(HTML, torzs(AGNES_KI), MA);
   assert.ok(ki);
   const elotte = kartyak(HTML);
   const utana = kartyak(ki);
   assert.deepEqual(utana.map((k) => `${k.id}|${k.loc}`), elotte.map((k) => `${k.id}|${k.loc}`));
   for (let i = 0; i < elotte.length; i++) assert.equal(utana[i].html, elotte[i].html, elotte[i].id);
   assert.deepEqual(szekciok(ki), ['Mexikói út · XIV. kerület', 'Reitter Ferenc utca · XIII. kerület']);
-  assert.equal(letszam(ki), '<b data-n="team">9</b> szakember · <b data-n="mex">6</b> a Mexikói úton · <b data-n="reit">4</b> a Reitter Ferenc utcában · egy kolléga mindkét helyszínen');
+  assert.equal(letszam(ki), '<b data-n="team">8</b> szakember · <b data-n="mex">5</b> a Mexikói úton · <b data-n="reit">4</b> a Reitter Ferenc utcában · egy kolléga mindkét helyszínen');
   // a blokkon kívül semmi nem változik
   const ki2 = ki.replace(/<div class="roster" data-roster>[\s\S]*?<p class="roster__note"/, '').replace(/<p class="team__count">[\s\S]*?<\/p>/, '');
   const be2 = HTML.replace(/<div class="roster" data-roster>[\s\S]*?<p class="roster__note"/, '').replace(/<p class="team__count">[\s\S]*?<\/p>/, '');
@@ -49,7 +52,7 @@ test('seed-törzs: minden kártya (Kovács Anna is) bájtra azonos a statikussal
 });
 
 test('ha egy kolléga (itt Kovács Anna) nincs a törzsben, csak az ő kártyája tűnik el, a többi blokk bájtra azonos: a sorköz és a behúzás is', () => {
-  const ki = rolunkHtml(HTML, torzs((k) => (k.id === 'kovacs-anna' ? null : k)), MA);
+  const ki = rolunkHtml(HTML, torzs((k) => (k.id === 'kovacs-anna' ? null : AGNES_KI(k))), MA);
   const blokk = (h) => h.replace(/\r\n/g, '\n').match(/<div class="roster" data-roster>[\s\S]*?<p class="roster__note"/)[0];
   const anna = kartyak(HTML.replace(/\r\n/g, '\n')).find((k) => k.id === 'kovacs-anna').html;
   assert.equal(blokk(ki), blokk(HTML).replace(`    ${anna}\n`, ''));
