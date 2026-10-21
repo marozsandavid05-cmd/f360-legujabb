@@ -908,6 +908,22 @@
     });
     return ids;
   }
+  // a backend admin.js napiNyitvatartasEllenoriz másolata: { '1'-'7': { nyit, zar } | null }, üres = nincs
+  function napiNyitvatartasEllenoriz(v, id) {
+    var rossz = function () { return hiba('Hibás napi nyitvatartás: ' + id + ' (napok 1-7, { nyit, zar } HH:MM vagy null).'); };
+    if (typeof v !== 'object' || Array.isArray(v)) throw rossz();
+    var ki = {};
+    Object.keys(v).forEach(function (nap) {
+      var x = v[nap];
+      if (!/^[1-7]$/.test(nap)) throw rossz();
+      if (x === null) { ki[nap] = null; return; }
+      if (!x || typeof x !== 'object' || Array.isArray(x) || typeof x.nyit !== 'string' || typeof x.zar !== 'string') throw rossz();
+      var ny = hhmmToPerc(x.nyit), z = hhmmToPerc(x.zar);
+      if (ny == null || z == null || ny >= z) throw rossz();
+      ki[nap] = { nyit: x.nyit, zar: x.zar };
+    });
+    return Object.keys(ki).length ? ki : null;
+  }
   function torzsEllenoriz(d) {
     if (!d || typeof d !== 'object') throw hiba('Hibás kérés.');
     ['helyszinek', 'szolgaltatasok', 'kollegak'].forEach(function (k) { if (!Array.isArray(d[k]) || d[k].length > 100) throw hiba('Hiányzó vagy hibás lista: ' + k + '.'); });
@@ -916,7 +932,7 @@
       var ny = str(h.nyit, 'nyitás', 5), z = str(h.zar, 'zárás', 5);
       if (hhmmToPerc(ny) == null || hhmmToPerc(z) == null || hhmmToPerc(ny) >= hhmmToPerc(z)) throw hiba('Hibás nyitvatartás: ' + h.id + '.');
       var o = { id: h.id, nev: str(h.nev, 'név', 100), cim: str(h.cim, 'cím', 200), nyit: ny, zar: z };
-      if (h.napiNyitvatartas) o.napiNyitvatartas = h.napiNyitvatartas; // a backend admin.js ellenőrzi
+      if (h.napiNyitvatartas != null) { var napi = napiNyitvatartasEllenoriz(h.napiNyitvatartas, h.id); if (napi) o.napiNyitvatartas = napi; } // mint a backend admin.js
       return o;
     });
     var sIds = egyediId(d.szolgaltatasok, 'szolgáltatás');

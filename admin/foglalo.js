@@ -1752,6 +1752,45 @@
         '<p class="hint">Ha a szakember 9:00-kor kezd. Ha egy foglalás korábban ér véget, utána is felkínálunk kezdést, így nem marad kihasználatlan rés.' +
         (sajat ? ' Ennél a kezelésnél saját beállítás van: ' + esc(kinSzoveg(sajat)) + '.' : '') + '</p></div>';
   }
+  /* ---- helyszín: napi nyitvatartás (hétfő-vasárnap), adatkezelés az admin/nyitvatartas.js-ben ----
+     Az alap nyit/zár minden napra érvényes, ahol nincs eltérő beállítás; a nap lehet eltérő idejű vagy zárva.
+     A backend formátuma: napiNyitvatartas { '1'-'7': { nyit, zar } | null } (admin.js napiNyitvatartasEllenoriz). */
+  var NY = window.F360Nyitva;
+  function nyOpciok(v) {
+    var l = NY.IDO.indexOf(v) < 0 && v ? NY.IDO.concat([v]).sort() : NY.IDO;
+    return l.map(function (x) { return '<option' + (x === v ? ' selected' : '') + '>' + x + '</option>'; }).join('');
+  }
+  function hetHtml(h, i) {
+    var sorok = NY.NAPOK.map(function (d) {
+      var n = d[0], x = NY.nap(h, n), id = 'wk-' + i + '-' + n;
+      var allapot = !x.sajat ? '<span class="wk__st">Alap szerint</span>'
+        : '<span class="wk__st wk__st--sajat">' + (x.nyitva ? 'Eltérő idő' : 'Zárva') + '</span>' +
+          '<button type="button" class="linkbtn wk__reset" data-wkalap="' + n + '" aria-label="' + esc(d[1]) + ': vissza az alap nyitvatartásra">Alapra</button>';
+      return '<div class="wk__row' + (x.nyitva ? '' : ' is-zarva') + (x.sajat ? ' is-sajat' : '') + '" data-wkn="' + n + '">' +
+        '<span class="wk__nap" id="' + id + '-l">' + esc(d[1]) + '</span>' +
+        '<label class="sw wk__sw"><input type="checkbox" role="switch" id="' + id + '-on" data-wkon="' + n + '"' + (x.nyitva ? ' checked' : '') + ' aria-labelledby="' + id + '-l ' + id + '-onl"><span class="sw__t" aria-hidden="true"></span><span class="sw__l" id="' + id + '-onl">' + (x.nyitva ? 'Nyitva' : 'Zárva') + '</span></label>' +
+        (x.nyitva
+          ? '<span class="wk__ido"><select id="' + id + '-ny" data-wk="nyit" aria-label="' + esc(d[1]) + ', nyitás">' + nyOpciok(x.nyit) + '</select>' +
+            '<span class="wk__ig" aria-hidden="true">és</span>' +
+            '<select id="' + id + '-z" data-wk="zar" aria-label="' + esc(d[1]) + ', zárás">' + nyOpciok(x.zar) + '</select><span class="wk__ig" aria-hidden="true">között</span></span>'
+          : '<span class="wk__ido wk__ido--zarva">Ezen a napon nincs foglalás</span>') +
+        '<span class="wk__allapot">' + allapot + '</span></div>';
+    }).join('');
+    return '<div class="wk__head"><h3 class="wk__h" id="wk-h-' + i + '">Nyitvatartás naponként</h3>' +
+      '<p class="hint wk__hint" id="wk-alap-' + i + '">Az alap nyitás és zárás minden napra érvényes, amelyiknél lent nem állítasz mást. Egy napot zárhatsz is, vagy adhatsz neki más időt, például rövidebb szombatot.</p>' +
+      '<p class="wk__sum" aria-live="polite"><span>A hét most:</span> ' + esc(NY.osszegzes(h)) + '</p></div>' +
+      '<div class="wk__rows" role="group" aria-labelledby="wk-h-' + i + '">' + sorok + '</div>';
+  }
+  function hetFrissit(i, fokuszId) {
+    var box = $('#wk-' + i); if (!box) return;
+    box.innerHTML = hetHtml(be.t.helyszinek[i], i);
+    var f = fokuszId && document.getElementById(fokuszId);
+    if (f) f.focus();
+  }
+  // ha az alap megváltozik, és egy nap eltérő ideje épp az új alappal egyezik, az a nap az alapot követi
+  function hetIgazit(h) {
+    NY.NAPOK.forEach(function (d) { var x = NY.nap(h, d[0]); if (x.sajat && x.nyitva && x.nyit === h.nyit && x.zar === h.zar) NY.alapra(h, d[0]); });
+  }
   function kinFrissit() {
     var t = be.t, glob = kinGlobal(t);
     $$('#be-form [data-szi]').forEach(function (row) {
@@ -1797,9 +1836,9 @@
       html += '<div class="erow" data-hi="' + i + '"><div class="erow__main erow__main--h">' +
         '<div class="field erow__nev"><label for="h-n-' + i + '">Név</label><input id="h-n-' + i + '" data-h="nev" value="' + esc(h.nev) + '" maxlength="100"></div>' +
         '<div class="field erow__nev"><label for="h-c-' + i + '">Cím</label><input id="h-c-' + i + '" data-h="cim" value="' + esc(h.cim) + '" maxlength="200"></div>' +
-        '<div class="field erow__num"><label for="h-ny-' + i + '">Nyitás</label><select id="h-ny-' + i + '" data-h="nyit">' + IDO.map(function (x) { return '<option' + (x === h.nyit ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></div>' +
-        '<div class="field erow__num"><label for="h-z-' + i + '">Zárás</label><select id="h-z-' + i + '" data-h="zar">' + IDO.map(function (x) { return '<option' + (x === h.zar ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></div>' +
-        '</div></div>';
+        '<div class="field erow__num"><label for="h-ny-' + i + '">Alap nyitás</label><select id="h-ny-' + i + '" data-h="nyit" aria-describedby="wk-alap-' + i + '">' + IDO.map(function (x) { return '<option' + (x === h.nyit ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></div>' +
+        '<div class="field erow__num"><label for="h-z-' + i + '">Alap zárás</label><select id="h-z-' + i + '" data-h="zar" aria-describedby="wk-alap-' + i + '">' + IDO.map(function (x) { return '<option' + (x === h.zar ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></div>' +
+        '</div><div class="wk" id="wk-' + i + '">' + hetHtml(h, i) + '</div></div>';
     });
     html += '</div></section>';
     // szabályok
@@ -1860,7 +1899,19 @@
       if (el.dataset.kh) { toggleIn(k.helyszinek, el.dataset.kh, el.checked); if (e.type === 'change') { beChanged(); renderBe(); return; } }
       if (el.dataset.ks) toggleIn(k.szolgaltatasok, el.dataset.ks, el.checked);
     } else if ((row = el.closest('[data-hi]'))) {
-      t.helyszinek[+row.getAttribute('data-hi')][el.dataset.h] = el.value;
+      var hi = +row.getAttribute('data-hi'), hh = t.helyszinek[hi], wr = el.closest('[data-wkn]');
+      if (wr) {
+        // napi sor: kapcsoló (nyitva / zárva) vagy a nap nyitása, zárása
+        if (e.type !== 'change') return;
+        var wn = +wr.getAttribute('data-wkn');
+        if (el.dataset.wkon) NY.beallit(hh, wn, { nyitva: el.checked });
+        else if (el.dataset.wk) { var wv = {}; wv[el.dataset.wk] = el.value; NY.beallit(hh, wn, wv); }
+        else return;
+        hetFrissit(hi, el.id); beChanged(); return;
+      }
+      if (!el.dataset.h) return;
+      hh[el.dataset.h] = el.value;
+      if (el.dataset.h === 'nyit' || el.dataset.h === 'zar') { hetIgazit(hh); hetFrissit(hi); }
     } else if (el.dataset.r) {
       if (el.type === 'checkbox') {
         t.szabalyok[el.dataset.r] = el.checked;
@@ -1886,7 +1937,11 @@
       if (!String(k.nev || '').trim()) return 'Minden szakembernek adj nevet.';
       if (!k.helyszinek.length) return k.nev + ': jelöld be, melyik helyszínen dolgozik.';
     }
-    for (var h = 0; h < t.helyszinek.length; h++) if (F.perc(t.helyszinek[h].nyit) >= F.perc(t.helyszinek[h].zar)) return t.helyszinek[h].nev + ': a zárás legyen későbbi a nyitásnál.';
+    for (var h = 0; h < t.helyszinek.length; h++) {
+      if (F.perc(t.helyszinek[h].nyit) >= F.perc(t.helyszinek[h].zar)) return t.helyszinek[h].nev + ': a zárás legyen későbbi a nyitásnál.';
+      var nyHiba = NY.ellenoriz(t.helyszinek[h]);
+      if (nyHiba) return nyHiba;
+    }
     var sz = t.szabalyok;
     if (!Number.isInteger(sz.minEloreOra) || !Number.isInteger(sz.maxEloreNap) || !Number.isInteger(sz.lemondasOra)) return 'A szabályoknál minden szám legyen kitöltve.';
     if (!Number.isInteger(sz.emlekeztetoOra) || sz.emlekeztetoOra < 1 || sz.emlekeztetoOra > 168) return 'Az emlékeztető 1 és 168 óra között lehet.';
@@ -2362,6 +2417,13 @@
       return;
     }
     if (t.closest('#be-reset')) { be.dirty = false; be.t = null; return openBeallitasok(); }
+    var wka = t.closest('[data-wkalap]');
+    if (wka) {
+      var whi = +wka.closest('[data-hi]').getAttribute('data-hi'), wnap = +wka.getAttribute('data-wkalap');
+      NY.alapra(be.t.helyszinek[whi], wnap);
+      hetFrissit(whi, 'wk-' + whi + '-' + wnap + '-on'); beChanged();
+      return;
+    }
     // kollégák
     var kl = t.closest('[data-kolista]');
     if (kl) { ko.lista = kl.getAttribute('data-kolista'); renderKoList(); var l0 = koLathato()[0]; if (l0 && !ko.uj && (!koll(ko.kid) || !!koll(ko.kid).archivalt !== (ko.lista === 'archiv'))) location.hash = '#/kollegak/' + l0.id; return; }
