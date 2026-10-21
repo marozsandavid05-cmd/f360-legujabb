@@ -88,10 +88,15 @@ function szabadSzakaszok(tol, ig, kivetelek) {
 }
 
 /**
+ * @param foglaltSavok  a kolléga saját Google Naptárának foglalt időszakai ([{ kollega, datum, kezd, veg }],
+ *   foglaltsag.js): a kezelés [kezd, kezd + perc) szakasza ezekkel nem fedhet át; a sáv vége utáni első
+ *   rácspont is felkínált (hézagkitöltés, mint a foglalások után). Üres lista: a régi működés.
+ * @param hezagSavok  ugyanilyen időszakok, amelyek NEM tiltanak, csak a végük utáni hézag-kezdést adják (a régi,
+ *   gyorsítótárból felkínált kezdés foglaláskor, ha a Google most nem érhető el).
  * @returns {{ napok: Record<string, {kezd: string, kollegak: string[]}[]> }}
  *   A kért tartomány minden napja szerepel, üres tömbbel is.
  */
-export function szabadIdopontok({ torzs, beosztas, kivetelek = [], foglalt = [], most = Date.now(), helyszin, szolgaltatas, kollega = 'barki', tol, ig }) {
+export function szabadIdopontok({ torzs, beosztas, kivetelek = [], foglalt = [], foglaltSavok = [], hezagSavok = [], most = Date.now(), helyszin, szolgaltatas, kollega = 'barki', tol, ig }) {
   const hely = torzs.helyszinek.find((h) => h.id === helyszin);
   const szolg = torzs.szolgaltatasok.find((s) => s.id === szolgaltatas);
   const eredmeny = {};
@@ -130,6 +135,9 @@ export function szabadIdopontok({ torzs, beosztas, kivetelek = [], foglalt = [],
       const foglalasVegek = foglalt
         .filter((f) => f.kollega === kid && f.datum === datum && !foglaltSet.has(`${kid}|${datum}|${f.slot + ZAR_RACS}`))
         .map((f) => Math.ceil((f.slot + ZAR_RACS) / RACS) * RACS);
+      // a saját naptár foglalt sávjai aznap, és a végük utáni első rácspont (hézagkitöltés)
+      const sajatSavok = foglaltSavok.filter((s) => s.kollega === kid && s.datum === datum);
+      for (const s of [...sajatSavok, ...hezagSavok.filter((x) => x.kollega === kid && x.datum === datum)]) foglalasVegek.push(Math.ceil(s.veg / RACS) * RACS);
       for (const b of beosztas) {
         if (b.kollega !== kid || b.nap !== nap || b.helyszin !== helyszin) continue;
         // a rács horgonya a beosztási blokk, illetve a részleges kivétel utáni szabad szakasz eleje
@@ -148,6 +156,7 @@ export function szabadIdopontok({ torzs, beosztas, kivetelek = [], foglalt = [],
           for (const k of jelolt) {
             if (helyiToUtc(datum, k) < legkorabbiMs) continue;
             if (kivetelUtkozik(kivetelek, { kollega: kid, helyszin, datum, kezd: k, veg: k + szolg.perc })) continue;
+            if (sajatSavok.some((s) => atfed(k, k + szolg.perc, s.kezd, s.veg))) continue;
             const slotok = foglalasSlotjai({ kollega: kid, datum, kezd: k, perc: szolg.perc, puffer });
             if (slotok.some((s) => foglaltSet.has(`${kid}|${datum}|${s.slot}`))) continue;
             const lista = kezdesek.get(k) || [];

@@ -8,16 +8,20 @@
 //   bemutatkozas  rövid szöveg (legfeljebb 2000 karakter)
 //   archivalt     true: nem foglalható, nem látszik a katalógusban, de a régi foglalásokhoz megmarad
 //   naptar_id     a kolléga Google Naptárának azonosítója (calendarId) vagy üres; a nyilvános API-ban SOHA
+//   foglaltsagNaptarak  a kolléga saját naptárai (0-3 calendarId), amelyek foglalt ideje a foglalóban nem
+//                 foglalható (foglaltsag.js); a nyilvános API-ban SOHA
 // A régi (mezők nélküli) adat betöltéskor alapértéket kap; ehhez ALTER TABLE nem kell.
 //
 // Új szabályok: ertesitKollega (alap: be), emlekeztetoBe (alap: be), emlekeztetoOra (alap: 30),
-// studioNaptarId (a közös stúdió Google Naptár azonosítója, alap: üres).
+// studioNaptarId (a közös stúdió Google Naptár azonosítója, alap: üres), foglaltsagFigyeles (alap: be).
 
 import { HttpError } from '../http.js';
 import { ervenyesDatum } from './ido.js';
 
-export const KOLLEGA_UJ_MEZOK = ['email', 'aktiv_tol', 'aktiv_ig', 'foto', 'bemutatkozas', 'archivalt', 'naptar_id'];
-export const SZABALY_UJ_ALAP = Object.freeze({ ertesitKollega: true, emlekeztetoBe: true, emlekeztetoOra: 30, reggeliHatarOra: 22, reggeliKezdesElott: 10, kinalas: 'igazitott', studioNaptarId: '' });
+export const KOLLEGA_UJ_MEZOK = ['email', 'aktiv_tol', 'aktiv_ig', 'foto', 'bemutatkozas', 'archivalt', 'naptar_id', 'foglaltsagNaptarak'];
+export const SZABALY_UJ_ALAP = Object.freeze({ ertesitKollega: true, emlekeztetoBe: true, emlekeztetoOra: 30, reggeliHatarOra: 22, reggeliKezdesElott: 10, kinalas: 'igazitott', studioNaptarId: '', foglaltsagFigyeles: true });
+// A kolléga saját naptárai, amelyek foglalt ideje a foglalóban nem foglalható (foglaltsag.js), legfeljebb ennyi
+export const FOGLALTSAG_MAX_NAPTAR = 3;
 
 // A felkínált kezdések lépése (a belső 15 perces rács ettől nem változik):
 //   globálisan (szabalyok.kinalas): 'igazitott' (időtartam + puffer, felfelé a 15 többszörösére) | 15 | 30 | 60
@@ -63,7 +67,23 @@ export function kollegaAlap(k) {
     bemutatkozas: typeof k.bemutatkozas === 'string' ? k.bemutatkozas : '',
     archivalt: k.archivalt === true,
     naptar_id: typeof k.naptar_id === 'string' ? k.naptar_id : '',
+    foglaltsagNaptarak: Array.isArray(k.foglaltsagNaptarak) ? k.foglaltsagNaptarak.filter((x) => typeof x === 'string' && x) : [],
   };
+}
+
+/**
+ * A kolléga saját naptárai (foglaltság-figyelés): 0-3 Google naptár-azonosító, egyenként ellenőrizve,
+ * szóközök levágva, ismétlés nélkül. Hibás elemre vagy túl sok naptárra magyar 400.
+ */
+export function foglaltsagNaptarak(v) {
+  if (v == null) return [];
+  if (!Array.isArray(v)) throw hiba('Hibás mező: foglaltság-naptárak (naptár-azonosítók listája kell).');
+  const ki = [...new Set(v.map((x) => {
+    if (typeof x !== 'string' || !x.trim()) throw hiba('Hibás foglaltság-naptár: üres vagy nem szöveg.');
+    return naptarAzonosito(x, 'foglaltság-naptár');
+  }))];
+  if (ki.length > FOGLALTSAG_MAX_NAPTAR) throw hiba(`Egy kollégánál legfeljebb ${FOGLALTSAG_MAX_NAPTAR} foglaltság-naptár adható meg.`);
+  return ki;
 }
 
 export function torzsAlap(t) {
@@ -142,6 +162,7 @@ export function kollegaUjMezok(d) {
     ki.foto = f;
   }
   if ('naptar_id' in d) ki.naptar_id = naptarAzonosito(d.naptar_id, 'naptár-azonosító (kolléga)');
+  if ('foglaltsagNaptarak' in d) ki.foglaltsagNaptarak = foglaltsagNaptarak(d.foglaltsagNaptarak);
   if ('bemutatkozas' in d) ki.bemutatkozas = szoveg(d.bemutatkozas, 'bemutatkozás', 2000);
   if ('archivalt' in d) {
     if (typeof d.archivalt !== 'boolean') throw hiba('Hibás mező: archivalt (true vagy false).');
@@ -158,7 +179,7 @@ export function aktivSorrend(k) {
 /** Az új szabályok ellenőrzése: csak a megadott kulcsok. */
 export function szabalyUjMezok(sz) {
   const ki = {};
-  for (const k of ['ertesitKollega', 'emlekeztetoBe']) {
+  for (const k of ['ertesitKollega', 'emlekeztetoBe', 'foglaltsagFigyeles']) {
     if (!(k in sz)) continue;
     if (typeof sz[k] !== 'boolean') throw hiba(`Hibás beállítás: ${k} (true vagy false).`);
     ki[k] = sz[k];

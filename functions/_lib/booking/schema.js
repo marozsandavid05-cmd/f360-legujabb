@@ -35,6 +35,12 @@ export const SEMA = [
   `CREATE TABLE IF NOT EXISTS sorozatok (id TEXT PRIMARY KEY, location_id TEXT NOT NULL, service_id TEXT NOT NULL, staff_id TEXT NOT NULL, weekday INTEGER NOT NULL CHECK (weekday BETWEEN 1 AND 7), start_min INTEGER NOT NULL, interval_het INTEGER NOT NULL CHECK (interval_het IN (1, 2)), kezdo_datum TEXT NOT NULL, vege_tipus TEXT NOT NULL CHECK (vege_tipus IN ('datum', 'alkalom', 'nyitott')), vege_datum TEXT, alkalmak_szama INTEGER, name TEXT NOT NULL, email TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'aktiv' CHECK (status IN ('aktiv', 'leallitva')), created_at INTEGER NOT NULL, leallitva_at INTEGER, leallitva_tol TEXT, gorditve_ig TEXT NOT NULL DEFAULT '', gordit_zar INTEGER)`,
   `CREATE INDEX IF NOT EXISTS sorozatok_allapot ON sorozatok (status, vege_tipus)`,
   `CREATE TABLE IF NOT EXISTS sorozat_kimaradt (sorozat_id TEXT NOT NULL, datum TEXT NOT NULL, ok TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (sorozat_id, datum))`,
+  // A kolléga saját naptárának foglaltsága (foglaltsag.js): naptáranként és naponként CSAK a foglalt időszakok
+  // (perc-párok JSON-ban) és a lekérdezés ideje, cím és leírás soha; a naptár utolsó lekérdezésének állapota;
+  // és a foglalások, amelyeknél foglaláskor a naptár-ellenőrzés nem futott le (az adminnak)
+  `CREATE TABLE IF NOT EXISTS gcal_foglaltsag (naptar_id TEXT NOT NULL, datum TEXT NOT NULL, savok TEXT NOT NULL, lekerdezve INTEGER NOT NULL, forras TEXT NOT NULL CHECK (forras IN ('fb', 'ev')), PRIMARY KEY (naptar_id, datum))`,
+  `CREATE TABLE IF NOT EXISTS gcal_foglaltsag_allapot (naptar_id TEXT PRIMARY KEY, allapot TEXT NOT NULL CHECK (allapot IN ('ok', 'nincs-hozzaferes', 'hiba')), uzenet TEXT NOT NULL DEFAULT '', ellenorizve INTEGER, frissitve INTEGER NOT NULL, tartos INTEGER NOT NULL DEFAULT 0)`,
+  `CREATE TABLE IF NOT EXISTS foglalas_naptar_jel (booking_id TEXT PRIMARY KEY, jel TEXT NOT NULL CHECK (jel IN ('nem-futott')), letrehozva INTEGER NOT NULL)`,
 ];
 
 /**

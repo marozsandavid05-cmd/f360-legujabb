@@ -32,11 +32,18 @@
 //   GET|POST /api/foglalo/ora-sablonok, PATCH|DELETE /api/foglalo/ora-sablonok/:id
 //
 //   Google Naptár (naptar.js; a kolléga naptar_id-ja a kollégák végpontjain, a studioNaptarId a szabályok között):
-//   GET      /api/foglalo/naptar/allapot               bekotve, kulcsHiba, szolgaltatasFiok, studioNaptarId, kollegak
-//                                                      [{id,nev,szin,naptar_id}], varakozik, elakadt, utolsoHiba {azonosito,uzenet,probalkozas,ido}
-//   PATCH    /api/foglalo/naptar                       { studioNaptarId: '' | '<calendarId>' }
+//   GET      /api/foglalo/naptar/allapot               bekotve, kulcsHiba, szolgaltatasFiok, studioNaptarId, foglaltsagFigyeles, kollegak
+//                                                      [{id,nev,szin,naptar_id,foglaltsagNaptarak,foglaltsag:{allapot,uzenet,ellenorizve}}],
+//                                                      varakozik, elakadt, utolsoHiba {azonosito,uzenet,probalkozas,ido}
+//                                                      foglaltsag.allapot: 'nincs-beallitva' | 'ok' | 'nincs-hozzaferes' | 'hiba'
+//   GET      /api/foglalo/naptar/utkozesek?tol=&ig=    { utkozesek: [{azonosito, tipus:'foglalas'|'ora', kollega{id,nev}, datum, kezd, veg}] }
+//                                                      a kolléga saját naptárával ütköző jövőbeli foglalás vagy óra (csak jelzés, max 62 nap)
+//   PATCH    /api/foglalo/naptar                       { studioNaptarId?: '' | '<calendarId>', foglaltsagFigyeles?: true | false }
 //   POST     /api/foglalo/naptar/ujraszinkron          { mind?: true }  a sor újrapróbálása (mind: minden jövőbeli tétel); kulcs nélkül 409
 //   A foglalást, órát vagy naptárat érintő minden sikeres művelet után a szinkron a háttérben fut (ctx.waitUntil).
+//   Kolléga saját naptára (foglaltsag.js): a kollégák végpontjain foglaltsagNaptarak: ['<calendarId>', ...] (0-3);
+//   foglalás-listában naptarEllenorzes: null | 'nem-futott' (+ naptarEllenorzesSzoveg); kézi felvételnél és
+//   áthelyezésnél foglalt sávra a válaszban figyelmeztetes (nem tilt).
 //
 //   Állandó időpont (sorozat.js; szerződés: Claude tesztelés360-allando-idopont-2026-10-01\SZERZODES.md):
 //   POST     /api/foglalo/sorozatok/elonezet           SorozatBe → { alkalmak, osszes, utkozik, horizontVege } (nem ír)
@@ -52,6 +59,7 @@ import {
   studioNaptarMent,
 } from '../../_lib/booking/admin.js';
 import { bekotve, naptarAllapot, naptarHatter, naptarHatterUjra, naptarUjraszinkron, naptarValtozas } from '../../_lib/booking/naptar.js';
+import { foglaltsagAllapot, utkozesek } from '../../_lib/booking/foglaltsag.js';
 import { torzsBetolt } from '../../_lib/booking/schema.js';
 import { hatterKuldes, mailMod, outboxKuld, outboxLista } from '../../_lib/booking/mailer.js';
 import { emlekeztetoFuttat } from '../../_lib/booking/emlekezteto.js';
@@ -266,7 +274,13 @@ async function kezel(context, request, env, url, reszek) {
     const db = dbVagy503(env);
     if (reszek.length === 2 && reszek[1] === 'allapot') {
       if (request.method !== 'GET') return json({ error: 'Ez a művelet itt nem engedélyezett.' }, 405, { Allow: 'GET' });
-      return json(await naptarAllapot(env, db));
+      // kollégánként a saját naptár figyelésének állapota is (foglaltsag)
+      return json(await foglaltsagAllapot(env, db, await naptarAllapot(env, db)));
+    }
+    // GET naptar/utkozesek?tol=&ig=: a kolléga saját naptárával ütköző jövőbeli foglalások és órák (csak jelzés)
+    if (reszek.length === 2 && reszek[1] === 'utkozesek') {
+      if (request.method !== 'GET') return json({ error: 'Ez a művelet itt nem engedélyezett.' }, 405, { Allow: 'GET' });
+      return json(await utkozesek(env, db, url.searchParams));
     }
     if (reszek.length === 2 && reszek[1] === 'ujraszinkron') {
       if (request.method !== 'POST') return json({ error: 'Ez a művelet itt nem engedélyezett.' }, 405, { Allow: 'POST' });

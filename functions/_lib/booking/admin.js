@@ -395,15 +395,26 @@ export async function szolgaltatasKinalasMent(db, id, d) {
   return { ...s, kinalas: s.kinalas ?? null };
 }
 
-/** PATCH /api/foglalo/naptar { studioNaptarId }: a közös stúdió Google Naptár azonosítója ('' = nincs). */
+/**
+ * PATCH /api/foglalo/naptar { studioNaptarId?, foglaltsagFigyeles? }: a közös stúdió Google Naptár
+ * azonosítója ('' = nincs) és a kollégák saját naptárának figyelése (true | false). Legalább egy mező kell.
+ */
 export async function studioNaptarMent(db, d) {
   if (!d || typeof d !== 'object' || Array.isArray(d)) throw hiba('Hibás kérés.');
   const kulcsok = Object.keys(d);
-  if (kulcsok.length !== 1 || kulcsok[0] !== 'studioNaptarId') throw hiba('Itt csak a studioNaptarId mező módosítható.');
-  const studioNaptarId = naptarAzonosito(d.studioNaptarId, 'stúdiónaptár-azonosító');
+  if (!kulcsok.length || kulcsok.some((k) => k !== 'studioNaptarId' && k !== 'foglaltsagFigyeles')) {
+    throw hiba('Itt csak a studioNaptarId és a foglaltsagFigyeles mező módosítható.');
+  }
+  const uj = {};
+  if ('studioNaptarId' in d) uj.studioNaptarId = naptarAzonosito(d.studioNaptarId, 'stúdiónaptár-azonosító');
+  if ('foglaltsagFigyeles' in d) {
+    if (typeof d.foglaltsagFigyeles !== 'boolean') throw hiba('Hibás beállítás: foglaltsagFigyeles (true vagy false).');
+    uj.foglaltsagFigyeles = d.foglaltsagFigyeles;
+  }
   const { ertek, torzs } = await torzsNyersen(db);
-  await torzsFeltetelesMent(db, ertek, { ...torzs, szabalyok: { ...torzs.szabalyok, studioNaptarId } });
-  return { studioNaptarId };
+  const szabalyok = { ...torzs.szabalyok, ...uj };
+  await torzsFeltetelesMent(db, ertek, { ...torzs, szabalyok });
+  return { studioNaptarId: szabalyok.studioNaptarId || '', foglaltsagFigyeles: szabalyok.foglaltsagFigyeles !== false };
 }
 
 // ---------------------------------------------------------------- beosztás

@@ -12,6 +12,7 @@ import { kollegaCim, kollegaLemondas, kollegaModositas, kollegaUj } from './leve
 import { levelSorok, mailMod } from './mailer.js';
 import { forrasBemenet, forrasOlvas } from './forras.js';
 import { AKTIV_KOLLEGA_SQL } from './torzs-alap.js';
+import { UZENET_KOZBEN, UZENET_NEM_FUTOTT, adminFigyelmeztetes, ellenorzesJelSql, ellenorzesJelek, frissEllenorzes, kinalatSavok, savUtkozik } from './foglaltsag.js';
 
 export const NAPI_KORLAT = 20; // foglalási kísérlet IP-nként naponta
 export const MAX_NAP_EGY_KERESBEN = 14;
@@ -138,7 +139,20 @@ export async function szabad(db, q, { env = {}, most = Date.now(), admin = false
   const p = { helyszin: row ? row.location_id : q.get('helyszin'), szolgaltatas: row ? row.service_id : q.get('szolgaltatas'), kollega };
   hivatkozasok(alapTorzs, p);
   const [beosztas, kivetelek, foglalt] = await Promise.all([beosztasBetolt(db), kivetelekBetolt(db, tol, ig), foglaltBetolt(db, tol, ig, row && row.id)]);
-  return szabadIdopontok({ torzs: szamitasiTorzs(szamitasra(alapTorzs, { admin, row })), beosztas, kivetelek, foglalt, most, ...p, tol, ig });
+  // a kollégák saját Google Naptárának foglalt sávjai (gyorsítótárral; kulcs nélkül vagy kikapcsolva üres).
+  // Az admin áthelyező nézete nem szűr rájuk: az admin felvehet foglalt sávra is, figyelmeztetéssel.
+  // A Google-lekérdezés csak a foglalható ablakra ([ma, ma + maxEloreNap]) megy: az ezen kívüli napokon úgysincs
+  // kínálat, így egy tetszőleges dátumokkal érkező nyilvános kérés sem fogyaszt Google-kvótát és gyorsítótár-sort.
+  const ma = budapestMost(most).datum;
+  const ablakTol = tol > ma ? tol : ma;
+  const utolso = datumPlusz(ma, alapTorzs.szabalyok.maxEloreNap ?? 60);
+  const ablakIg = ig < utolso ? ig : utolso;
+  const foglaltSavok = admin || ablakTol > ablakIg ? [] : await kinalatSavok(env, db, alapTorzs, {
+    kollegak: alapTorzs.kollegak.filter((k) => (kollega === 'barki' || k.id === kollega) && k.archivalt !== true
+      && (k.helyszinek || []).includes(p.helyszin) && (k.szolgaltatasok || []).includes(p.szolgaltatas)),
+    tol: ablakTol, ig: ablakIg, most,
+  });
+  return szabadIdopontok({ torzs: szamitasiTorzs(szamitasra(alapTorzs, { admin, row })), beosztas, kivetelek, foglalt, foglaltSavok, most, ...p, tol, ig });
 }
 
 /**
@@ -256,12 +270,27 @@ export async function ipKorlat(env, db, request) {
  * a meglévő foglalások utáni hézagkitöltő kezdés (a foglalásokkal számolva). Előbb a most szabadnak
  * látszók, utána a többi (hátha közben felszabadult); a végső döntést a slot_locks hozza meg.
  */
-function jeloltKollegak(alap, foglalt, datum, kezd) {
-  const keres = (f) => ((szabadIdopontok({ ...alap, foglalt: f }).napok[datum] || []).find((s) => s.kezd === kezd) || { kollegak: [] }).kollegak;
-  const mostSzabad = keres(foglalt);
-  const jeloltek = [...new Set([...mostSzabad, ...keres([])])];
-  if (!jeloltek.length) throw new HttpError(409, NEM_FOGLALHATO);
+function jeloltKollegak(alap, foglalt, datum, kezd, foglaltSavok = [], hezagSavok = []) {
+  const keres = (f, savok) => ((szabadIdopontok({ ...alap, foglalt: f, foglaltSavok: savok, hezagSavok }).napok[datum] || []).find((s) => s.kezd === kezd) || { kollegak: [] }).kollegak;
+  const mostSzabad = keres(foglalt, foglaltSavok);
+  const jeloltek = [...new Set([...mostSzabad, ...keres([], foglaltSavok)])];
+  if (!jeloltek.length) {
+    // a saját naptár nélkül felkínált lett volna: a kolléga közben beírt valamit
+    if (foglaltSavok.length && keres([], []).length) throw new HttpError(409, UZENET_KOZBEN);
+    throw new HttpError(409, NEM_FOGLALHATO);
+  }
   return jeloltek;
+}
+
+/**
+ * A vendég foglalásának és módosításának friss naptár-ellenőrzése (gyorsítótár nélkül): a szóba jöhető
+ * kollégák saját naptárának foglalt sávjai, és akiket most nem sikerült ellenőrizni. Admin és állandó
+ * időpont esetén nincs (ott csak figyelmeztetés van). Kulcs nélkül vagy kikapcsolva üres.
+ */
+async function vendegEllenorzes(env, db, torzs, { helyszin, szolgaltatas, kollega, datum, most }) {
+  const kollegak = torzs.kollegak.filter((k) => (kollega === 'barki' || k.id === kollega) && k.archivalt !== true
+    && (k.helyszinek || []).includes(helyszin) && (k.szolgaltatasok || []).includes(szolgaltatas)).map((k) => k.id);
+  return frissEllenorzes(env, db, torzs, { kollegak, datum, most });
 }
 
 /**
@@ -303,8 +332,10 @@ export async function foglal(env, db, be, { origin, admin = false, most = Date.n
   ]);
   const kezd = percToHHMM(be.kezdPerc);
   const alap = { torzs: szTorzs, beosztas, kivetelek, most, helyszin: be.helyszin, szolgaltatas: be.szolgaltatas, kollega: be.kollega, tol: be.datum, ig: be.datum };
+  // vendég: a kollégák saját naptárának friss ellenőrzése (ütközésnél 409; Google-hibánál a foglalás megy, jelölve)
+  const ell = !admin && !sorozatId ? await vendegEllenorzes(env, db, torzs, { ...be, most }) : { savok: [], hezagSavok: [], ellenorizetlen: new Set() };
   // csak felkínált kezdésre (a rács vagy hézagkitöltés szerint); ha egyik kolléga sem, 409
-  const jeloltek = jeloltKollegak(alap, foglalt, be.datum, kezd);
+  const jeloltek = jeloltKollegak(alap, foglalt, be.datum, kezd, ell.savok, ell.hezagSavok);
 
   const secret = await titok(env, db);
   const puffer = szolg.puffer ?? 10;
@@ -339,6 +370,8 @@ export async function foglal(env, db, be, { origin, admin = false, most = Date.n
       zarakBeszurasa(db, { kollega, datum: be.datum, kezd: be.kezdPerc, perc: szolg.perc, puffer },
         `(SELECT id FROM bookings WHERE id = ?)`, [id]),
       ...levelSorok(db, id, levelek, most),
+      // ha a kolléga saját naptárát most nem sikerült ellenőrizni, az adminban jelölve
+      ...(ell.ellenorizetlen.has(kollega) ? [ellenorzesJelSql(db, id, true, most)] : []),
     ];
     mailMod(env);
     try {
@@ -349,7 +382,14 @@ export async function foglal(env, db, be, { origin, admin = false, most = Date.n
       if (/NOT NULL constraint failed: slot_locks\.booking_id/.test(uzenet)) continue; // archiválták, kiléptették, vagy átfedne
       throw e;
     }
-    return { azonosito: id, lemondasUrl, ics: icsUrl, level: { targy: elsoLevel.targy, html: elsoLevel.html, szoveg: elsoLevel.szoveg }, foglalas: publikusNezet(f) };
+    // admin kézi felvétel: a kolléga saját naptárában foglalt sávra nem tilt, csak figyelmeztet
+    const figyelmeztetes = admin && !sorozatId
+      ? await adminFigyelmeztetes(env, db, torzs, { kollega, datum: be.datum, kezd: be.kezdPerc, veg: be.kezdPerc + szolg.perc, most }).catch(() => undefined)
+      : undefined;
+    return {
+      azonosito: id, lemondasUrl, ics: icsUrl, level: { targy: elsoLevel.targy, html: elsoLevel.html, szoveg: elsoLevel.szoveg }, foglalas: publikusNezet(f),
+      ...(figyelmeztetes ? { figyelmeztetes } : {}),
+    };
   }
   throw new HttpError(409, UTKOZES);
 }
@@ -503,7 +543,11 @@ export async function modosit(env, db, row, be, { origin, admin = false, most = 
   ]);
   const kezd = percToHHMM(be.kezdPerc);
   const alap = { torzs: szTorzs, beosztas, kivetelek, most, helyszin: row.location_id, szolgaltatas: row.service_id, kollega: be.kollega, tol: be.datum, ig: be.datum };
-  const jeloltek = jeloltKollegak(alap, foglalt, be.datum, kezd);
+  // vendég-módosítás: friss naptár-ellenőrzés, mint foglaláskor
+  const ell = !admin
+    ? await vendegEllenorzes(env, db, torzs, { helyszin: row.location_id, szolgaltatas: row.service_id, kollega: be.kollega, datum: be.datum, most })
+    : { savok: [], hezagSavok: [], ellenorizetlen: new Set() };
+  const jeloltek = jeloltKollegak(alap, foglalt, be.datum, kezd, ell.savok, ell.hezagSavok);
 
   const token = await tokenKeszit(await titok(env, db), row.id, row.token_salt);
   const { lemondasUrl, icsUrl } = linkek(origin, token);
@@ -524,6 +568,8 @@ export async function modosit(env, db, row, be, { origin, admin = false, most = 
           ...atfedesParams(kollega, be.datum, row.id, be.kezdPerc, row.dur_min, row.buffer_min)]),
       db.prepare(`UPDATE bookings SET staff_id = ?, date = ?, start_min = ?, emlekeztetve_at = NULL WHERE id = ?`).bind(kollega, be.datum, be.kezdPerc, row.id),
       ...levelSorok(db, row.id, levelek, most),
+      // a naptár-ellenőrzés jele az új időpontra vonatkozik (az admin áthelyezése a régi jelet törli)
+      ellenorzesJelSql(db, row.id, ell.ellenorizetlen.has(kollega), most),
     ];
     mailMod(env);
     try {
@@ -540,9 +586,13 @@ export async function modosit(env, db, row, be, { origin, admin = false, most = 
       }
       throw e;
     }
+    const figyelmeztetes = admin
+      ? await adminFigyelmeztetes(env, db, torzs, { kollega, datum: be.datum, kezd: be.kezdPerc, veg: be.kezdPerc + row.dur_min, most }).catch(() => undefined)
+      : undefined;
     return {
       azonosito: row.id, lemondasUrl, ics: icsUrl, modositva: true,
       level: { targy: levelek[0].targy, html: levelek[0].html, szoveg: levelek[0].szoveg }, foglalas: publikusNezet(f),
+      ...(figyelmeztetes ? { figyelmeztetes } : {}),
     };
   }
   throw new HttpError(409, UTKOZES);
@@ -608,12 +658,16 @@ export async function foglalasLista(db, q) {
     `SELECT id, weekday, start_min, interval_het FROM sorozatok WHERE id IN (SELECT DISTINCT sorozat_id FROM bookings WHERE ${felt.join(' AND ')} AND sorozat_id IS NOT NULL)`,
   ).bind(...args).all();
   const sorozatMap = new Map((sorozatok || []).map((x) => [x.id, { id: x.id, nap: x.weekday, kezd: percToHHMM(x.start_min), ismetles: x.interval_het }]));
+  // a foglaláskori naptár-ellenőrzés elmaradásának jele (a kolléga saját naptárát nem sikerült lekérdezni)
+  const jelek = await ellenorzesJelek(db, (results || []).map((r) => r.id));
   return {
     tol, ig,
     foglalasok: (results || []).map((r) => {
       const { kezdPerc: _k, ...f } = nezet(r, torzs);
+      const jel = jelek.get(r.id) || null;
       return {
         ...f, kampany: forrasOlvas(r.forras), sorozat: (r.sorozat_id && sorozatMap.get(r.sorozat_id)) || null,
+        naptarEllenorzes: jel, ...(jel ? { naptarEllenorzesSzoveg: UZENET_NEM_FUTOTT } : {}),
         letrehozva: new Date(r.created_at).toISOString(), lemondva: r.cancelled_at ? new Date(r.cancelled_at).toISOString() : null,
       };
     }),

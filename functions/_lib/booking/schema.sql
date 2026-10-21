@@ -72,5 +72,13 @@ CREATE INDEX IF NOT EXISTS sorozatok_allapot ON sorozatok (status, vege_tipus);
 
 CREATE TABLE IF NOT EXISTS sorozat_kimaradt (sorozat_id TEXT NOT NULL, datum TEXT NOT NULL, ok TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (sorozat_id, datum));
 
+-- A kolléga saját naptárának foglaltsága (foglaltsag.js): csak időszakok és a lekérdezés ideje (cím, leírás soha),
+-- a naptár utolsó lekérdezésének állapota, és a foglaláskori naptár-ellenőrzés elmaradásának jele
+CREATE TABLE IF NOT EXISTS gcal_foglaltsag (naptar_id TEXT NOT NULL, datum TEXT NOT NULL, savok TEXT NOT NULL, lekerdezve INTEGER NOT NULL, forras TEXT NOT NULL CHECK (forras IN ('fb', 'ev')), PRIMARY KEY (naptar_id, datum));
+
+CREATE TABLE IF NOT EXISTS gcal_foglaltsag_allapot (naptar_id TEXT PRIMARY KEY, allapot TEXT NOT NULL CHECK (allapot IN ('ok', 'nincs-hozzaferes', 'hiba')), uzenet TEXT NOT NULL DEFAULT '', ellenorizve INTEGER, frissitve INTEGER NOT NULL, tartos INTEGER NOT NULL DEFAULT 0);
+
+CREATE TABLE IF NOT EXISTS foglalas_naptar_jel (booking_id TEXT PRIMARY KEY, jel TEXT NOT NULL CHECK (jel IN ('nem-futott')), letrehozva INTEGER NOT NULL);
+
 -- a migráció után (régi adatbázisban a sorozat_id oszlopot az ALTER hozza létre)
 CREATE INDEX IF NOT EXISTS bookings_sorozat ON bookings (sorozat_id, date);

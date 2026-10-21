@@ -33,7 +33,23 @@ import { TZ } from './ido.js';
 
 export const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 export const SCOPE = 'https://www.googleapis.com/auth/calendar.events';
-const API = 'https://www.googleapis.com/calendar/v3/calendars/';
+const API_ALAP = 'https://www.googleapis.com/calendar/v3/';
+const API = `${API_ALAP}calendars/`;
+
+// Helyi próbához (workerd + Google-utánzat): GOOGLE_API_TESZT_ALAP = 'http://127.0.0.1:<port>' esetén a token-
+// és a Calendar-hívás oda megy. Csak helyi cím fogadható el, élesben a változó nincs beállítva.
+const HELYI_ALAP_RE = /^http:\/\/(127\.0\.0\.1|localhost):\d{2,5}$/;
+function tesztAlap(env) {
+  const v = env && env.GOOGLE_API_TESZT_ALAP;
+  // csak a helyi fejlesztői futásban (DEV_EMAIL csak ott van beállítva) és csak helyi címre
+  return env && env.DEV_EMAIL && typeof v === 'string' && HELYI_ALAP_RE.test(v) ? v : null;
+}
+/** A Calendar API alapcíme (élesben a Google; helyi próbánál az utánzat). */
+export function apiAlap(env) {
+  const t = tesztAlap(env);
+  return t ? `${t}/calendar/v3/` : API_ALAP;
+}
+const tokenCim = (env) => (tesztAlap(env) ? `${tesztAlap(env)}/token` : TOKEN_URL);
 const IDOKORLAT = 10000; // ms egy Google-hívásra
 // Google-hívás egy futásban. A Workers Free kérésenként 50 külső subrequestet enged; ugyanabban a
 // kérésben a levélküldés legfeljebb 20-at használ, a token-kérés legfeljebb 2-t: 20 + 25 + 2 < 50
@@ -179,16 +195,19 @@ async function alairoKulcs(sa) {
   return key;
 }
 
-/** Hozzáférési token a szolgáltatásfiókkal (JWT bearer). A lejárat előtt 60 mp-ig újrahasznosítja. */
-export async function googleToken(env, { fetchFn, most = Date.now(), friss = false, kor = null } = {}) {
+/**
+ * Hozzáférési token a szolgáltatásfiókkal (JWT bearer). A lejárat előtt 60 mp-ig újrahasznosítja.
+ * `scope`: alapból calendar.events (a szinkron írása); a foglaltság-figyelés csak olvasó hatókört kér.
+ */
+export async function googleToken(env, { fetchFn, most = Date.now(), friss = false, kor = null, scope = SCOPE } = {}) {
   const sa = saBetolt(env);
   if (!sa) throw new Error('A Google Naptár nincs bekötve (hiányzik a GOOGLE_SA_KEY titok).');
-  const ck = `${sa.kid}|${sa.email}`;
+  const ck = `${sa.kid}|${sa.email}|${scope}`;
   const c = tokenCache.get(ck);
   if (!friss && c && most < c.lejar - 60e3) return c.token;
   const iat = Math.floor(most / 1000);
   const fej = { alg: 'RS256', typ: 'JWT', ...(sa.kid ? { kid: sa.kid } : {}) };
-  const claim = { iss: sa.email, scope: SCOPE, aud: TOKEN_URL, iat, exp: iat + 3600 };
+  const claim = { iss: sa.email, scope, aud: TOKEN_URL, iat, exp: iat + 3600 };
   const alairando = `${b64uSzoveg(JSON.stringify(fej))}.${b64uSzoveg(JSON.stringify(claim))}`;
   const sig = new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', await alairoKulcs(sa), new TextEncoder().encode(alairando)));
   const f = fetchFn || globalThis.fetch;
@@ -199,7 +218,7 @@ export async function googleToken(env, { fetchFn, most = Date.now(), friss = fal
   }
   let r;
   try {
-    r = await f(TOKEN_URL, {
+    r = await f(tokenCim(env), {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: `${alairando}.${b64u(sig)}` }).toString(),
@@ -258,7 +277,7 @@ function hibaUzenet(status, cal, ok) {
 /** Egy Calendar API-hívás; 401-re egyszer új tokennel újrapróbálja. A keret minden hívást számol. */
 async function hivas(env, kor, method, cal, eventId, body) {
   if (kor.hasznalt >= kor.max) throw keretHiba();
-  const url = `${API}${encodeURIComponent(cal)}/events${eventId ? `/${encodeURIComponent(eventId)}` : ''}?sendUpdates=none`;
+  const url = `${tesztAlap(env) ? `${apiAlap(env)}calendars/` : API}${encodeURIComponent(cal)}/events${eventId ? `/${encodeURIComponent(eventId)}` : ''}?sendUpdates=none`;
   for (let proba = 0; proba < 2; proba++) {
     const token = await tokenVagyLeall(env, { friss: proba > 0, kor });
     if (kor.hasznalt >= kor.max) throw keretHiba();
