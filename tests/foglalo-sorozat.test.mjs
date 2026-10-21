@@ -145,8 +145,8 @@ test('létrehozás részleges ütközéssel: 201, a szabad alkalmak a sorozathoz
   const b = sorok(e, `SELECT * FROM bookings WHERE sorozat_id = ? ORDER BY date`, d.sorozat.id);
   assert.equal(b.length, 3);
   assert.ok(b.every((x) => x.source === 'admin' && x.status === 'megerositett' && x.name === 'David teszt' && x.staff_id === 'szegedi-botond'));
-  // zárak: alkalmanként (50 + 10) / 15 = 4
-  for (const x of b) assert.equal(sorok(e, 'SELECT * FROM slot_locks WHERE booking_id = ?', x.id).length, 4);
+  // zárak: alkalmanként (50 + 10) / 5 = 12
+  for (const x of b) assert.equal(sorok(e, 'SELECT * FROM slot_locks WHERE booking_id = ?', x.id).length, 12);
   // levelek: egy összefoglaló a vendégnek, egy a kollégának, egy a stúdiónak, alkalmanként semmi
   const uj = outbox(e).slice(elotte);
   assert.deepEqual(uj.map((l) => l.tipus).sort(), ['sorozat-kollega', 'sorozat-studio', 'sorozat-visszaigazolas']);
@@ -211,7 +211,7 @@ test('6 párhuzamos létrehozás ugyanarra az időre: minden alkalmat pontosan e
   // alkalmanként egy foglalás, egy zár-sorozat
   const b = foglalasok(e);
   assert.deepEqual(b.map((x) => x.date), [het(0), het(1), het(2)]);
-  assert.equal(sorok(e, 'SELECT COUNT(*) AS n FROM slot_locks')[0].n, 12);
+  assert.equal(sorok(e, 'SELECT COUNT(*) AS n FROM slot_locks')[0].n, 36);
   // a 409-es kérésből nem marad sorozat; ami megmaradt, annak van alkalma
   const s = sorok(e, 'SELECT id FROM sorozatok').map((x) => x.id);
   assert.equal(s.length, nyertes);

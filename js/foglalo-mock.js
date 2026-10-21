@@ -25,6 +25,7 @@
   var ORIGIN = ROOT.replace(/\/$/, '');
   var realFetch = window.fetch.bind(window);
   var RACS = 15;
+  var ZAR_RACS = 5; // a zárak rácsa (ido.js ZAR_RACS): a rögzített kezdések (:50, :05) ne lógjanak egymásba
 
   if (/[?&]utkozes=1(&|$)/.test(location.search)) { try { sessionStorage.setItem(FLAG, '1'); } catch (e) { /* nincs */ } }
 
@@ -36,8 +37,8 @@
     return {
       minta: true,
       helyszinek: [
-        { id: 'mexikoi', nev: 'Mexikói út', cim: 'Mexikói út 32/b, XIV. kerület', nyit: '07:00', zar: '21:00' },
-        { id: 'reitter', nev: 'Reitter Ferenc utca', cim: 'Reitter Ferenc utca 48., XIII. kerület', nyit: '08:00', zar: '20:00' }
+        { id: 'mexikoi', nev: 'Mexikói út', cim: 'Mexikói út 32/b, XIV. kerület', nyit: '07:00', zar: '21:00', napiNyitvatartas: { 6: { nyit: '08:00', zar: '12:00' }, 7: null } },
+        { id: 'reitter', nev: 'Reitter Ferenc utca', cim: 'Reitter Ferenc utca 48., XIII. kerület', nyit: '07:00', zar: '21:00', napiNyitvatartas: { 6: { nyit: '08:00', zar: '14:00' }, 7: null } }
       ],
       szolgaltatasok: [
         { id: 'gyogytorna', nev: 'Gyógytorna', perc: 50, ar: 14500, puffer: 10, helyszinek: ['mexikoi'] },
@@ -46,7 +47,7 @@
         { id: 'relaxalo-masszazs', nev: 'Relaxáló masszázs', perc: 50, ar: 13500, puffer: 10, helyszinek: ['mexikoi'] },
         { id: 'nyirokmasszazs-teljes', nev: 'Nyirokmasszázs, teljes test', perc: 90, ar: 23000, puffer: 10, helyszinek: ['mexikoi'] },
         { id: 'kismama-masszazs', nev: 'Kismama masszázs', perc: 50, ar: 12000, puffer: 10, helyszinek: ['mexikoi'] },
-        { id: 'sportrehab-felmeres', nev: 'Sportrehabilitációs állapotfelmérés', perc: 50, ar: 20000, puffer: 10, helyszinek: ['reitter'] },
+        { id: 'sportrehab-felmeres', nev: 'Állapotfelmérés (1. alkalom)', perc: 50, ar: 20000, puffer: 10, helyszinek: ['reitter'] },
         { id: 'sportrehab-gyogytorna', nev: 'Sportrehabilitáció, gyógytorna', perc: 50, ar: 16000, puffer: 10, helyszinek: ['reitter'] },
         { id: 'sportmasszazs', nev: 'Sportmasszázs, regeneráció', perc: 50, ar: 15000, puffer: 10, helyszinek: ['reitter'] },
         { id: 'kinvent-pro', nev: 'Kinvent PRO', perc: 60, ar: 20000, puffer: 10, helyszinek: ['reitter'] },
@@ -241,8 +242,8 @@
 
   /* ---------------- szabad.js ---------------- */
   function foglalasSlotjai(o) {
-    var n = Math.ceil((o.perc + (o.puffer || 0)) / RACS), out = [];
-    for (var i = 0; i < n; i++) out.push({ kollega: o.kollega, datum: o.datum, slot: o.kezd + i * RACS });
+    var elso = Math.floor(o.kezd / ZAR_RACS) * ZAR_RACS, n = Math.ceil((o.kezd + o.perc + (o.puffer || 0) - elso) / ZAR_RACS), out = [];
+    for (var i = 0; i < n; i++) out.push({ kollega: o.kollega, datum: o.datum, slot: elso + i * ZAR_RACS });
     return out;
   }
   function kivetelUtkozik(kiv, o) {
@@ -310,18 +311,22 @@
     var fs = {};
     (o.foglalt || []).forEach(function (f) { fs[f.kollega + '|' + f.datum + '|' + f.slot] = 1; });
     var puffer = szolg.puffer == null ? 10 : szolg.puffer;
-    var nyit = F.perc(hely.nyit), zar = F.perc(hely.zar), lepes = kinalasLepes(szolg, sz);
+    var lepes = kinalasLepes(szolg, sz);
     var kivAll = o.kivetelek || db.kivetelek;
     osszes.forEach(function (datum) {
       if (datum > utolso) return;
       if (helyiToUtc(datum, 24 * 60 - 1) <= legkorabbi) return;
       var nap = hetNapja(datum), kezdesek = {};
+      // napfüggő nyitvatartás (szabad.js napiNyitva): szombaton rövidebb, null = aznap zárva
+      var napi = hely.napiNyitvatartas && Object.prototype.hasOwnProperty.call(hely.napiNyitvatartas, String(nap)) ? hely.napiNyitvatartas[String(nap)] : hely;
+      if (!napi) return;
+      var nyit = F.perc(napi.nyit), zar = F.perc(napi.zar);
       // belépés előtt és kilépés után a kolléga nem foglalható (a „bárki” sem osztja rá)
       jeloltek.filter(function (k) { return aktivANapon(k, datum); }).map(function (k) { return k.id; }).forEach(function (kid) {
         var napiKiv = napiKivetelek(kivAll, { kollega: kid, helyszin: o.helyszin, datum: datum });
         // a kolléga aznapi foglalásainak vége: egy zár-sorozat utolsó rácspontja utáni rácspont
-        var foglalasVegek = (o.foglalt || []).filter(function (f) { return f.kollega === kid && f.datum === datum && !fs[kid + '|' + datum + '|' + (f.slot + RACS)]; })
-          .map(function (f) { return f.slot + RACS; });
+        var foglalasVegek = (o.foglalt || []).filter(function (f) { return f.kollega === kid && f.datum === datum && !fs[kid + '|' + datum + '|' + (f.slot + ZAR_RACS)]; })
+          .map(function (f) { return Math.ceil((f.slot + ZAR_RACS) / RACS) * RACS; });
         db.beosztas.forEach(function (b) {
           if (b.kollega !== kid || b.nap !== nap || b.helyszin !== o.helyszin) return;
           // a rács horgonya a beosztási blokk, illetve a részleges kivétel utáni szabad szakasz eleje
@@ -605,7 +610,7 @@
     var t = T();
     return {
       minta: t.minta === true,
-      helyszinek: t.helyszinek.map(function (h) { return { id: h.id, nev: h.nev, cim: h.cim, nyit: h.nyit, zar: h.zar }; }),
+      helyszinek: t.helyszinek.map(function (h) { var o = { id: h.id, nev: h.nev, cim: h.cim, nyit: h.nyit, zar: h.zar }; if (h.napiNyitvatartas) o.napiNyitvatartas = h.napiNyitvatartas; return o; }),
       szolgaltatasok: t.szolgaltatasok.map(function (s) {
         var o = { id: s.id, nev: s.nev, perc: s.perc, ar: s.ar, helyszinek: s.helyszinek, lepes: kinalasLepes(s, t.szabalyok) };
         if (s.leiras) o.leiras = s.leiras;
@@ -910,7 +915,9 @@
     var helyszinek = d.helyszinek.map(function (h) {
       var ny = str(h.nyit, 'nyitás', 5), z = str(h.zar, 'zárás', 5);
       if (hhmmToPerc(ny) == null || hhmmToPerc(z) == null || hhmmToPerc(ny) >= hhmmToPerc(z)) throw hiba('Hibás nyitvatartás: ' + h.id + '.');
-      return { id: h.id, nev: str(h.nev, 'név', 100), cim: str(h.cim, 'cím', 200), nyit: ny, zar: z };
+      var o = { id: h.id, nev: str(h.nev, 'név', 100), cim: str(h.cim, 'cím', 200), nyit: ny, zar: z };
+      if (h.napiNyitvatartas) o.napiNyitvatartas = h.napiNyitvatartas; // a backend admin.js ellenőrzi
+      return o;
     });
     var sIds = egyediId(d.szolgaltatasok, 'szolgáltatás');
     var szolgaltatasok = d.szolgaltatasok.map(function (s) {
@@ -1595,7 +1602,9 @@
     var k = t.kollegak.filter(function (x) { return x.id === be.kollega; })[0];
     if (helyiToUtc(datum, kezdPerc) < Date.now()) return 'mult';
     if (!k || !aktivANapon(k, datum)) return 'kollega_inaktiv';
-    if (kezdPerc < F.perc(be.hely.nyit) || veg > F.perc(be.hely.zar)) return 'zarva';
+    var hn = be.hely.napiNyitvatartas, nn = String(hetNapja(datum));
+    var nyitva = hn && Object.prototype.hasOwnProperty.call(hn, nn) ? hn[nn] : be.hely;
+    if (!nyitva || kezdPerc < F.perc(nyitva.nyit) || veg > F.perc(nyitva.zar)) return 'zarva';
     var kiv = db.kivetelek.filter(function (x) { return datum >= x.tol && datum <= x.ig && (x.kezd == null || percAtfed(kezdPerc, veg, x.kezd, x.veg)); });
     if (kiv.some(function (x) { return !x.kollega && x.helyszin === be.helyszin; })) return 'zarva';
     if (kiv.some(function (x) { return x.kollega === be.kollega && (!x.helyszin || x.helyszin === be.helyszin); })) return 'szabadsag';

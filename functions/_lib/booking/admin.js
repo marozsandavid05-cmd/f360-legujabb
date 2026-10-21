@@ -76,6 +76,27 @@ function szolgaltatasExtra(s) {
   return ki;
 }
 
+/**
+ * A helyszín napfüggő nyitvatartása (például szombaton rövidebb, vasárnap zárva): { '1'-'7': { nyit, zar } | null }.
+ * A hiányzó nap az alap nyit/zar szerint nyitva; a null = aznap zárva. Üres vagy hiányzó: nincs (null).
+ */
+function napiNyitvatartasEllenoriz(v, id) {
+  if (v == null) return null;
+  const rossz = () => hiba(`Hibás napi nyitvatartás: ${id} (napok 1-7, { nyit, zar } HH:MM vagy null).`);
+  if (typeof v !== 'object' || Array.isArray(v)) throw rossz();
+  const ki = {};
+  for (const [nap, x] of Object.entries(v)) {
+    if (!/^[1-7]$/.test(nap)) throw rossz();
+    if (x === null) { ki[nap] = null; continue; }
+    if (!x || typeof x !== 'object' || Array.isArray(x) || typeof x.nyit !== 'string' || typeof x.zar !== 'string') throw rossz();
+    const ny = hhmmToPerc(x.nyit);
+    const z = hhmmToPerc(x.zar);
+    if (ny == null || z == null || ny >= z) throw rossz();
+    ki[nap] = { nyit: x.nyit, zar: x.zar };
+  }
+  return Object.keys(ki).length ? ki : null;
+}
+
 /** A teljes törzsadat ellenőrzése és normalizálása (PUT /api/foglalo/beallitasok). */
 export function torzsEllenoriz(d) {
   if (!d || typeof d !== 'object') throw hiba('Hibás kérés.');
@@ -87,7 +108,8 @@ export function torzsEllenoriz(d) {
     const nyit = str(h.nyit, 'nyitás', 5);
     const zar = str(h.zar, 'zárás', 5);
     if (hhmmToPerc(nyit) == null || hhmmToPerc(zar) == null || hhmmToPerc(nyit) >= hhmmToPerc(zar)) throw hiba(`Hibás nyitvatartás: ${h.id}.`);
-    return { id: h.id, nev: str(h.nev, 'név', 100), cim: str(h.cim, 'cím', 200), nyit, zar };
+    const napi = napiNyitvatartasEllenoriz(h.napiNyitvatartas, h.id);
+    return { id: h.id, nev: str(h.nev, 'név', 100), cim: str(h.cim, 'cím', 200), nyit, zar, ...(napi ? { napiNyitvatartas: napi } : {}) };
   });
   const sIds = egyediId(d.szolgaltatasok, 'szolgáltatás');
   const szolgaltatasok = d.szolgaltatasok.map((s) => {

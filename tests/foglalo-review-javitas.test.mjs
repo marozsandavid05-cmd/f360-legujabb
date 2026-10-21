@@ -176,7 +176,7 @@ test('4c. módosítás olyan kollégához, akit közben archiváltak: 409, a fog
   const r = await post(e2, '/foglalas-api/modositas', { t: f.t, datum: NAP, kezd: '14:00', kollega: 'vas-luca' });
   assert.equal(r.status, 409, await r.clone().text());
   assert.deepEqual({ ...sorok(e, 'SELECT staff_id, start_min FROM bookings')[0] }, { staff_id: 'szegedi-botond', start_min: 600 });
-  assert.equal(sorok(e, 'SELECT COUNT(*) AS n FROM slot_locks WHERE staff_id = ?', 'szegedi-botond')[0].n, 4);
+  assert.equal(sorok(e, 'SELECT COUNT(*) AS n FROM slot_locks WHERE staff_id = ?', 'szegedi-botond')[0].n, 12);
 });
 
 test('5. másik kolléga jövőbeli foglalása nem akadályozza egy kolléga módosítását és archiválását', async () => {

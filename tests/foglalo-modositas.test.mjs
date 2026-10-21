@@ -81,7 +81,7 @@ test('módosítás: 200, ugyanaz az azonosító és token, a zárak cserélődne
   assert.ok(d.level.html.includes('12:00'));
   assert.ok(d.level.html.includes('10:00')); // a régi időpont is szerepel
   // a zárak az új időpontra kerültek (50 perc + 10 puffer = 4 rácspont)
-  assert.deepEqual(zarak(e, f.azonosito), [720, 735, 750, 765].map((s) => `szegedi-botond|${NAP}|${s}`));
+  assert.deepEqual(zarak(e, f.azonosito), Array.from({ length: 12 }, (_, i) => 720 + i * 5).map((s) => `szegedi-botond|${NAP}|${s}`));
   assert.deepEqual(foglalasRow(e, f.azonosito), { staff_id: 'szegedi-botond', date: NAP, start_min: 720, status: 'megerositett' });
   assert.equal(sorok(e, 'SELECT COUNT(*) AS n FROM bookings')[0].n, 1);
   // levelek: páciens + stúdió, a páciensé .ics-szel; semmi nem ment ki
@@ -107,15 +107,15 @@ test('módosítás a saját időpontjával átfedő időre (10:00 → 10:30) és
   assert.equal((await admin(e, 'PATCH', '/api/foglalo/beallitasok', { kinalas: 15 })).status, 200); // negyedórás kínálás
   const f = await foglalj(e);
   assert.equal((await modosit(e, { t: f.t, datum: NAP, kezd: '10:30', kollega: 'szegedi-botond' })).status, 200);
-  assert.deepEqual(zarak(e, f.azonosito), [630, 645, 660, 675].map((s) => `szegedi-botond|${NAP}|${s}`));
+  assert.deepEqual(zarak(e, f.azonosito), Array.from({ length: 12 }, (_, i) => 630 + i * 5).map((s) => `szegedi-botond|${NAP}|${s}`));
   // „bárki”: a következő hétfőn bárki, aki ezt végzi a Mexikóiban
   const r = await modosit(e, { t: f.t, datum: HETFO2, kezd: '11:00', kollega: 'barki' });
   assert.equal(r.status, 200);
   const d = await r.json();
   assert.equal(d.foglalas.datum, HETFO2);
-  assert.equal(zarak(e, f.azonosito).length, 4);
+  assert.equal(zarak(e, f.azonosito).length, 12);
   assert.ok(zarak(e, f.azonosito).every((z) => z.includes(`|${HETFO2}|`)));
-  assert.equal(sorok(e, 'SELECT COUNT(*) AS n FROM slot_locks')[0].n, 4);
+  assert.equal(sorok(e, 'SELECT COUNT(*) AS n FROM slot_locks')[0].n, 12);
 });
 
 // ---------------------------------------------------------------- ütközés, szabályok
@@ -129,7 +129,7 @@ test('foglalt új időpont: 409, a régi foglalás és a zárai érintetlenek, n
   assert.equal(r.status, 409);
   assert.match((await r.json()).error, /nem foglalható|lefoglalták/);
   assert.deepEqual(foglalasRow(e, a.azonosito), { staff_id: 'szegedi-botond', date: NAP, start_min: 600, status: 'megerositett' });
-  assert.deepEqual(zarak(e, a.azonosito), [600, 615, 630, 645].map((s) => `szegedi-botond|${NAP}|${s}`));
+  assert.deepEqual(zarak(e, a.azonosito), Array.from({ length: 12 }, (_, i) => 600 + i * 5).map((s) => `szegedi-botond|${NAP}|${s}`));
   assert.equal(sorok(e, 'SELECT COUNT(*) AS n FROM outbox')[0].n, elotte);
 });
 
@@ -213,8 +213,8 @@ test('párhuzamos módosítás és új foglalás ugyanarra a slotra: csak egy ny
     // minden élő foglalásnak pontosan 4 zárja van, és mindegyik a saját foglalása idejét fedi
     const elo = sorok(e, "SELECT COUNT(*) AS n FROM bookings WHERE status = 'megerositett'")[0].n;
     const zarSorok = sorok(e, 'SELECT s.slot_min, b.start_min FROM slot_locks s JOIN bookings b ON b.id = s.booking_id');
-    assert.equal(zarSorok.length, 4 * elo);
-    assert.equal(sorok(e, 'SELECT COUNT(*) AS n FROM slot_locks')[0].n, 4 * elo);
+    assert.equal(zarSorok.length, 12 * elo);
+    assert.equal(sorok(e, 'SELECT COUNT(*) AS n FROM slot_locks')[0].n, 12 * elo);
     assert.ok(zarSorok.every((z) => z.slot_min >= z.start_min && z.slot_min < z.start_min + 60));
     const aRow = foglalasRow(e, a.azonosito);
     assert.equal(aRow.start_min, m.status === 200 ? 720 : 600);
@@ -230,8 +230,8 @@ test('két párhuzamos módosítás ugyanarra a foglalásra: egy 200, egy 409, a
   ]);
   assert.deepEqual(rs.map((r) => r.status).sort(), [200, 409]);
   const row = foglalasRow(e, a.azonosito);
-  assert.deepEqual(zarak(e, a.azonosito), [0, 15, 30, 45].map((p) => `szegedi-botond|${NAP}|${row.start_min + p}`));
-  assert.equal(sorok(e, 'SELECT COUNT(*) AS n FROM slot_locks')[0].n, 4);
+  assert.deepEqual(zarak(e, a.azonosito), Array.from({ length: 12 }, (_, i) => 0 + i * 5).map((p) => `szegedi-botond|${NAP}|${row.start_min + p}`));
+  assert.equal(sorok(e, 'SELECT COUNT(*) AS n FROM slot_locks')[0].n, 12);
   assert.equal(sorok(e, "SELECT COUNT(*) AS n FROM outbox WHERE tipus = 'modositas'")[0].n, 1);
 });
 
@@ -297,7 +297,7 @@ test('admin PATCH: a lemondási határon belül is áthelyez, ütközésre 409, 
   assert.equal(d.modositva, true);
   assert.equal(d.azonosito, f.azonosito);
   assert.equal(d.lemondasUrl.split('?t=')[1], encodeURIComponent(f.t)); // ugyanaz a token
-  assert.deepEqual(zarak(e, f.azonosito), [720, 735, 750, 765].map((s) => `szegedi-botond|${NAP}|${s}`));
+  assert.deepEqual(zarak(e, f.azonosito), Array.from({ length: 12 }, (_, i) => 720 + i * 5).map((s) => `szegedi-botond|${NAP}|${s}`));
   // admin áthelyezésnél csak a páciens kap levelet (ahogy a kézi felvételnél is)
   assert.deepEqual(sorok(e, "SELECT tipus FROM outbox WHERE tipus LIKE '%modositas'").map((x) => x.tipus), ['modositas']);
 
@@ -348,6 +348,6 @@ test('lemondás elavult sorral (közben módosították): 409, a foglalás él, 
   assert.equal((await modosit(e, { t: f.t, datum: NAP, kezd: '12:00', kollega: 'szegedi-botond' })).status, 200);
   await assert.rejects(() => lemond(e, e.BOOKING_DB, elavult), (err) => err.status === 409 && /közben módosították/.test(err.message));
   assert.equal(foglalasRow(e, f.azonosito).status, 'megerositett');
-  assert.equal(zarak(e, f.azonosito).length, 4);
+  assert.equal(zarak(e, f.azonosito).length, 12);
   assert.equal(sorok(e, "SELECT COUNT(*) AS n FROM outbox WHERE tipus = 'lemondas'")[0].n, 0);
 });

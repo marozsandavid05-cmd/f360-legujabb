@@ -18,7 +18,7 @@
 
 import { HttpError } from '../http.js';
 import { budapestMost, datumPlusz, ervenyesDatum, hetNapja, helyiToUtc, hhmmToPerc, kezdesPerc, percToHHMM } from './ido.js';
-import { kezdesAlakja, szabadIdopontok } from './szabad.js';
+import { kezdesAlakja, napiNyitva, szabadIdopontok } from './szabad.js';
 import { szamitasiTorzs, titok, torzsBetolt } from './schema.js';
 import { tokenKeszit, ujAzonosito } from './token.js';
 import { aktivANapon } from './torzs-alap.js';
@@ -120,7 +120,8 @@ export function alkalomOk(k, be, datum, kezdPerc, most = Date.now()) {
   if (helyiToUtc(datum, kezdPerc) < most) return 'mult';
   const koll = k.torzs.kollegak.find((x) => x.id === be.kollega);
   if (!koll || !aktivANapon(koll, datum)) return 'kollega_inaktiv';
-  if (kezdPerc < hhmmToPerc(be.hely.nyit) || veg > hhmmToPerc(be.hely.zar)) return 'zarva';
+  const nyitva = napiNyitva(be.hely, hetNapja(datum));
+  if (!nyitva || kezdPerc < hhmmToPerc(nyitva.nyit) || veg > hhmmToPerc(nyitva.zar)) return 'zarva';
   const kiv = k.kivetelek.filter((x) => datum >= x.tol && datum <= x.ig && (x.kezd == null || x.veg == null || atfed(kezdPerc, veg, x.kezd, x.veg)));
   if (kiv.some((x) => !x.kollega && x.helyszin === be.helyszin)) return 'zarva';
   if (kiv.some((x) => x.kollega === be.kollega && (!x.helyszin || x.helyszin === be.helyszin))) return 'szabadsag';

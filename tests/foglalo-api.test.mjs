@@ -124,8 +124,8 @@ test('foglalás: 201, azonosító, lemondó link, .ics, levél-előnézet; a há
   const ob = sorok(e, 'SELECT tipus, cimzett, sent FROM outbox ORDER BY tipus');
   assert.deepEqual(ob.map((x) => [x.tipus, x.sent]), [['studio-ertesito', 0], ['visszaigazolas', 0]]);
   assert.equal(ob.find((x) => x.tipus === 'visszaigazolas').cimzett, 'david.teszt@example.com');
-  // 50 perc + 10 perc puffer = 4 rácspont
-  assert.deepEqual(sorok(e, 'SELECT slot_min FROM slot_locks ORDER BY slot_min').map((x) => x.slot_min), [600, 615, 630, 645]);
+  // 50 perc + 10 perc puffer = 12 zár az 5 perces zár-rácson (10:00-10:55)
+  assert.deepEqual(sorok(e, 'SELECT slot_min FROM slot_locks ORDER BY slot_min').map((x) => x.slot_min), Array.from({ length: 12 }, (_, i) => 600 + i * 5));
   const sz = await (await get(e, `/foglalas-api/szabad?helyszin=mexikoi&szolgaltatas=gyogymasszazs-50&kollega=szegedi-botond&tol=${NAP}&ig=${NAP}`)).json();
   const kezdok = sz.napok[NAP].map((x) => x.kezd);
   assert.ok(!kezdok.includes('10:00') && !kezdok.includes('09:15'));

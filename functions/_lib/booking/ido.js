@@ -4,7 +4,10 @@
 // saját DST-táblát szándékosan nem tartunk.
 
 export const TZ = 'Europe/Budapest';
-export const RACS = 15; // perc
+export const RACS = 15; // perc: a rácsos (kezdoPerc nélküli) kezdések, a beosztás és a nyitvatartás rácsa
+// A zárak (slot_locks) rácsa. 5 perc, mert a rögzített kezdésű szolgáltatások (InBody :50, tanácsadás :05)
+// 15 perces rácson egymásba lógnának: a 8:50-9:05-ös InBody és a 9:05-ös tanácsadás mindkettő a 9:00-t zárná.
+export const ZAR_RACS = 5;
 
 const fmt = new Intl.DateTimeFormat('en-CA', {
   timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',

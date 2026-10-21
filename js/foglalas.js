@@ -53,7 +53,7 @@
   // helyszín-kép és rövid leírás (a katalógus csak id, nev, cim mezőt garantál)
   var LOC_META = {
     mexikoi: { img: 'media/brand/foglalo/mexikoi-kezelo.jpg', alt: 'Kezelőszoba a Mexikói úti stúdióban', kerulet: 'XIV. kerület', utca: 'Mexikói út 32/b', nyit: '07:00', zar: '21:00' },
-    reitter: { img: 'media/brand/foglalo/reitter-edzes.jpg', alt: 'Gyógytorna a Reitter Ferenc utcai teremben', kerulet: 'XIII. kerület', utca: 'Reitter Ferenc utca 48.', nyit: '08:00', zar: '20:00' }
+    reitter: { img: 'media/brand/foglalo/reitter-edzes.jpg', alt: 'Gyógytorna a Reitter Ferenc utcai teremben', kerulet: 'XIII. kerület', utca: 'Reitter Ferenc utca 48.', nyit: '07:00', zar: '21:00' }
   };
   // portré a csapat-oldalról (a katalógus nem ad képet); akinek nincs, monogramot kap
   var KEP = {
@@ -423,6 +423,7 @@
         if (names.indexOf(n) < 0) names.push(n);
       });
       var nyit = h.nyit || m.nyit, zar = h.zar || m.zar;
+      var szo = (h.napiNyitvatartas || {})['6']; // szombati rövidebb nyitvatartás (a katalógusból)
       return '<label class="loc loc--' + esc(h.id) + '">' +
         '<input type="radio" name="helyszin" value="' + esc(h.id) + '"' + (st.h === h.id ? ' checked' : '') + '>' +
         '<span class="loc__img">' + (m.img ? '<img src="' + esc(m.img) + '" alt="" width="1400" height="931" loading="eager">' : '') + '</span>' +
@@ -431,7 +432,7 @@
           '<span class="loc__n">' + esc(h.nev) + '</span>' +
           '<span class="loc__a">' + esc(m.utca || String(h.cim || '').split(',')[0]) + '</span>' +
           '<span class="loc__s">' + esc(names.slice(0, 4).join(', ')) + '</span>' +
-          (nyit && zar ? '<span class="loc__h">Hétköznap ' + esc(F.hm(F.perc(nyit)) + '-' + F.hm(F.perc(zar))) + '</span>' : '') +
+          (nyit && zar ? '<span class="loc__h">Hétköznap ' + esc(F.hm(F.perc(nyit)) + '-' + F.hm(F.perc(zar))) + (szo ? ' · szombat ' + esc(F.hm(F.perc(szo.nyit)) + '-' + F.hm(F.perc(szo.zar))) : '') + '</span>' : '') +
         '</span>' +
         '<span class="mk" aria-hidden="true">' + CHECK + '</span>' +
       '</label>';

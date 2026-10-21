@@ -140,7 +140,11 @@ async function szinPotlas(db, ertek) {
 export function szamitasiTorzs(torzs) {
   return {
     ...torzs,
-    helyszinek: torzs.helyszinek.map((h) => ({ ...h, nyit: hhmmToPerc(h.nyit), zar: hhmmToPerc(h.zar) })),
+    helyszinek: torzs.helyszinek.map((h) => ({
+      ...h, nyit: hhmmToPerc(h.nyit), zar: hhmmToPerc(h.zar),
+      ...(h.napiNyitvatartas ? { napiNyitvatartas: Object.fromEntries(Object.entries(h.napiNyitvatartas)
+        .map(([nap, v]) => [nap, v ? { nyit: hhmmToPerc(v.nyit), zar: hhmmToPerc(v.zar) } : null])) } : {}),
+    })),
   };
 }
 

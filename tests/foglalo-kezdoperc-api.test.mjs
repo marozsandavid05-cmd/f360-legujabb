@@ -1,5 +1,5 @@
 // Időpontfoglaló · rögzített kezdési perc a valódi API-n (2026-10-15): az InBody 8:50-re foglalható,
-// a 9:00-s tanácsadás ütközik vele (közös 9:00-s rácspont), a rácson kívüli kezdés a módosításnál is megy.
+// a 9:00-s tanácsadás ütközik vele (a 9:00 még az InBody pufferébe esik), a rácson kívüli kezdés a módosításnál is megy.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { admin, alap, get, post, kovNap, ujEnv } from './_foglalo.mjs';
@@ -47,7 +47,7 @@ test('API: 8:50-es InBody foglalható; a 9:00-s tanácsadás ütközik, a 9:50-e
   assert.equal(d.foglalas.kezd, '08:50');
   assert.equal(d.foglalas.veg, '09:05');
   const zarak = e.BOOKING_DB._raw.prepare('SELECT slot_min FROM slot_locks WHERE booking_id = ? ORDER BY slot_min').all(d.azonosito).map((x) => x.slot_min);
-  assert.deepEqual(zarak, [525, 540]);
+  assert.deepEqual(zarak, [530, 535, 540, 545, 550]); // 8:50 + 15 perc + 10 perc puffer, 5 perces zár-rács
   assert.ok(!(await szabadKezdesek(e, 'taplalkozas-alapcsomag')).includes('09:00'));
   assert.equal((await post(e, '/foglalas-api/foglalas', anna({ szolgaltatas: 'taplalkozas-alapcsomag', kezd: '09:00', email: 'david.teszt2@example.com' }), { ip: '1.2.3.5' })).status, 409);
   assert.equal((await post(e, '/foglalas-api/foglalas', anna({ kezd: '09:50', email: 'david.teszt3@example.com' }), { ip: '1.2.3.6' })).status, 201);
@@ -65,4 +65,22 @@ test('API: a 8:50-es InBody módosítható 10:50-re (tokenes link), utána a 8:5
   assert.equal(m.status, 200, await m.clone().text());
   assert.ok((await szabadKezdesek(e, 'inbody-770')).includes('08:50'));
   assert.ok(!(await szabadKezdesek(e, 'inbody-770')).includes('10:50'));
+});
+
+// 2026-10-21 (3. adatkör): a zár-rács 5 perces lett. A kód élesítése és a zár-migráció között a már meglévő
+// foglalásoknak még a régi, 15 perces záraik vannak. A szabad-számítás ezért nem a zárakból, hanem magukból a
+// foglalásokból számolja a foglalt időt, így a régi zárú foglalás mellé sem kerülhet átfedő új foglalás.
+test('API: régi (15 perces) zárú 9:00-10:00-s tanácsadás mellett a 9:50-es InBody nem kínálódik és 409', async () => {
+  const e = await annaKeszit();
+  const raw = e.BOOKING_DB._raw;
+  raw.prepare(`INSERT INTO bookings (id, location_id, service_id, staff_id, date, start_min, dur_min, buffer_min, price, name, email, phone, note, status, source, token_salt, created_at)
+    VALUES ('FREGI', 'mexikoi', 'taplalkozas-alapcsomag', 'kovacs-anna', ?, 540, 60, 0, 60000, 'David teszt', 'david.teszt@example.com', '+36301234567', '', 'megerositett', 'web', 'so', 1)`).run(NAP);
+  for (const s of [540, 555, 570, 585]) raw.prepare(`INSERT INTO slot_locks (staff_id, date, slot_min, booking_id) VALUES ('kovacs-anna', ?, ?, 'FREGI')`).run(NAP, s);
+  const k = await szabadKezdesek(e, 'inbody-770');
+  assert.ok(!k.includes('09:50'), k.join(','));
+  assert.ok(k.includes('10:50'));
+  assert.equal((await post(e, '/foglalas-api/foglalas', anna({ kezd: '09:50' }))).status, 409);
+  // a lemondott foglalás nem foglal időt
+  raw.prepare(`UPDATE bookings SET status = 'lemondva' WHERE id = 'FREGI'`).run();
+  assert.ok((await szabadKezdesek(e, 'inbody-770')).includes('09:50'));
 });

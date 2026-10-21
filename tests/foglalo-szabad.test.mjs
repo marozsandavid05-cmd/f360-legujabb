@@ -58,7 +58,8 @@ test('a helyszín nyitvatartása levágja a beosztást (b 6:00-tól lenne, a Mex
 
 test('puffer: egy 10:00-s 45 perces foglalás után 10 perc szünet kell, előtte a 9:15-ös kezdés már ütközne', () => {
   const foglalt = foglalasSlotjai({ kollega: 'a', datum: HETFO, kezd: H(10), perc: 45, puffer: 10 });
-  assert.deepEqual(foglalt.map((f) => f.slot), [H(10), H(10, 15), H(10, 30), H(10, 45)]);
+  // 45 + 10 perc az 5 perces zár-rácson: 10:00-10:50 (11 zár)
+  assert.deepEqual(foglalt.map((f) => f.slot), Array.from({ length: 11 }, (_, i) => H(10) + i * 5));
   const k = kezdok(futtat({ szolgaltatas: 'gep45', foglalt }));
   assert.ok(k.includes('09:00'));
   assert.ok(!k.includes('09:15')); // puffer nélkül 9:15-10:00 beleférne

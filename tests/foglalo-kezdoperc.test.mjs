@@ -3,8 +3,8 @@
 //
 // A szolgáltatás `kezdoPerc` mezője (0-55, 5 többszöröse): a felkínált kezdés MINDEN egész óra ennyiedik
 // perce a beosztási blokkon belül (a kínálás-lépés és a hézagkitöltés erre a szolgáltatásra nem
-// vonatkozik). A belső 15 perces rács és a slot_locks marad: a rácson kívüli kezdés (8:50) zárai a
-// foglalás által ÉRINTETT rácspontok (8:45, 9:00, ...), így a rácsos foglalásokkal is ütközik.
+// vonatkozik). A zárak (slot_locks) 2026-10-21 óta 5 perces rácson vannak: a 8:50-es kezdés zárai
+// 8:50, 8:55, ... (a 3. adatkör, tanácsadás :05 miatt; foglalo-adatcsere3.test.mjs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { foglalasSlotjai, kinalasLepes, szabadIdopontok } from '../functions/_lib/booking/szabad.js';
@@ -59,11 +59,11 @@ test('kezdoPerc nélküli szolgáltatás változatlan (igazított lépés a blok
   assert.deepEqual(kezdok({ szolgaltatas: 's50' }).slice(0, 3), ['08:45', '09:45', '10:45']);
 });
 
-test('a rácson kívüli kezdés zárai az érintett 15 perces rácspontok (8:50 + 15 + 10 perc: 8:45, 9:00)', () => {
-  assert.deepEqual(foglalasSlotjai({ kollega: 'anna', datum: HETFO, kezd: H(8, 50), perc: 15, puffer: 10 }).map((s) => s.slot), [H(8, 45), H(9)]);
+test('a rácson kívüli kezdés zárai az 5 perces zár-rácson (8:50 + 15 + 10 perc: 8:50-9:10)', () => {
+  assert.deepEqual(foglalasSlotjai({ kollega: 'anna', datum: HETFO, kezd: H(8, 50), perc: 15, puffer: 10 }).map((s) => s.slot), [H(8, 50), H(8, 55), H(9), H(9, 5), H(9, 10)]);
   // rácson lévő kezdésnél ugyanaz, mint eddig
-  assert.deepEqual(foglalasSlotjai({ kollega: 'a', datum: HETFO, kezd: H(9), perc: 50, puffer: 10 }).map((s) => s.slot), [H(9), H(9, 15), H(9, 30), H(9, 45)]);
-  assert.deepEqual(foglalasSlotjai({ kollega: 'a', datum: HETFO, kezd: H(9), perc: 20, puffer: 0 }).map((s) => s.slot), [H(9), H(9, 15)]);
+  assert.deepEqual(foglalasSlotjai({ kollega: 'a', datum: HETFO, kezd: H(9), perc: 50, puffer: 10 }).map((s) => s.slot), Array.from({ length: 12 }, (_, i) => H(9) + i * 5));
+  assert.deepEqual(foglalasSlotjai({ kollega: 'a', datum: HETFO, kezd: H(9), perc: 20, puffer: 0 }).map((s) => s.slot), [H(9), H(9, 5), H(9, 10), H(9, 15)]);
 });
 
 test('a 8:50-es InBody foglalás ütközik a 9:00-s tanácsadással, a 9:50-es InBody szabad marad', () => {

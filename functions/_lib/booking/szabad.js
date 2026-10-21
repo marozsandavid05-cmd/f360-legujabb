@@ -1,25 +1,36 @@
 // Időpontfoglaló · szabad időpontok számítása (tiszta függvény, nincs benne adatbázis-hívás)
 //
 // Szabad = a kolléga heti beosztása az adott helyszínen
-//          ∩ a helyszín nyitvatartása
+//          ∩ a helyszín nyitvatartása (aznapi: napiNyitvatartas, különben az alap nyit/zar)
 //          − kivételek (szabadság, helyszín zárva, egész napra vagy órákra)
 //          − már foglalt 15 perces rácspontok (a foglalás hossza + puffer, felfelé kerekítve)
 //          − a „most + minEloreOra” előtti és a „ma + maxEloreNap” utáni időpontok.
 // A kezdések 15 perces rácson vannak; a szolgáltatásnak a beosztáson és a nyitvatartáson
 // belül be kell fejeződnie (a puffer átlóghat a zárás utánra).
 
-import { RACS, budapestMost, datumPlusz, hetNapja, helyiToUtc, napok, percToHHMM } from './ido.js';
+import { RACS, ZAR_RACS, budapestMost, datumPlusz, hetNapja, helyiToUtc, napok, percToHHMM } from './ido.js';
 import { aktivANapon } from './torzs-alap.js';
 
 /**
- * Egy foglalás által lefoglalt rácspontok (ezekből lesz a slot_locks sor): minden 15 perces rácspont,
- * amelybe a foglalás (kezelés + puffer) belelóg. Rácson lévő kezdésnél ez ceil((perc + puffer) / 15)
- * darab a kezdéstől; rácson kívüli kezdésnél (például 8:50) az első zár a kezdést tartalmazó rácspont (8:45).
+ * Egy foglalás által lefoglalt rácspontok (ezekből lesz a slot_locks sor): minden 5 perces (ZAR_RACS)
+ * rácspont, amelybe a foglalás (kezelés + puffer) belelóg. A kezdés mindig 5 perces pontosságú
+ * (kezdesPerc), ezért az első zár maga a kezdés; 8:50 + 15 perc = 8:50, 8:55, 9:00.
  */
 export function foglalasSlotjai({ kollega, datum, kezd, perc, puffer = 0 }) {
-  const elso = Math.floor(kezd / RACS) * RACS;
-  const db = Math.ceil((kezd + perc + puffer - elso) / RACS);
-  return Array.from({ length: db }, (_, i) => ({ kollega, datum, slot: elso + i * RACS }));
+  const elso = Math.floor(kezd / ZAR_RACS) * ZAR_RACS;
+  const db = Math.ceil((kezd + perc + puffer - elso) / ZAR_RACS);
+  return Array.from({ length: db }, (_, i) => ({ kollega, datum, slot: elso + i * ZAR_RACS }));
+}
+
+/**
+ * A helyszín nyitvatartása egy adott napon (1 = hétfő ... 7 = vasárnap): a `napiNyitvatartas[nap]`
+ * felülírja az alap nyit/zar értéket; null = aznap zárva; hiányzó kulcs = az alap érvényes.
+ * Ugyanabban az egységben ad vissza, amiben a helyszín van (szöveg 'HH:MM' vagy perc).
+ */
+export function napiNyitva(hely, nap) {
+  const kulon = hely.napiNyitvatartas;
+  if (kulon && Object.prototype.hasOwnProperty.call(kulon, String(nap))) return kulon[String(nap)] || null;
+  return { nyit: hely.nyit, zar: hely.zar };
 }
 
 /**
@@ -108,18 +119,21 @@ export function szabadIdopontok({ torzs, beosztas, kivetelek = [], foglalt = [],
     if (datum > utolsoNap) continue;
     if (helyiToUtc(datum, 24 * 60) <= legkorabbiMs) continue; // az egész nap a határ előtt van
     const nap = hetNapja(datum);
+    const nyitva = napiNyitva(hely, nap); // szombaton rövidebb, vasárnap (null) zárva
+    if (!nyitva) continue;
     const kezdesek = new Map(); // perc → [kolléga-id]
     // belépés előtt és kilépés után a kolléga nem foglalható (a „bárki” sem osztja rá)
     for (const kid of jeloltek.filter((k) => aktivANapon(k, datum)).map((k) => k.id)) {
       const napiKiv = napiKivetelek(kivetelek, { kollega: kid, helyszin, datum });
-      // a kolléga aznapi foglalásainak vége: egy zár-sorozat utolsó rácspontja utáni rácspont
+      // a kolléga aznapi foglalásainak vége: egy zár-sorozat utolsó zárpontja utáni első 15 perces rácspont
+      // (a zárak 5 percesek, a kezdések rácsa 15 perces: 10:00 + 45 + 10 perc = 10:55, a kezdés 11:00)
       const foglalasVegek = foglalt
-        .filter((f) => f.kollega === kid && f.datum === datum && !foglaltSet.has(`${kid}|${datum}|${f.slot + RACS}`))
-        .map((f) => f.slot + RACS);
+        .filter((f) => f.kollega === kid && f.datum === datum && !foglaltSet.has(`${kid}|${datum}|${f.slot + ZAR_RACS}`))
+        .map((f) => Math.ceil((f.slot + ZAR_RACS) / RACS) * RACS);
       for (const b of beosztas) {
         if (b.kollega !== kid || b.nap !== nap || b.helyszin !== helyszin) continue;
         // a rács horgonya a beosztási blokk, illetve a részleges kivétel utáni szabad szakasz eleje
-        for (const [tol0, ig0] of szabadSzakaszok(Math.max(b.kezd, hely.nyit), Math.min(b.veg, hely.zar), napiKiv)) {
+        for (const [tol0, ig0] of szabadSzakaszok(Math.max(b.kezd, nyitva.nyit), Math.min(b.veg, nyitva.zar), napiKiv)) {
           const jelolt = new Set();
           if (rogzitett) {
             // rögzített kezdési perc (például InBody óra :50-kor): minden egész óra ennyiedik perce,

@@ -208,7 +208,7 @@ export function footerBlock(prefix, cur, world) {
         <address>
           <a href="${prefix}${m.href}">${m.street} · ${m.district}</a>
           <a href="${prefix}${r.href}">${r.street} · ${r.district}</a>
-          <span class="footer__hours">H-P: 7:00-21:00</span>
+          <span class="footer__hours">H-P: 7:00-21:00 · Szo: Reitter 8:00-14:00, Mexikói út 8:00-12:00</span>
         </address>
       </div>
       <div>

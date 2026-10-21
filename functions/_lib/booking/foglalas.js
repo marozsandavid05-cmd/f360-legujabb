@@ -43,12 +43,29 @@ export async function kivetelekBetolt(db, tol, ig) {
   }));
 }
 
+/**
+ * A foglalt idő rácspontjai a tartományban. A forrás maguk az élő foglalások (nem a slot_locks), az aktuális
+ * zár-rácsra vetítve: így egy korábbi (15 perces) zár-rácson tárolt foglalás is pontosan a saját idejét
+ * foglalja (2026-10-21, a zár-rács 15 percről 5 percre váltott). A dupla foglalást továbbra is a
+ * slot_locks UNIQUE kulcsa és az ATFEDES_NINCS_SQL őr zárja ki az írásnál.
+ */
 export async function foglaltBetolt(db, tol, ig, kiveveFoglalas = null) {
   const { results } = await db.prepare(
-    `SELECT staff_id, date, slot_min FROM slot_locks WHERE date >= ? AND date <= ? AND booking_id != ?`,
+    `SELECT staff_id, date, start_min, dur_min, buffer_min FROM bookings
+     WHERE status = 'megerositett' AND date >= ? AND date <= ? AND id != ?`,
   ).bind(tol, ig, kiveveFoglalas || '').all();
-  return (results || []).map((r) => ({ kollega: r.staff_id, datum: r.date, slot: r.slot_min }));
+  return (results || []).flatMap((r) => foglalasSlotjai({ kollega: r.staff_id, datum: r.date, kezd: r.start_min, perc: r.dur_min, puffer: r.buffer_min }));
 }
+
+/**
+ * Írás-oldali átfedés-őr: ugyanannál a kollégánál, ugyanazon a napon nincs másik élő foglalás, amely a
+ * [kezdés, kezdés + idő + puffer) szakasszal átfed (a saját pufferével együtt). A zárak mellett ez akkor is
+ * véd, ha egy régebbi foglalás zárai még a korábbi rácson vannak. Paraméterek (atfedesParams):
+ * kolléga, dátum, kivéve-azonosító, új vég, új kezdés.
+ */
+export const ATFEDES_NINCS_SQL = `NOT EXISTS (SELECT 1 FROM bookings o WHERE o.staff_id = ? AND o.date = ?
+  AND o.status = 'megerositett' AND o.id != ? AND o.start_min < ? AND o.start_min + o.dur_min + o.buffer_min > ?)`;
+const atfedesParams = (kollega, datum, kiveve, kezd, perc, puffer) => [kollega, datum, kiveve || '', kezd + perc + puffer, kezd];
 
 // ---------------------------------------------------------------- katalógus és szabad időpontok
 
@@ -62,7 +79,7 @@ export async function katalogus(db) {
     && beosztas.some((b) => b.kollega === k.id && s.helyszinek.includes(b.helyszin) && k.helyszinek.includes(b.helyszin)));
   return {
     minta: t.minta === true,
-    helyszinek: t.helyszinek.map(({ id, nev, cim, nyit, zar }) => ({ id, nev, cim, nyit, zar })),
+    helyszinek: t.helyszinek.map(({ id, nev, cim, nyit, zar, napiNyitvatartas }) => ({ id, nev, cim, nyit, zar, ...(napiNyitvatartas ? { napiNyitvatartas } : {}) })),
     szolgaltatasok: t.szolgaltatasok.map((s) => ({
       id: s.id, nev: s.nev, perc: s.perc, ar: s.ar, helyszinek: s.helyszinek,
       lepes: kinalasLepes(s, t.szabalyok), // a felkínált kezdések lépése percben
@@ -247,6 +264,20 @@ function jeloltKollegak(alap, foglalt, datum, kezd) {
   return jeloltek;
 }
 
+/**
+ * A foglalás zárai EGY utasításban (a rácspontok JSON-tömbként, json_each): az 5 perces zár-rács
+ * miatt egy 50 perces foglalás 12 zár, és soronként külön INSERT a D1 kérésenkénti lekérdezés-keretét
+ * (állandó időpontnál 104 alkalom) feleslegesen terhelné. A `foglalasSql` a booking_id-t adó
+ * részlekérdezés: ha NULL (a foglalás nem jött létre, vagy a feltétele nem teljesül), a NOT NULL
+ * eldobja a batch-et; ütközéskor a PRIMARY KEY (UNIQUE) dobja.
+ */
+export function zarakBeszurasa(db, { kollega, datum, kezd, perc, puffer }, foglalasSql, foglalasParams) {
+  const slotok = foglalasSlotjai({ kollega, datum, kezd, perc, puffer }).map((s) => s.slot);
+  return db.prepare(
+    `INSERT INTO slot_locks (staff_id, date, slot_min, booking_id) SELECT ?, ?, j.value, ${foglalasSql} FROM json_each(?) j`,
+  ).bind(kollega, datum, ...foglalasParams, JSON.stringify(slotok));
+}
+
 // ---------------------------------------------------------------- foglalás
 
 const linkek = (origin, token) => ({
@@ -301,11 +332,12 @@ export async function foglal(env, db, be, { origin, admin = false, most = Date.n
     const stmts = [
       // a kolléga a batch lefutásakor is aktív legyen (nem archiválták és nem léptették ki közben);
       // ha nem, a sor nem kerül be, és a zárak booking_id-ja NULL lesz: a NOT NULL eldobja a batch-et
-      db.prepare(`INSERT INTO bookings (${cols.join(', ')}) SELECT ${cols.map(() => '?').join(', ')} WHERE ${AKTIV_KOLLEGA_SQL}${sorozatOr}`)
-        .bind(...cols.map((c) => row[c] ?? null), kollega, be.datum, be.datum, ...(sorozatId ? [sorozatId] : [])),
-      ...foglalasSlotjai({ kollega, datum: be.datum, kezd: be.kezdPerc, perc: szolg.perc, puffer }).map((s) => db.prepare(
-        `INSERT INTO slot_locks (staff_id, date, slot_min, booking_id) VALUES (?, ?, ?, (SELECT id FROM bookings WHERE id = ?))`,
-      ).bind(kollega, s.datum, s.slot, id)),
+      // és ne fedjen át a kolléga másik élő foglalásával (ATFEDES_NINCS_SQL); ha igen, ugyanígy NULL zár
+      db.prepare(`INSERT INTO bookings (${cols.join(', ')}) SELECT ${cols.map(() => '?').join(', ')} WHERE ${AKTIV_KOLLEGA_SQL}${sorozatOr} AND ${ATFEDES_NINCS_SQL}`)
+        .bind(...cols.map((c) => row[c] ?? null), kollega, be.datum, be.datum, ...(sorozatId ? [sorozatId] : []),
+          ...atfedesParams(kollega, be.datum, id, be.kezdPerc, szolg.perc, puffer)),
+      zarakBeszurasa(db, { kollega, datum: be.datum, kezd: be.kezdPerc, perc: szolg.perc, puffer },
+        `(SELECT id FROM bookings WHERE id = ?)`, [id]),
       ...levelSorok(db, id, levelek, most),
     ];
     mailMod(env);
@@ -314,7 +346,7 @@ export async function foglal(env, db, be, { origin, admin = false, most = Date.n
     } catch (e) {
       const uzenet = String(e && e.message);
       if (/UNIQUE constraint failed: slot_locks/.test(uzenet)) continue; // közben lefoglalták
-      if (/NOT NULL constraint failed: slot_locks\.booking_id/.test(uzenet)) continue; // a kollégát közben archiválták vagy kiléptették
+      if (/NOT NULL constraint failed: slot_locks\.booking_id/.test(uzenet)) continue; // archiválták, kiléptették, vagy átfedne
       throw e;
     }
     return { azonosito: id, lemondasUrl, ics: icsUrl, level: { targy: elsoLevel.targy, html: elsoLevel.html, szoveg: elsoLevel.szoveg }, foglalas: publikusNezet(f) };
@@ -486,10 +518,10 @@ export async function modosit(env, db, row, be, { origin, admin = false, most = 
     else levelek.push(kollegaLemondas(regi, kollegaCim(torzs, row.staff_id), { admin }), kollegaUj(f, kollegaCim(torzs, kollega), { admin }));
     const stmts = [
       db.prepare(`DELETE FROM slot_locks WHERE booking_id = ?`).bind(row.id),
-      ...foglalasSlotjai({ kollega, datum: be.datum, kezd: be.kezdPerc, perc: row.dur_min, puffer: row.buffer_min }).map((s) => db.prepare(
-        `INSERT INTO slot_locks (staff_id, date, slot_min, booking_id) VALUES (?, ?, ?, (SELECT id FROM bookings
-         WHERE id = ? AND status = 'megerositett' AND staff_id = ? AND date = ? AND start_min = ? AND ${AKTIV_KOLLEGA_SQL}))`,
-      ).bind(kollega, s.datum, s.slot, row.id, row.staff_id, row.date, row.start_min, kollega, be.datum, be.datum)),
+      zarakBeszurasa(db, { kollega, datum: be.datum, kezd: be.kezdPerc, perc: row.dur_min, puffer: row.buffer_min },
+        `(SELECT id FROM bookings WHERE id = ? AND status = 'megerositett' AND staff_id = ? AND date = ? AND start_min = ? AND ${AKTIV_KOLLEGA_SQL} AND ${ATFEDES_NINCS_SQL})`,
+        [row.id, row.staff_id, row.date, row.start_min, kollega, be.datum, be.datum,
+          ...atfedesParams(kollega, be.datum, row.id, be.kezdPerc, row.dur_min, row.buffer_min)]),
       db.prepare(`UPDATE bookings SET staff_id = ?, date = ?, start_min = ?, emlekeztetve_at = NULL WHERE id = ?`).bind(kollega, be.datum, be.kezdPerc, row.id),
       ...levelSorok(db, row.id, levelek, most),
     ];

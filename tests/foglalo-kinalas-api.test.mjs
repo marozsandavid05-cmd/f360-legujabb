@@ -118,7 +118,7 @@ test('hézagkitöltés: egy 10:15-ös foglalás után a 11:15 felkínálódik é
   assert.deepEqual(k, ['09:00', '11:15', '12:00', '13:00', '14:00', '15:00', '16:00']);
   const r = await post(e, '/foglalas-api/foglalas', alap({ kezd: '11:15' }));
   assert.equal(r.status, 201, await r.clone().text());
-  assert.equal(sorok(e, `SELECT COUNT(*) AS n FROM slot_locks WHERE staff_id = 'szegedi-botond'`)[0].n, 8);
+  assert.equal(sorok(e, `SELECT COUNT(*) AS n FROM slot_locks WHERE staff_id = 'szegedi-botond'`)[0].n, 24);
 });
 
 test('lemondás után a kínálat visszaáll az óránkénti rácsra', async () => {
