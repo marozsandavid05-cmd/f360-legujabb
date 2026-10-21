@@ -492,6 +492,59 @@ body[data-view="view-edit"] .tabs{display:none}
   .gc-kl{max-height:none}
 }
 .fv input[type="number"]:disabled{opacity:.55}
+/* ---- a kolléga saját naptára (foglaltság) ----
+   Új szín nincs: az állapotcímke a Google Naptár blokk formanyelve (.gc-st: tömör = figyelve, keretes = nincs beállítva,
+   bekötésre vár, kikapcsolva; vonalkázott = nem ellenőrizhető). Az ütközés-sáv tájékoztat, nem riaszt: fehér lap,
+   antracit szöveg, piros és felkiáltójel nélkül. */
+.ft__d{font-size:.9375rem;max-width:66ch;margin-bottom:.8rem}
+.ft__st{display:flex;align-items:flex-start;flex-wrap:wrap;gap:.45rem .9rem;padding:.8rem 1rem;border-radius:var(--r-sm);background:var(--base);margin-bottom:.9rem;max-width:46rem}
+.ft__st .gc-st{min-height:28px;margin-top:.05rem}
+.ft__st-t{flex:1 1 20rem;margin:0;font-size:.9375rem;line-height:1.5;overflow-wrap:anywhere}
+.ft__st-t a{text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--ink)}
+.ft__st-n{flex:0 0 100%;margin:0;font-size:.875rem;font-weight:600}
+.ft__list{list-style:none;display:grid;gap:.5rem;margin:0 0 .6rem;padding:0;max-width:46rem}
+.ft__row{display:grid;grid-template-columns:6.25rem minmax(0,1fr) auto;align-items:center;gap:.4rem .9rem}
+.ft__lbl{font-size:.875rem;font-weight:600}
+.ft__row input{width:100%}
+.ft__row input[aria-invalid="true"]{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+.ft__del{min-height:44px;font-size:.875rem}
+.ft__add{min-height:44px;margin-bottom:.6rem}
+.ft__h{max-width:66ch;opacity:1;font-size:.8125rem}
+.gc-st--be.ft-st,.gc-st--nincs.ft-st,.gc-st--hibas.ft-st{font-size:.6875rem}
+/* Beállítások: a figyelés kapcsolója és a figyelt kollégák */
+.ft-be{margin-top:1.4rem;padding-top:1.1rem;border-top:1px solid var(--rice)}
+.ft-be__sw{display:grid;grid-template-columns:auto minmax(0,1fr);gap:.4rem 1.25rem;align-items:center;margin-bottom:.5rem}
+.ft-be__sw .hint{margin:0;max-width:62ch;opacity:1;font-size:.8125rem}
+.ft-be .gc-sync__msg{margin:.2rem 0 .7rem}
+.ft-be .gc-koll__n{margin-top:.9rem}
+.ft-kl{max-width:46rem}
+.ft-kl .gc-k{grid-template-columns:auto minmax(0,1fr) auto}
+/* ütközés-sáv a Foglalások naptár fölött (csak ha van ütközés) */
+.utk{margin:0 0 1.1rem;padding:1rem 1.2rem 1.05rem;background:var(--paper);border-radius:var(--r);box-shadow:var(--shadow)}
+.utk[hidden]{display:none!important}
+.utk__head{display:flex;align-items:center;gap:.6rem;margin-bottom:.35rem}
+.utk__i{flex:none}
+.utk__h{font-size:1.0625rem;font-weight:600;line-height:1.3;margin:0}
+.utk__t{font-size:.9375rem;line-height:1.5;max-width:78ch;margin:0 0 .55rem}
+.utk__list{list-style:none;display:grid;gap:0;margin:0;padding:0}
+.utk__list li + li{border-top:1px solid var(--rice)}
+.utk__a{display:flex;align-items:center;min-height:44px;padding:.45rem .25rem;font-size:.9375rem;line-height:1.45;text-decoration:none;border-radius:var(--r-sm)}
+.utk__s{text-decoration:underline;text-decoration-color:var(--cocoa);text-underline-offset:3px;text-decoration-thickness:1px}
+.utk__a:hover .utk__s{text-decoration-color:var(--ink)}
+.utk__a:hover{background:var(--base)}
+.utk__a:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.utk__more{margin:.45rem 0 0;font-size:.875rem}
+/* a naptár-ellenőrzés nem futott le: kis naptár-ikon a blokk idejénél, a jelmagyarázatban és a részletekben */
+.ne{flex:none;display:inline-block;vertical-align:-2px}
+.bk-item__t .ne,.wk-item b .ne{margin-left:.3rem;color:var(--ink)}
+.dd-ism .ne{margin-top:.25rem}
+@media (max-width:760px){
+  /* a naptár-azonosító hosszú (…@group.calendar.google.com): a mező a teljes szélességet kapja, az Eltávolítás alá kerül */
+  .ft__row{grid-template-columns:minmax(0,1fr);gap:.3rem}
+  .ft__del{justify-self:start}
+  .ft-be__sw{grid-template-columns:minmax(0,1fr)}
+  .utk{padding:.9rem 1rem}
+}
 
 /* ============ LEVELEK: szűrők ============ */
 .le-filter{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1rem}
